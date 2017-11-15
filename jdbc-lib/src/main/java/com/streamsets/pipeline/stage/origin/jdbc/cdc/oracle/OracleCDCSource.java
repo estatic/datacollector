@@ -147,6 +147,7 @@ public class OracleCDCSource extends BaseSource {
   private static final String VERSION_STR = "v2";
   private static final String VERSION_UNCOMMITTED = "v3";
   private static final String ZERO = "0";
+  private static final String SCHEMA = "schema";
   private static final int MAX_RECORD_GENERATION_ATTEMPTS = 100;
 
   // What are all these constants?
@@ -233,6 +234,9 @@ public class OracleCDCSource extends BaseSource {
   private static final String NLS_TIMESTAMP_TZ_FORMAT =
       "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = " + DateTimeColumnHandler.ZONED_DATETIME_SESSION_FORMAT;
   private final Pattern ddlPattern = Pattern.compile("(CREATE|ALTER|DROP|TRUNCATE).*", Pattern.CASE_INSENSITIVE);
+
+  private static final String TABLE_METADATA_TABLE_SCHEMA_CONSTANT = "TABLE_SCHEM";
+  private static final String TABLE_METADATA_TABLE_NAME_CONSTANT = "TABLE_NAME";
 
   private final OracleCDCConfigBean configBean;
   private final HikariPoolConfigBean hikariConfigBean;
@@ -472,6 +476,7 @@ public class OracleCDCSource extends BaseSource {
             String xidSqn = String.valueOf(resultSet.getString(12));
             String rsId = resultSet.getString(13);
             Object ssn = resultSet.getObject(14);
+            String schema = String.valueOf(resultSet.getString(15));
             String xid = xidUsn + "." + xidSlt + "." + xidSqn;
             TransactionIdKey key = new TransactionIdKey(xid);
             bufferedRecordsLock.lock();
@@ -514,9 +519,10 @@ public class OracleCDCSource extends BaseSource {
               attributes.put(XID, xid);
               attributes.put(RS_ID, rsId);
               attributes.put(SSN, ssn.toString());
+              attributes.put(SCHEMA, schema);
               if (!useLocalBuffering || getContext().isPreview()) {
                 if (commitSCN.compareTo(lastCommitSCN) < 0 ||
-                        (commitSCN.compareTo(lastCommitSCN) == 0 && seq < sequenceNumber)) {
+                    (commitSCN.compareTo(lastCommitSCN) == 0 && seq < sequenceNumber)) {
                   continue;
                 }
                 lastCommitSCN = commitSCN;
@@ -577,7 +583,7 @@ public class OracleCDCSource extends BaseSource {
                 // DROP/TRUNCATE: Schema is not sent, since they don't change schema.
                 DDL_EVENT type = getDdlType(queryString);
                 if (type == DDL_EVENT.ALTER || type == DDL_EVENT.CREATE) {
-                  sendSchema = refreshSchema(scnDecimal, table);
+                  sendSchema = refreshSchema(scnDecimal, schema + "|" + table);
                 }
                 recordQueue.put(new RecordOffset(
                     createEventRecord(type, queryString, table, offset.toString(), sendSchema), offset));
@@ -648,7 +654,7 @@ public class OracleCDCSource extends BaseSource {
   private Record generateRecord(Map<String, String> attributes, int operationCode, ParserRuleContext ruleContext)
       throws StageException {
     String operation;
-    String table = attributes.get(TABLE);
+    String table = configBean.baseConfigBean.multitenancy ? attributes.get(SCHEMA) + "|" + attributes.get(TABLE) : attributes.get(TABLE);
     operation = OperationType.getLabelFromIntCode(operationCode);
     attributes.put(OperationType.SDC_OPERATION_TYPE, String.valueOf(operationCode));
     attributes.put(OPERATION, operation);
@@ -697,7 +703,7 @@ public class OracleCDCSource extends BaseSource {
     if (!fieldTypeExceptions.isEmpty()) {
       errorColumns = fieldTypeExceptions.stream().map(ex -> {
             String fieldTypeName = JDBCTypeNames.getOrDefault(ex.fieldType, "unknown");
-            return "[Column = '" + ex.column + "', Type = '" + fieldTypeName + "', Value = '" + ex.columnVal +"']";
+            return "[Column = '" + ex.column + "', Type = '" + fieldTypeName + "', Value = '" + ex.columnVal + "']";
           }
       ).collect(Collectors.toList());
     }
@@ -743,7 +749,7 @@ public class OracleCDCSource extends BaseSource {
     try {
       HashQueue<RecordSequence> records = bufferedRecords.getOrDefault(key, EMPTY_LINKED_HASHSET);
       records.completeInserts();
-      while(!records.isEmpty()) {
+      while (!records.isEmpty()) {
         RecordSequence r = records.remove();
         try {
           if (configBean.keepOriginalQuery) {
@@ -991,15 +997,36 @@ public class OracleCDCSource extends BaseSource {
           containerized = true;
         }
       }
-      tables = new ArrayList<>(configBean.baseConfigBean.tables.size());
-      for (String table : configBean.baseConfigBean.tables) {
-        table = table.trim();
-        if (!configBean.baseConfigBean.caseSensitive) {
-          tables.add(table.toUpperCase());
-        } else {
-          tables.add(table);
+      if (configBean.baseConfigBean.multitenancy) {
+        Pattern p =
+            StringUtils.isEmpty(configBean.baseConfigBean.excludePattern)?
+                null : Pattern.compile(configBean.baseConfigBean.excludePattern);
+        tables = new ArrayList<>();
+        try (ResultSet rs = JdbcUtil.getTableMetadata(connection, null, configBean.baseConfigBean.database, configBean.baseConfigBean.tables.get(0), false)) {
+          while (rs.next()) {
+            String schemaName = rs.getString(TABLE_METADATA_TABLE_SCHEMA_CONSTANT);
+            String tableName = rs.getString(TABLE_METADATA_TABLE_NAME_CONSTANT);
+            LOG.info("Found " + schemaName + ", " + tableName);
+            if (p == null || (!p.matcher(tableName).matches() && !p.matcher(schemaName).matches())) {
+              LOG.info("Adding " + schemaName + ", " + tableName);
+              tables.add(schemaName + "|" + tableName);
+            }
+          }
+        }
+      } else {
+        LOG.info("Using simple tables list");
+        tables = new ArrayList<>(configBean.baseConfigBean.tables.size());
+
+        for (String table : configBean.baseConfigBean.tables) {
+          table = configBean.baseConfigBean.database + "|" + table.trim();
+          if (!configBean.baseConfigBean.caseSensitive) {
+            tables.add(table.toUpperCase());
+          } else {
+            tables.add(table);
+          }
         }
       }
+
       validateTablePresence(reusedStatement, tables, issues);
       if (!issues.isEmpty()) {
         return issues;
@@ -1059,12 +1086,14 @@ public class OracleCDCSource extends BaseSource {
 
     final String base =
         "SELECT SCN, USERNAME, OPERATION_CODE, TIMESTAMP, SQL_REDO, TABLE_NAME, " + commitScnField +
-            ", SEQUENCE#, CSF, XIDUSN, XIDSLT, XIDSQN, RS_ID, SSN" +
+            ", SEQUENCE#, CSF, XIDUSN, XIDSLT, XIDSQN, RS_ID, SSN, SEG_OWNER " +
             " FROM GV$LOGMNR_CONTENTS" +
             " WHERE ";
 
-    final String tableCondition = Utils.format("SEG_OWNER='{}' AND TABLE_NAME IN ({})",
-        configBean.baseConfigBean.database, formatTableList(tables));
+    final String tableCondition = configBean.baseConfigBean.multitenancy ?
+        getListOfSchemasAndTables(tables)
+        : Utils.format(
+            "SEG_OWNER='{}' AND TABLE_NAME IN ({})", configBean.baseConfigBean.database, formatTableList(tables));
 
     final String commitRollbackCondition = Utils.format("OPERATION_CODE = {} OR OPERATION_CODE = {}",
         COMMIT_CODE, ROLLBACK_CODE);
@@ -1073,7 +1102,6 @@ public class OracleCDCSource extends BaseSource {
 
     final String restartNonBufferCondition = Utils.format("((" + commitScnField + " = ? AND SEQUENCE# > ?) OR "
         + commitScnField + "  > ?)" + (shouldTrackDDL ? " OR (OPERATION_CODE = {} AND SCN > ?)" : ""), DDL_CODE);
-
 
 
     if (useLocalBuffering) {
@@ -1134,6 +1162,26 @@ public class OracleCDCSource extends BaseSource {
     version = useLocalBuffering ? VERSION_UNCOMMITTED : VERSION_STR;
     delay = getContext().createGauge("Read Lag (seconds)");
     return issues;
+  }
+
+  private String getListOfSchemasAndTables(List<String> tables) {
+    Map<String, List<String>> schemas = new HashMap<>();
+    for (String table : tables) {
+      String[] schameTable = table.split("\\|");
+      if (schemas.containsKey(schameTable[0])) {
+        schemas.get(schameTable[0]).add(schameTable[1]);
+      } else {
+        List<String> tbls = new ArrayList<>();
+        tbls.add(schameTable[1]);
+        schemas.put(schameTable[0], tbls);
+      }
+    }
+    List<String> queries = new ArrayList<>();
+    for (Map.Entry<String, List<String>> entry : schemas.entrySet()) {
+      queries.add(Utils.format(
+          "(SEG_OWNER='{}' AND TABLE_NAME IN ({}))", entry.getKey(), formatTableList(entry.getValue())));
+    }
+    return "( " + String.join(" OR ", queries) + " )";
   }
 
   @NotNull
@@ -1251,7 +1299,8 @@ public class OracleCDCSource extends BaseSource {
   private void validateTablePresence(Statement statement, List<String> tables, List<ConfigIssue> issues) {
     for (String table : tables) {
       try {
-        statement.execute("SELECT * FROM \"" + configBean.baseConfigBean.database + "\".\"" + table + "\" WHERE 1 = 0");
+          String[] schameTable = table.split("\\|");
+          statement.execute("SELECT * FROM \"" + schameTable[0] + "\".\"" + schameTable[1] + "\" WHERE 1 = 0");
       } catch (SQLException ex) {
         StringBuilder sb = new StringBuilder("Table: ").append(table).append(" does not exist.");
         if (StringUtils.isEmpty(configBean.pdb)) {
@@ -1265,7 +1314,9 @@ public class OracleCDCSource extends BaseSource {
 
   private Map<String, Integer> getTableSchema(String tableName) throws SQLException {
     Map<String, Integer> columns = new HashMap<>();
-    String query = "SELECT * FROM \"" + configBean.baseConfigBean.database + "\".\"" + tableName + "\" WHERE 1 = 0";
+    String query;
+    String[] schameTable = tableName.split("\\|");
+    query = "SELECT * FROM \"" + schameTable[0] + "\".\"" + schameTable[1] + "\" WHERE 1 = 0";
     try (Statement schemaStatement = connection.createStatement();
          ResultSet rs = schemaStatement.executeQuery(query)) {
       ResultSetMetaData md = rs.getMetaData();
@@ -1536,7 +1587,7 @@ public class OracleCDCSource extends BaseSource {
     this.dataSource = dataSource;
   }
 
-  private RuleContextAndOpCode getRuleContextAndCode (String queryString, int op) throws UnparseableSQLException {
+  private RuleContextAndOpCode getRuleContextAndCode(String queryString, int op) throws UnparseableSQLException {
     plsqlLexer lexer = new plsqlLexer(new ANTLRInputStream(queryString));
     CommonTokenStream tokenStream = new CommonTokenStream(lexer);
     plsqlParser parser = new plsqlParser(tokenStream);
@@ -1595,7 +1646,7 @@ public class OracleCDCSource extends BaseSource {
 
     @Override
     public boolean equals(Object o) {
-      return o!= null
+      return o != null
           && o instanceof TransactionIdKey
           && this.txnId.equals(((TransactionIdKey) o).txnId);
     }
@@ -1631,7 +1682,7 @@ public class OracleCDCSource extends BaseSource {
       this.version = splits[index++];
       this.timestamp =
           version.equals(VERSION_UNCOMMITTED) ?
-              LocalDateTime.ofInstant(Instant.ofEpochSecond(Long.parseLong(splits[index++])), zoneId): null;
+              LocalDateTime.ofInstant(Instant.ofEpochSecond(Long.parseLong(splits[index++])), zoneId) : null;
       this.scn = splits[index++];
       this.sequence = Integer.parseInt(splits[index]);
     }
