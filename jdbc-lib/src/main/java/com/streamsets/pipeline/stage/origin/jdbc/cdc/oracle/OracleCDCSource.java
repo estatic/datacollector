@@ -1006,15 +1006,12 @@ public class OracleCDCSource extends BaseSource {
           while (rs.next()) {
             String schemaName = rs.getString(TABLE_METADATA_TABLE_SCHEMA_CONSTANT);
             String tableName = rs.getString(TABLE_METADATA_TABLE_NAME_CONSTANT);
-            LOG.info("Found " + schemaName + ", " + tableName);
             if (p == null || (!p.matcher(tableName).matches() && !p.matcher(schemaName).matches())) {
-              LOG.info("Adding " + schemaName + ", " + tableName);
               tables.add(schemaName + "|" + tableName);
             }
           }
         }
       } else {
-        LOG.info("Using simple tables list");
         tables = new ArrayList<>(configBean.baseConfigBean.tables.size());
 
         for (String table : configBean.baseConfigBean.tables) {
@@ -1299,8 +1296,8 @@ public class OracleCDCSource extends BaseSource {
   private void validateTablePresence(Statement statement, List<String> tables, List<ConfigIssue> issues) {
     for (String table : tables) {
       try {
-          String[] schameTable = table.split("\\|");
-          statement.execute("SELECT * FROM \"" + schameTable[0] + "\".\"" + schameTable[1] + "\" WHERE 1 = 0");
+        String[] schameTable = table.split("\\|");
+        statement.execute("SELECT * FROM \"" + schameTable[0] + "\".\"" + schameTable[1] + "\" WHERE 1 = 0");
       } catch (SQLException ex) {
         StringBuilder sb = new StringBuilder("Table: ").append(table).append(" does not exist.");
         if (StringUtils.isEmpty(configBean.pdb)) {
