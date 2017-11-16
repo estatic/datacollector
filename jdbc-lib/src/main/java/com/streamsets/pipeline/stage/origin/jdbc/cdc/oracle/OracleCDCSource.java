@@ -681,7 +681,7 @@ public class OracleCDCSource extends BaseSource {
     for (Map.Entry<String, String> column : columns.entrySet()) {
       String columnName = column.getKey();
       try {
-        fields.put(columnName, objectToField(table, columnName, column.getValue()));
+        fields.put(columnName, objectToField(attributes.get(SCHEMA) + "|" + table, columnName, column.getValue()));
       } catch (UnsupportedFieldTypeException ex) {
         if (configBean.sendUnsupportedFields) {
           fields.put(columnName, Field.create(column.getValue()));
@@ -1247,7 +1247,8 @@ public class OracleCDCSource extends BaseSource {
   private String formatTableList(List<String> tables) {
     List<String> quoted = new ArrayList<>(tables.size());
     for (String table : tables) {
-      quoted.add("'" + table + "'");
+      String[] schameTable = table.split("\\|");
+      quoted.add("'" + schameTable[1] + "'");
     }
     Joiner joiner = Joiner.on(',');
     return joiner.join(quoted);
