@@ -35,17 +35,6 @@ public class CDCSourceConfigBean {
 
   @ConfigDef(
       required = true,
-      type = ConfigDef.Type.BOOLEAN,
-      label = "Multitenancy",
-      description = "Define which configuration use, Use SQL patterns in Schema and Table to load metadata",
-      displayPosition = 5,
-      defaultValue = "false",
-      group = "CDC"
-  )
-  public boolean multitenancy;
-
-  @ConfigDef(
-      required = true,
       type = ConfigDef.Type.STRING,
       label = "Schema Name",
       displayPosition = 10,

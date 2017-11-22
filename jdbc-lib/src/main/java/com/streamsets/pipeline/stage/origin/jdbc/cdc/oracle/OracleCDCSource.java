@@ -240,10 +240,10 @@ public class OracleCDCSource extends BaseSource {
 
   private final OracleCDCConfigBean configBean;
   private final HikariPoolConfigBean hikariConfigBean;
-  private final Map<String, Map<String, Integer>> tableSchemas = new HashMap<>();
-  private final Map<String, Map<String, String>> dateTimeColumns = new HashMap<>();
-  private final Map<String, Map<String, PrecisionAndScale>> decimalColumns = new HashMap<>();
-  private final Map<String, BigDecimal> tableSchemaLastUpdate = new HashMap<>();
+  private final Map<SchemaAndTable, Map<String, Integer>> tableSchemas = new HashMap<>();
+  private final Map<SchemaAndTable, Map<String, String>> dateTimeColumns = new HashMap<>();
+  private final Map<SchemaAndTable, Map<String, PrecisionAndScale>> decimalColumns = new HashMap<>();
+  private final Map<SchemaAndTable, BigDecimal> tableSchemaLastUpdate = new HashMap<>();
 
   private final ExecutorService generationExecutor =
       Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("Oracle CDC Data Generator").build());
@@ -287,9 +287,9 @@ public class OracleCDCSource extends BaseSource {
     pollForStageExceptions();
     while (!getContext().isStopped() && !recordsProduced && recordGenerationAttempts++ < MAX_RECORD_GENERATION_ATTEMPTS) {
       if (!sentInitialSchemaEvent) {
-        for (String table : tableSchemas.keySet()) {
+        for (SchemaAndTable schemaAndTable : tableSchemas.keySet()) {
           getContext().toEvent(
-              createEventRecord(DDL_EVENT.STARTUP, null, table, ZERO, true));
+              createEventRecord(DDL_EVENT.STARTUP, null, schemaAndTable, ZERO, true));
         }
         sentInitialSchemaEvent = true;
       }
@@ -477,6 +477,7 @@ public class OracleCDCSource extends BaseSource {
             String rsId = resultSet.getString(13);
             Object ssn = resultSet.getObject(14);
             String schema = String.valueOf(resultSet.getString(15));
+            SchemaAndTable schemaAndTable = new SchemaAndTable(table, schema);
             String xid = xidUsn + "." + xidSlt + "." + xidSqn;
             TransactionIdKey key = new TransactionIdKey(xid);
             bufferedRecordsLock.lock();
@@ -583,10 +584,10 @@ public class OracleCDCSource extends BaseSource {
                 // DROP/TRUNCATE: Schema is not sent, since they don't change schema.
                 DDL_EVENT type = getDdlType(queryString);
                 if (type == DDL_EVENT.ALTER || type == DDL_EVENT.CREATE) {
-                  sendSchema = refreshSchema(scnDecimal, schema + "|" + table);
+                  sendSchema = refreshSchema(scnDecimal, new SchemaAndTable(schema, table));
                 }
                 recordQueue.put(new RecordOffset(
-                    createEventRecord(type, queryString, table, offset.toString(), sendSchema), offset));
+                    createEventRecord(type, queryString, schemaAndTable, offset.toString(), sendSchema), offset));
               }
             }
             query.setLength(0);
@@ -654,13 +655,13 @@ public class OracleCDCSource extends BaseSource {
   private Record generateRecord(Map<String, String> attributes, int operationCode, ParserRuleContext ruleContext)
       throws StageException {
     String operation;
-    String table = configBean.baseConfigBean.multitenancy ? attributes.get(SCHEMA) + "|" + attributes.get(TABLE) : attributes.get(TABLE);
+    SchemaAndTable table = new SchemaAndTable(attributes.get(SCHEMA), attributes.get(TABLE));
     operation = OperationType.getLabelFromIntCode(operationCode);
     attributes.put(OperationType.SDC_OPERATION_TYPE, String.valueOf(operationCode));
     attributes.put(OPERATION, operation);
     // Walk it and attach our sqlListener
     sqlListener.reset();
-    if (configBean.allowNulls && !StringUtils.isEmpty(table)) {
+    if (configBean.allowNulls && !table.isNotEmpty()) {
       sqlListener.setColumns(tableSchemas.get(table).keySet());
     }
 
@@ -681,7 +682,7 @@ public class OracleCDCSource extends BaseSource {
     for (Map.Entry<String, String> column : columns.entrySet()) {
       String columnName = column.getKey();
       try {
-        fields.put(columnName, objectToField(attributes.get(SCHEMA) + "|" + table, columnName, column.getValue()));
+        fields.put(columnName, objectToField(table, columnName, column.getValue()));
       } catch (UnsupportedFieldTypeException ex) {
         if (configBean.sendUnsupportedFields) {
           fields.put(columnName, Field.create(column.getValue()));
@@ -779,12 +780,12 @@ public class OracleCDCSource extends BaseSource {
   private EventRecord createEventRecord(
       DDL_EVENT type,
       String redoSQL,
-      String table,
+      SchemaAndTable table,
       String scnSeq,
       boolean sendSchema
   ) {
     EventRecord event = getContext().createEventRecord(type.name(), 1, scnSeq);
-    event.getHeader().setAttribute(TABLE, table);
+    event.getHeader().setAttribute(TABLE, table.getTable());
     if (redoSQL != null) {
       event.getHeader().setAttribute(DDL_TEXT, redoSQL);
     }
@@ -828,16 +829,16 @@ public class OracleCDCSource extends BaseSource {
    * Refresh the schema for the table if the last update of this table was before the given SCN.
    * Returns true if it was updated, else returns false.
    */
-  private boolean refreshSchema(BigDecimal scnDecimal, String table) throws SQLException {
+  private boolean refreshSchema(BigDecimal scnDecimal, SchemaAndTable schemaAndTable) throws SQLException {
     try {
-      if (!tableSchemaLastUpdate.containsKey(table) || scnDecimal.compareTo(tableSchemaLastUpdate.get(table)) > 0) {
+      if (!tableSchemaLastUpdate.containsKey(schemaAndTable) || scnDecimal.compareTo(tableSchemaLastUpdate.get(schemaAndTable)) > 0) {
         if (containerized) {
           try (Statement switchToPdb = connection.createStatement()) {
             switchToPdb.execute("ALTER SESSION SET CONTAINER = " + configBean.pdb);
           }
         }
-        tableSchemas.put(table, getTableSchema(table));
-        tableSchemaLastUpdate.put(table, scnDecimal);
+        tableSchemas.put(schemaAndTable, getTableSchema(schemaAndTable));
+        tableSchemaLastUpdate.put(schemaAndTable, scnDecimal);
         return true;
       }
       return false;
@@ -932,7 +933,7 @@ public class OracleCDCSource extends BaseSource {
         configBean.baseConfigBean.caseSensitive ?
             configBean.baseConfigBean.database.trim() :
             configBean.baseConfigBean.database.trim().toUpperCase();
-    List<String> tables;
+    List<SchemaAndTable> schemasAndTables;
 
     try {
       initializeStatements();
@@ -997,43 +998,38 @@ public class OracleCDCSource extends BaseSource {
           containerized = true;
         }
       }
-      if (configBean.baseConfigBean.multitenancy) {
-        Pattern p =
-            StringUtils.isEmpty(configBean.baseConfigBean.excludePattern)?
-                null : Pattern.compile(configBean.baseConfigBean.excludePattern);
-        tables = new ArrayList<>();
-        try (ResultSet rs = JdbcUtil.getTableMetadata(connection, null, configBean.baseConfigBean.database, configBean.baseConfigBean.tables.get(0), false)) {
+
+      Pattern p =
+          StringUtils.isEmpty(configBean.baseConfigBean.excludePattern)?
+              null : Pattern.compile(configBean.baseConfigBean.excludePattern);
+      schemasAndTables = new ArrayList<>();
+      for (String table : configBean.baseConfigBean.tables) {
+        try (ResultSet rs = JdbcUtil.getTableMetadata(connection, null, configBean.baseConfigBean.database, table, false)) {
           while (rs.next()) {
             String schemaName = rs.getString(TABLE_METADATA_TABLE_SCHEMA_CONSTANT);
             String tableName = rs.getString(TABLE_METADATA_TABLE_NAME_CONSTANT);
             if (p == null || (!p.matcher(tableName).matches() && !p.matcher(schemaName).matches())) {
-              tables.add(schemaName + "|" + tableName);
+              if (StringUtils.isNotBlank(schemaName)) {
+                schemaName = schemaName.trim();
+              }
+              if (StringUtils.isNotBlank(tableName)) {
+                tableName = tableName.trim();
+              }
+              schemasAndTables.add(new SchemaAndTable(schemaName, tableName));
             }
           }
         }
-      } else {
-        tables = new ArrayList<>(configBean.baseConfigBean.tables.size());
-
-        for (String table : configBean.baseConfigBean.tables) {
-          table = configBean.baseConfigBean.database + "|" + table.trim();
-          if (!configBean.baseConfigBean.caseSensitive) {
-            tables.add(table.toUpperCase());
-          } else {
-            tables.add(table);
-          }
-        }
       }
 
-      validateTablePresence(reusedStatement, tables, issues);
+      validateTablePresence(reusedStatement, schemasAndTables, issues);
       if (!issues.isEmpty()) {
         return issues;
       }
-      for (String table : tables) {
-        table = table.trim();
+      for (SchemaAndTable schemaAndTable : schemasAndTables) {
         try {
-          tableSchemas.put(table, getTableSchema(table));
+          tableSchemas.put(schemaAndTable, getTableSchema(schemaAndTable));
           if (scn != null) {
-            tableSchemaLastUpdate.put(table, scn);
+            tableSchemaLastUpdate.put(schemaAndTable, scn);
           }
         } catch (SQLException ex) {
           LOG.error("Error while switching to container: " + container, ex);
@@ -1087,10 +1083,7 @@ public class OracleCDCSource extends BaseSource {
             " FROM GV$LOGMNR_CONTENTS" +
             " WHERE ";
 
-    final String tableCondition = configBean.baseConfigBean.multitenancy ?
-        getListOfSchemasAndTables(tables)
-        : Utils.format(
-            "SEG_OWNER='{}' AND TABLE_NAME IN ({})", configBean.baseConfigBean.database, formatTableList(tables));
+    final String tableCondition = getListOfSchemasAndTables(schemasAndTables);
 
     final String commitRollbackCondition = Utils.format("OPERATION_CODE = {} OR OPERATION_CODE = {}",
         COMMIT_CODE, ROLLBACK_CODE);
@@ -1161,16 +1154,20 @@ public class OracleCDCSource extends BaseSource {
     return issues;
   }
 
-  private String getListOfSchemasAndTables(List<String> tables) {
+  /**
+   * This method needs to get SQL like string with all required schemas and tables.
+   * @param schemaAndTables List of SchemaAndTable objects
+   * @return SQL string of schemas and tables
+   */
+  private String getListOfSchemasAndTables(List<SchemaAndTable> schemaAndTables) {
     Map<String, List<String>> schemas = new HashMap<>();
-    for (String table : tables) {
-      String[] schameTable = table.split("\\|");
-      if (schemas.containsKey(schameTable[0])) {
-        schemas.get(schameTable[0]).add(schameTable[1]);
+    for (SchemaAndTable schemaAndTable : schemaAndTables) {
+      if (schemas.containsKey(schemaAndTable.getSchema())) {
+        schemas.get(schemaAndTable.getSchema()).add(schemaAndTable.getTable());
       } else {
         List<String> tbls = new ArrayList<>();
-        tbls.add(schameTable[1]);
-        schemas.put(schameTable[0], tbls);
+        tbls.add(schemaAndTable.getTable());
+        schemas.put(schemaAndTable.getSchema(), tbls);
       }
     }
     List<String> queries = new ArrayList<>();
@@ -1245,12 +1242,11 @@ public class OracleCDCSource extends BaseSource {
   }
 
   private String formatTableList(List<String> tables) {
-    List<String> quoted = new ArrayList<>(tables.size());
+    List<String> quoted = new ArrayList<>();
     for (String table : tables) {
-      String[] schameTable = table.split("\\|");
-      quoted.add("'" + schameTable[1] + "'");
+      quoted.add(String.format("'%s'", table));
     }
-    Joiner joiner = Joiner.on(',');
+    Joiner joiner = Joiner.on(",");
     return joiner.join(quoted);
   }
 
@@ -1294,27 +1290,28 @@ public class OracleCDCSource extends BaseSource {
     }
   }
 
-  private void validateTablePresence(Statement statement, List<String> tables, List<ConfigIssue> issues) {
-    for (String table : tables) {
+  private void validateTablePresence(Statement statement, List<SchemaAndTable> schemaAndTables,
+                                     List<ConfigIssue> issues) {
+    for (SchemaAndTable schemaAndTable : schemaAndTables) {
       try {
-        String[] schameTable = table.split("\\|");
-        statement.execute("SELECT * FROM \"" + schameTable[0] + "\".\"" + schameTable[1] + "\" WHERE 1 = 0");
+        statement.execute("SELECT * FROM \"" + schemaAndTable.getSchema() + "\".\"" + schemaAndTable.getTable() +
+                "\" WHERE 1 = 0");
       } catch (SQLException ex) {
-        StringBuilder sb = new StringBuilder("Table: ").append(table).append(" does not exist.");
+        StringBuilder sb = new StringBuilder("Table: ").append(schemaAndTable).append(" does not exist.");
         if (StringUtils.isEmpty(configBean.pdb)) {
           sb.append(" PDB was not specified. If the database was created inside a PDB, please specify PDB");
         }
         LOG.error(sb.toString(), ex);
-        issues.add(getContext().createConfigIssue(Groups.CDC.name(), "oracleCDCConfigBean.baseConfigBean.tables", JDBC_16, table));
+        issues.add(getContext().createConfigIssue(Groups.CDC.name(), "oracleCDCConfigBean.baseConfigBean.tables",
+                JDBC_16, schemaAndTable));
       }
     }
   }
 
-  private Map<String, Integer> getTableSchema(String tableName) throws SQLException {
+  private Map<String, Integer> getTableSchema(SchemaAndTable schemaAndTable) throws SQLException {
     Map<String, Integer> columns = new HashMap<>();
-    String query;
-    String[] schameTable = tableName.split("\\|");
-    query = "SELECT * FROM \"" + schameTable[0] + "\".\"" + schameTable[1] + "\" WHERE 1 = 0";
+    String query = "SELECT * FROM \"" + schemaAndTable.getSchema() + "\".\"" + schemaAndTable.getTable() +
+            "\" WHERE 1 = 0";
     try (Statement schemaStatement = connection.createStatement();
          ResultSet rs = schemaStatement.executeQuery(query)) {
       ResultSetMetaData md = rs.getMetaData();
@@ -1326,13 +1323,13 @@ public class OracleCDCSource extends BaseSource {
           colName = colName.toUpperCase();
         }
         if (colType == Types.DATE || colType == Types.TIME || colType == Types.TIMESTAMP) {
-          dateTimeColumns.computeIfAbsent(tableName, k -> new HashMap<>());
-          dateTimeColumns.get(tableName).put(colName, md.getColumnTypeName(i));
+          dateTimeColumns.computeIfAbsent(schemaAndTable, k -> new HashMap<>());
+          dateTimeColumns.get(schemaAndTable).put(colName, md.getColumnTypeName(i));
         }
 
         if (colType == Types.DECIMAL || colType == Types.NUMERIC) {
-          decimalColumns.computeIfAbsent(tableName, k -> new HashMap<>());
-          decimalColumns.get(tableName).put(colName, new PrecisionAndScale(md.getPrecision(i), md.getScale(i)));
+          decimalColumns.computeIfAbsent(schemaAndTable, k -> new HashMap<>());
+          decimalColumns.get(schemaAndTable).put(colName, new PrecisionAndScale(md.getPrecision(i), md.getScale(i)));
         }
         columns.put(md.getColumnName(i), md.getColumnType(i));
       }
@@ -1424,10 +1421,10 @@ public class OracleCDCSource extends BaseSource {
 
   }
 
-  private Field objectToField(String table, String column, String columnValue) throws StageException {
-    Map<String, Integer> tableSchema = tableSchemas.get(table);
+  private Field objectToField(SchemaAndTable schemaAndTable, String column, String columnValue) throws StageException {
+    Map<String, Integer> tableSchema = tableSchemas.get(schemaAndTable);
     if (!tableSchema.containsKey(column)) {
-      throw new StageException(JDBC_54, column, table);
+      throw new StageException(JDBC_54, column, schemaAndTable);
     }
     int columnType = tableSchema.get(column);
 
@@ -1481,7 +1478,7 @@ public class OracleCDCSource extends BaseSource {
       case Types.TIMESTAMP:
         // For whatever reason, Oracle returns all the date/time/timestamp fields as the same type, so additional
         // logic is required to accurately parse the type
-        String actualType = dateTimeColumns.get(table).get(column);
+        String actualType = dateTimeColumns.get(schemaAndTable).get(column);
         field = dateTimeColumnHandler.getDateTimeStampField(column, columnValue, columnType, actualType);
         break;
       case Types.TIMESTAMP_WITH_TIMEZONE:
