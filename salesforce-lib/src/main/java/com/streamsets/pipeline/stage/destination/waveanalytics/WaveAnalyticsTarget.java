@@ -40,6 +40,7 @@ import com.streamsets.pipeline.lib.salesforce.ForceConfigBean;
 import com.streamsets.pipeline.lib.salesforce.ForceUtils;
 import com.streamsets.pipeline.lib.waveanalytics.WaveAnalyticsConfigBean;
 import com.streamsets.pipeline.lib.waveanalytics.Errors;
+import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpResponseException;
 import org.apache.http.client.fluent.Request;
@@ -52,7 +53,7 @@ import javax.xml.namespace.QName;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -105,15 +106,21 @@ public class WaveAnalyticsTarget extends BaseTarget {
   }
 
   private void openDataset() throws ConnectionException, StageException {
-    datasetName = conf.edgemartAliasPrefix + "_" + System.currentTimeMillis();
+    datasetName = conf.edgemartAliasPrefix;
+    if (conf.appendTimestamp) {
+      datasetName += "_" + System.currentTimeMillis();
+    }
 
     SObject sobj = new SObject();
     sobj.setType("InsightsExternalData");
     sobj.setField("Format", "Csv");
     sobj.setField("EdgemartAlias", datasetName);
     sobj.setField("MetadataJson", conf.metadataJson.getBytes(StandardCharsets.UTF_8));
-    sobj.setField("Operation", "Overwrite");
+    sobj.setField("Operation", conf.operation.getLabel());
     sobj.setField("Action", "None");
+    if (!StringUtils.isEmpty(conf.edgemartContainer)) {
+      sobj.setField("EdgemartContainer", conf.edgemartContainer);
+    }
 
     SaveResult[] results = connection.create(new SObject[]{sobj});
     for (SaveResult sv : results) {
@@ -284,49 +291,70 @@ public class WaveAnalyticsTarget extends BaseTarget {
 
     Map<String, Object> workflowDefinition = (Map<String, Object>) workflow.get("workflowDefinition");
 
-    String appendJob = "Append_" + conf.edgemartAliasPrefix;
-    Map<String, Object> append = (Map<String, Object>) workflowDefinition.get(appendJob);
-
-    if (append == null) {
-      LOG.info("Can't find {} in dataflow {}", appendJob, conf.dataflowName);
-
-      // Clear out dataflow and create bits we need
-      workflowDefinition = new HashMap<String, Object>();
-
-      Map<String, Object> parameters = new HashMap<String, Object>();
-      parameters.put("sources", new ArrayList<String>());
-
-      append = new HashMap<String, Object>();
-      append.put("action", "append");
-      append.put("parameters", parameters);
-
-      workflowDefinition.put(appendJob, append);
-
-      parameters = new HashMap<String, Object>();
-      parameters.put("alias", conf.edgemartAliasPrefix);
-      parameters.put("name", conf.edgemartAliasPrefix);
-      parameters.put("source", appendJob);
-
-      Map<String, Object> register = new HashMap<String, Object>();
-      register.put("action", "sfdcRegister");
-      register.put("parameters", parameters);
-
-      workflowDefinition.put("Register_" + conf.edgemartAliasPrefix, register);
-    }
-
-    // Add new 'extract' source
+    // Make new 'extract' source
     String extractSource = "Extract_" + datasetName;
     Map<String, Object> parameters = new HashMap<String, Object>();
     parameters.put("alias", datasetName);
     Map<String, Object> extractDataset = new HashMap<String, Object>();
     extractDataset.put("action", "edgemart");
     extractDataset.put("parameters", parameters);
-    workflowDefinition.put(extractSource, extractDataset);
 
-    // Add 'extract' to 'append' job
-    Map<String, Object> parameters2 = (Map<String, Object>) append.get("parameters");
-    List<String> sources = (List<String>) parameters2.get("sources");
-    sources.add(extractSource);
+    // Look for 'append' job
+    String appendJob = "Append_" + conf.edgemartAliasPrefix;
+    Map<String, Object> append = (Map<String, Object>) workflowDefinition.get(appendJob);
+
+    if (append == null) {
+      LOG.info("Can't find {} in dataflow {}", appendJob, conf.dataflowName);
+
+      String registerJob = "Register_" + conf.edgemartAliasPrefix;
+
+      Map<String, Object> register = (Map<String, Object>) workflowDefinition.get(registerJob);
+
+      if (register == null) {
+        // Clear out dataflow and create bits we need
+        LOG.info("Can't find {} in dataflow {}", registerJob, conf.dataflowName);
+        LOG.info("Clearing out dataflow");
+
+        workflowDefinition = new HashMap<String, Object>();
+
+        parameters = new HashMap<String, Object>();
+        parameters.put("alias", conf.edgemartAliasPrefix);
+        parameters.put("name", conf.edgemartAliasPrefix);
+        parameters.put("source", extractSource);
+
+        register = new HashMap<String, Object>();
+        register.put("action", "sfdcRegister");
+        register.put("parameters", parameters);
+
+        workflowDefinition.put(registerJob, register);
+      } else {
+        // Create append job and knit it into the flow
+        LOG.info("Creating append job in dataflow {}", conf.dataflowName);
+
+        Map<String, Object> regParams = ((Map<String, Object>)register.get("parameters"));
+
+        parameters = new HashMap<String, Object>();
+        parameters.put("sources", Arrays.asList(
+            regParams.get("source"),
+            extractSource
+        ));
+
+        append = new HashMap<String, Object>();
+        append.put("action", "append");
+        append.put("parameters", parameters);
+
+        workflowDefinition.put(appendJob, append);
+
+        regParams.put("source", appendJob);
+      }
+    } else {
+      // Add 'extract' to 'append' job
+      Map<String, Object> parameters2 = (Map<String, Object>) append.get("parameters");
+      List<String> sources = (List<String>) parameters2.get("sources");
+      sources.add(extractSource);
+    }
+
+    workflowDefinition.put(extractSource, extractDataset);
 
     // Make upload map
     Map<String, Object> map = new HashMap<String, Object>();

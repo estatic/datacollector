@@ -19,13 +19,13 @@
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
 <concept id="concept_elk_jr4_ht">
  <title>Common Prefix, Prefix Pattern, and Wildcards</title>
- <shortdesc>The Amazon S3 origin appends the common prefix to the prefix pattern to define the
-        objects that the origin processes. You can specify an exact prefix pattern or you can use
-        Ant-style path patterns to read multiple objects recursively.</shortdesc>
  <conbody>
         <p><indexterm>Amazon S3 origin<indexterm>common prefix and prefix
-                pattern</indexterm></indexterm>Ant-style path patterns can include the following
-            wildcards: <ul id="ul_lg1_gyd_wv">
+                pattern</indexterm></indexterm>The Amazon S3 origin appends the common prefix to the
+            prefix pattern to define the objects that the origin processes. You can specify an exact
+            prefix pattern or you can use Ant-style path patterns to read multiple objects
+            recursively.</p>
+        <p>Ant-style path patterns can include the following wildcards: <ul id="ul_lg1_gyd_wv">
                 <li>Question mark (?) to match a single character</li>
                 <li>Asterisk (*) to match zero or more characters</li>
                 <li>Double asterisks (**) to match zero or more directories</li>

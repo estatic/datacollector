@@ -100,6 +100,14 @@
    <topicref href="../Destinations/Elastic-DefineOperation.dita"/>
    <topicref href="../Destinations/Elasticsearch-Configuring.dita"/>
   </topicref>
+  <topicref href="../Destinations/WaveAnalytics.dita" chunk="to-content">
+   <topicmeta>
+    <shortdesc/>
+   </topicmeta>
+   <topicref href="../Destinations/WaveAnalytics-APIVersion.dita"/>
+   <topicref href="../Destinations/WaveAnalytics-Dataflow.dita"/>
+   <topicref href="../Destinations/WaveAnalytics-Configuring.dita"/>
+  </topicref>
   <topicref href="../Destinations/Flume.dita" chunk="to-content">
    <topicmeta>
     <shortdesc/>
@@ -131,6 +139,25 @@
    <topicref href="../Destinations/Bigtable-ColumnFamily.dita"/>
    <topicref href="../Destinations/Bigtable-TimeBasis.dita"/>
    <topicref href="../Destinations/Bigtable-Configuring.dita"/>
+  </topicref>
+  <topicref href="../Destinations/GCS.dita" chunk="to-content">
+   <topicmeta>
+    <shortdesc/>
+   </topicmeta>
+   <topicref href="../Destinations/GCS-Credentials.dita">
+    <topicref href="../Destinations/GCS-CredentialsDefault.dita"/>
+    <topicref href="../Destinations/GCS-CredentialsFile.dita"/>
+   </topicref>
+   <topicref href="../Destinations/GCS-PartitionPrefix.dita"/>
+   <topicref href="../Destinations/GCS-TimeBasis.dita"/>
+   <topicref href="../Destinations/GCS-ObjectNames.dita">
+    <topicref href="../Destinations/GCS-ObjectNames-WholeFile.dita"/>
+   </topicref>
+   <topicref href="../Destinations/GCS-EventGeneration.dita">
+    <topicref href="../Destinations/GCS-EventRecords.dita"/>
+   </topicref>
+   <topicref href="../Destinations/GCS-DataFormats.dita"/>
+   <topicref href="../Destinations/GCS-Configuring.dita"/>
   </topicref>
   <topicref href="../Destinations/PubSubPublisher.dita" chunk="to-content">
    <topicmeta>
@@ -317,6 +344,10 @@
    <topicref href="../Destinations/MapRDBJSON-RowKey.dita">
     <topicref href="../Destinations/MapRDBJSON-RowKeyDataType.dita"/>
    </topicref>
+   <topicref href="../Destinations/MapRDBJSON-Writing.dita">
+    <topicref href="../Destinations/MapRDBJSON-CRUDOperation.dita"/>
+    <topicref href="../Destinations/MapRDBJSON-APIProperties.dita"/>
+   </topicref>
    <topicref href="../Destinations/MapRDBJSON-Configuring.dita"/>
   </topicref>
   <topicref href="../Destinations/MapRFS.dita" chunk="to-content">
@@ -381,6 +412,7 @@
     <topicref href="../Destinations/Redis-BatchModeDataTypes.dita"/>
     <topicref href="../Destinations/Redis-DataFormat.dita"/>
    </topicref>
+   <topicref href="../Destinations/Redis-CRUDOperation.dita"/>
    <topicref href="../Destinations/Redis-Configuring.dita"/>
   </topicref>
   <topicref href="../Destinations/Salesforce.dita" chunk="to-content">
@@ -416,14 +448,6 @@
    <topicmeta>
     <shortdesc/>
    </topicmeta>
-  </topicref>
-  <topicref href="../Destinations/WaveAnalytics.dita" chunk="to-content">
-   <topicmeta>
-    <shortdesc/>
-   </topicmeta>
-   <topicref href="../Destinations/WaveAnalytics-APIVersion.dita"/>
-   <topicref href="../Destinations/WaveAnalytics-Dataflow.dita"/>
-   <topicref href="../Destinations/WaveAnalytics-Configuring.dita"/>
   </topicref>
   <topicref href="../Destinations/WebSocketClient.dita" chunk="to-content">
    <topicmeta>

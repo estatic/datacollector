@@ -24,6 +24,7 @@
     <topicmeta><shortdesc></shortdesc></topicmeta>
    <topicref href="../Origins/Origins-HTTPComparison.dita"/>
    <topicref href="../Origins/Origins-MapRComparison.dita"/>
+   <topicref href="../Origins/Origins-UDP.dita"/>
    <topicref href="../Origins/Origins-WebSocketComparison.dita"/>
    <topicref href="../Origins/BatchSizeWaitTime.dita"/>
    <topicref href="../Origins/MaxRecordSize.dita"/>
@@ -44,6 +45,17 @@
    </topicref>
    <topicref href="../Origins/AmazonS3-DataFormat.dita"/>
    <topicref href="../Origins/AmazonS3-Configuring.dita"/>
+  </topicref>
+  <topicref href="../Origins/AmazonSQS.dita" chunk="to-content">
+   <topicmeta><shortdesc></shortdesc></topicmeta>
+   <topicref href="../Origins/AmazonSQS-AWSCredentials.dita"/>
+   <topicref href="../Origins/AmazonSQS-QueueNamePrefix.dita"/>
+   <topicref href="../Origins/AmazonSQS-MultithreadProcessing.dita"/>
+   <topicref href="../Origins/AmazonSQS-MessageAttributes.dita">
+    <topicref href="../Origins/AmazonSQS-SenderAtts.dita"/>
+   </topicref>
+   <topicref href="../Origins/AmazonSQS-DataFormats.dita"/>
+   <topicref href="../Origins/AmazonSQS-Configuring.dita"/>
   </topicref>
   <topicref href="../Origins/AzureEventHub.dita" chunk="to-content">
    <topicmeta><shortdesc></shortdesc></topicmeta>
@@ -122,6 +134,19 @@
     <topicref href="../Origins/BigQuery-EventRecord.dita"/>
    </topicref>
    <topicref href="../Origins/BigQuery-Configuring.dita"/>
+  </topicref>
+  <topicref href="../Origins/GCS.dita" chunk="to-content">
+   <topicmeta><shortdesc></shortdesc></topicmeta>
+   <topicref href="../Origins/GCS-Credentials.dita">
+    <topicref href="../Origins/GCS-CredentialsDefault.dita"/>
+    <topicref href="../Origins/GCS-CredentialsFile.dita"/>
+   </topicref>
+   <topicref href="../Origins/GCS-CommonPrefixPatterns.dita"/>
+   <topicref href="../Origins/GCS-EventGeneration.dita">
+    <topicref href="../Origins/GCS-EventRecords.dita"/>
+   </topicref>
+   <topicref href="../Origins/GCS-DataFormats.dita"/>
+   <topicref href="../Origins/GCS-Configuring.dita"/>
   </topicref>
   <topicref href="../Origins/PubSub.dita" chunk="to-content">
    <topicmeta><shortdesc></shortdesc></topicmeta>
@@ -312,18 +337,10 @@
    <topicref href="../Origins/MapRFS-DataFormat-origin.dita"/>
    <topicref href="../Origins/MapRFS-Configuring.dita"/>
   </topicref>
-  <topicref href="../Origins/MapRStreamsCons.dita" chunk="to-content">
-   <topicmeta><shortdesc></shortdesc></topicmeta>
-   <topicref href="../Origins/MapRStreamsCons-AllData.dita"/>
-   <topicref href="../Origins/MapRStreamsCons-DataFormats.dita">
-    <topicref href="../Origins/LogFormats.dita"/>
-   </topicref>
-   <topicref href="../Origins/MapRStreamsCons-AddProps.dita"/>
-   <topicref href="../Origins/MapRStreamsCons-RecordHeaderAtts.dita"/>
-   <topicref href="../Origins/MapRStreamsCons-Configuring.dita"/>
-  </topicref>
   <topicref href="../Origins/MapRStreamsMultiConsumer.dita" chunk="to-content">
-   <topicmeta><shortdesc></shortdesc></topicmeta>
+   <topicmeta>
+    <shortdesc/>
+   </topicmeta>
    <topicref href="../Origins/MapRStreamsMultiConsumer-Offsets.dita"/>
    <topicref href="../Origins/MapRStreamsMultiConsumer-ExistingData.dita"/>
    <topicref href="../Origins/MapRStreamsMultiConsumer-MultithreadProcessing.dita"/>
@@ -333,6 +350,16 @@
     <topicref href="../Origins/LogFormats.dita"/>
    </topicref>
    <topicref href="../Origins/MapRStreamsMultiConsumer-Configuring.dita"/>
+  </topicref>
+  <topicref href="../Origins/MapRStreamsCons.dita" chunk="to-content">
+   <topicmeta><shortdesc></shortdesc></topicmeta>
+   <topicref href="../Origins/MapRStreamsCons-AllData.dita"/>
+   <topicref href="../Origins/MapRStreamsCons-DataFormats.dita">
+    <topicref href="../Origins/LogFormats.dita"/>
+   </topicref>
+   <topicref href="../Origins/MapRStreamsCons-AddProps.dita"/>
+   <topicref href="../Origins/MapRStreamsCons-RecordHeaderAtts.dita"/>
+   <topicref href="../Origins/MapRStreamsCons-Configuring.dita"/>
   </topicref>
   <topicref href="../Origins/MongoDB.dita" chunk="to-content">
    <topicmeta><shortdesc></shortdesc></topicmeta>
@@ -526,9 +553,19 @@
    <topicref href="../Origins/TCPServer-DataFormats.dita"/>
    <topicref href="../Origins/TCPServer-Configuring.dita"/>
   </topicref>
+  <topicref href="../Origins/UDPMulti.dita" chunk="to-content">
+   <topicmeta><shortdesc></shortdesc></topicmeta>
+   <topicref href="../Origins/UDPMulti-RawData.dita"/>
+   <topicref href="../Origins/UDPMulti-ReceiverWorkerThreads.dita"/>
+   <topicref href="../Origins/UDPMulti-PacketQueue.dita"/>
+   <topicref href="../Origins/UDPMulti-Multithreaded.dita"/>
+   <topicref href="../Origins/UDPMulti-MetricsandTuning.dita"/>
+   <topicref href="../Origins/UDPMulti-Configuring.dita"/>
+  </topicref>
   <topicref href="../Origins/UDP.dita" chunk="to-content">
    <topicmeta><shortdesc></shortdesc></topicmeta>
    <topicref href="../Origins/UDP-RawData.dita"/>
+   <topicref href="../Origins/UDP-ReceiverThreads.dita"/>
    <topicref href="../Origins/UDP-Configuring.dita"/>
   </topicref>
   <topicref href="../Origins/UDPtoKafka.dita" chunk="to-content">

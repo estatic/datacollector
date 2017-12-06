@@ -50,6 +50,7 @@ import com.streamsets.pipeline.lib.salesforce.Errors;
 import com.streamsets.pipeline.lib.salesforce.ForceLookupConfigBean;
 import com.streamsets.pipeline.lib.salesforce.ForceSDCFieldMapping;
 import com.streamsets.pipeline.lib.salesforce.ForceUtils;
+import com.streamsets.pipeline.lib.salesforce.SoapRecordCreator;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
 import com.streamsets.pipeline.stage.origin.salesforce.Groups;
@@ -63,7 +64,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,8 +86,8 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
   PartnerConnection partnerConnection;
   private ErrorRecordHandler errorRecordHandler;
   private ELEval queryEval;
-  Map<String, Map<String, com.sforce.soap.partner.Field>> metadataMap;
   private CacheCleaner cacheCleaner;
+  SoapRecordCreator recordCreator;
 
   public ForceLookupProcessor(ForceLookupConfigBean conf) {
     this.conf = conf;
@@ -151,6 +151,7 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
     if (issues.isEmpty()) {
       cache = buildCache();
       cacheCleaner = new CacheCleaner(cache, "ForceLookupProcessor", 10 * 60 * 1000);
+      recordCreator = new SoapRecordCreator(getContext(), conf, conf.sObjectType);
     }
 
     return issues;
@@ -177,14 +178,8 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
       return;
     }
 
-    // New metadata map for each batch
-    metadataMap = new LinkedHashMap<>();
-    LOG.debug("Getting metadata for sobjectType {}", conf.sObjectType);
-    try {
-      ForceUtils.getAllReferences(partnerConnection, metadataMap, new String[]{conf.sObjectType}, ForceUtils.METADATA_DEPTH);
-    } catch (ConnectionException e) {
-      throw new StageException(Errors.FORCE_21, conf.sObjectType, e);
-    }
+    // New metadata cache for each batch
+    recordCreator.buildMetadataCacheFromFieldList(partnerConnection, conf.retrieveFields);
 
     // Could be more than one record with the same value in the lookup
     // field, so we have to build a multimap
@@ -213,7 +208,7 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
     Set<Record> badRecords = new HashSet<>();
     if (!recordsToRetrieve.isEmpty()) {
       String fieldList = ("*".equals(conf.retrieveFields.trim()))
-          ? ForceUtils.expandWildcard(conf.sObjectType, metadataMap )
+          ? recordCreator.expandWildcard()
           : conf.retrieveFields;
       String[] idArray = recordsToRetrieve.keySet().toArray(new String[0]);
 
@@ -230,12 +225,7 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
 
           for (SObject sObject : sObjects) {
             String id = sObject.getId();
-            Map<String, Field> fieldMap = ForceUtils.addFields(sObject,
-                metadataMap,
-                conf.createSalesforceNsHeaders,
-                conf.salesforceNsHeaderPrefix,
-                columnsToTypes
-            );
+            Map<String, Field> fieldMap = recordCreator.addFields(sObject, columnsToTypes);
             for (Record record : recordsToRetrieve.get(id)) {
               setFieldsInRecord(record, fieldMap);
             }
@@ -365,8 +355,8 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
 
   private void processQuery(Batch batch, SingleLaneBatchMaker batchMaker) throws StageException {
     if (batch.getRecords().hasNext()) {
-      // New metadata map for each batch
-      metadataMap = new LinkedHashMap<>();
+      // New record creator for each batch
+      recordCreator.clearMetadataCache();
     } else {
       // No records - take the opportunity to clean up the cache so that we don't hold on to memory indefinitely
       cacheCleaner.periodicCleanUp();
@@ -382,7 +372,7 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
     try {
       ELVars elVars = getContext().createELVars();
       RecordEL.setRecordInContext(elVars, record);
-      String preparedQuery = prepareQuery(conf.soqlQuery, elVars);
+      String preparedQuery = prepareQuery(queryEval.eval(elVars, conf.soqlQuery, String.class));
       // Need this ugly cast since there isn't a way to do a simple
       // get with the Cache interface
       Map<String, Field> fieldMap = ((LoadingCache<String, Map<String, Field>>)cache).get(preparedQuery);
@@ -405,20 +395,18 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
 
   }
 
-  private String prepareQuery(String soqlQuery, ELVars elVars) throws StageException {
-    String preparedQuery = queryEval.eval(elVars, soqlQuery, String.class);
-    String sobjectType = ForceUtils.getSobjectTypeFromQuery(preparedQuery);
-
-    if (metadataMap.get(sobjectType.toLowerCase()) == null) {
-      LOG.debug("Getting metadata for sobjectType {} - query is {}", sobjectType, preparedQuery);
-      try {
-        ForceUtils.getAllReferences(partnerConnection, metadataMap, new String[]{sobjectType}, ForceUtils.METADATA_DEPTH);
-      } catch (ConnectionException e) {
-        throw new StageException(Errors.FORCE_21, sobjectType, e);
+  private String prepareQuery(String preparedQuery) throws StageException {
+    if (recordCreator.queryHasWildcard(preparedQuery)) {
+      if (!recordCreator.metadataCacheExists()) {
+        // Can't follow relationships on a wildcard query, so build the cache from the object type
+        recordCreator.buildMetadataCache(partnerConnection);
+      }
+      preparedQuery = recordCreator.expandWildcard(preparedQuery);
+    } else {
+      if (!recordCreator.metadataCacheExists()) {
+        recordCreator.buildMetadataCacheFromQuery(partnerConnection, preparedQuery);
       }
     }
-
-    preparedQuery = ForceUtils.expandWildcard(preparedQuery, sobjectType, metadataMap);
 
     return preparedQuery;
   }

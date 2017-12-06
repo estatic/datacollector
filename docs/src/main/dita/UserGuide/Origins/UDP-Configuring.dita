@@ -51,18 +51,18 @@
                                     conref="../Reusable_Content/ReusableSteps.dita#task_kzs_5vz_sq/row-EnableMultithreading">
                                     <entry/>
                                 </row>
-                                <row
-                                    conref="../Reusable_Content/ReusableSteps.dita#task_kzs_5vz_sq/row-ReceiverThreads">
-                                    <entry/>
-                                </row>
                                 <row>
-                                    <entry>Data Format</entry>
-                                    <entry>Data format passed by UDP:<ul id="ul-UDPDataFormat">
-                                            <li>collectd</li>
-                                            <li>NetFlow</li>
-                                            <li>syslog </li>
-                                            <li>Raw/separated data </li>
-                                        </ul></entry>
+                                    <entry>Number of Receiver Threads <xref
+                                            href="UDP-ReceiverThreads.dita">
+                                            <image href="../Graphics/icon_moreInfo.png" scale="10"
+                                                id="image_mgp_2q3_br" placement="inline"
+                                        /></xref></entry>
+                                    <entry
+                                        conref="../Reusable_Content/ReusableSteps.dita#task_kzs_5vz_sq/entry_ReceiverThreads"/>
+                                </row>
+                                <row
+                                    conref="../Reusable_Content/ReusableSteps.dita#task_kzs_5vz_sq/row-UDPdataFormat">
+                                    <entry/>
                                 </row>
                                 <row
                                     conref="../Reusable_Content/ReusableSteps.dita#task_kzs_5vz_sq/row-MaxBatchSize">
@@ -76,9 +76,6 @@
                         </tgroup>
                     </table>
                 </info>
-            </step>
-            <step conref="../Reusable_Content/ReusableSteps.dita#task_kzs_5vz_sq/O-step-UDPprops">
-                <cmd/>
             </step>
             <step>
                 <cmd>On the <wintitle>syslog</wintitle> tab, define the character set for the data. </cmd>

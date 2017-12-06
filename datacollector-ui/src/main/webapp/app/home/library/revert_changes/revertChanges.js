@@ -57,7 +57,7 @@ angular
                       pipelineRules: JSON.parse(orgRemotePipeline.currentRules.rulesDefinition)
                     };
 
-                    api.pipelineAgent.importPipelineConfig(pipelineInfo.pipelineId, pipelineEnvelope, true)
+                    api.pipelineAgent.importPipelineConfig(pipelineInfo.pipelineId, pipelineEnvelope, true, false)
                       .then(
                         function(res) {
                           $scope.updatedPipelineConfig = res.data.pipelineConfig;
@@ -87,7 +87,7 @@ angular
                   }
                 );
             } else {
-              $scope.common.errors = ['No pipeline found in DPM Pipeline Repository with pipeline ID: ' +
+              $scope.common.errors = ['No pipeline found in SCH Pipeline Repository with pipeline ID: ' +
               $scope.dpmPipelineId];
               $scope.operationInProgress = false;
             }

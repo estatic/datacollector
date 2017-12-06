@@ -21,6 +21,7 @@ public class WindowLengthChooserValues extends BaseEnumChooserValues<TimeWindow>
 
   public WindowLengthChooserValues() {
     super(
+        TimeWindow.TW_1M,
         TimeWindow.TW_5M,
         TimeWindow.TW_10M,
         TimeWindow.TW_30M,

@@ -66,6 +66,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -132,7 +134,7 @@ public class TableJdbcSource extends BasePushSource {
                   new TableJdbcELEvalContext(context, context.createELVars()),
                   tableJdbcConfigBean.quoteChar
 
-          );
+              );
 
           allTableContexts.putAll(tableContexts);
           for (String qualifiedTableName : tableContexts.keySet()) {
@@ -399,7 +401,9 @@ public class TableJdbcSource extends BasePushSource {
         }
       }
     } finally {
-      shutdownExecutorIfNeeded();
+      if (shutdownExecutorIfNeeded()) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 
@@ -430,22 +434,32 @@ public class TableJdbcSource extends BasePushSource {
 
   @Override
   public void destroy() {
-    shutdownExecutorIfNeeded();
-    executorService = null;
+    boolean interrupted = shutdownExecutorIfNeeded();
     //Invalidate all the thread cache so that all statements/result sets are properly closed.
     toBeInvalidatedThreadCaches.forEach(Cache::invalidateAll);
     //Closes all connections
     Optional.ofNullable(connectionManager).ifPresent(ConnectionManager::closeAll);
     JdbcUtil.closeQuietly(hikariDataSource);
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
   }
 
-  private void shutdownExecutorIfNeeded() {
+  private synchronized boolean shutdownExecutorIfNeeded() {
+    AtomicBoolean interrupted = new AtomicBoolean(false);
     Optional.ofNullable(executorService).ifPresent(executor -> {
       if (!executor.isTerminated()) {
         LOG.info("Shutting down executor service");
         executor.shutdown();
+        try {
+          executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+          LOG.warn("Shutdown interrupted");
+          interrupted.set(true);
+        }
       }
     });
+    return interrupted.get();
   }
 
   @VisibleForTesting

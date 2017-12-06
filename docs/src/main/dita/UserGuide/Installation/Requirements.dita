@@ -40,7 +40,7 @@
             <entry>Use one of the following operating systems and versions:<ul id="ul_cjh_sw4_1r">
                 <li>Mac OS X</li>
                 <li>CentOS 6 or 7</li>
-                <li>RedHat Enterprise Linux 6 or 7</li>
+                <li>Red Hat Enterprise Linux 6 or 7</li>
                 <li>Ubuntu 14.04 LTS or 16.04 LTS</li>
               </ul></entry>
           </row>
@@ -64,7 +64,7 @@
           </row>
           <row>
             <entry>Java</entry>
-            <entry>Oracle Java 8.<note>OpenJDK is not supported.</note></entry>
+            <entry>Oracle Java 8 or OpenJDK 8</entry>
           </row>
           <row>
             <entry>Browser</entry>

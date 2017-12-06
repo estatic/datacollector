@@ -605,8 +605,8 @@
        <entry>Common Prefix <xref href="../Origins/AmazonS3-CommonPrefixPatterns.dita">
          <image href="../Graphics/icon_moreInfo.png" scale="10" id="image_wm3_212_wv"/>
         </xref></entry>
-       <entry>Optional common prefix that describes the location of the objects. When defined, the
-        common prefix acts as a root for the prefix pattern.</entry>
+       <entry id="entry-CommonPrefix">Optional common prefix that describes the location of the
+        objects. When defined, the common prefix acts as a root for the prefix pattern.</entry>
       </row>
       <row id="S3ObjectPathDelimiter">
        <entry>Delimiter</entry>
@@ -624,11 +624,9 @@
        <entry>Prefix Pattern <xref href="../Origins/AmazonS3-CommonPrefixPatterns.dita">
          <image href="../Graphics/icon_moreInfo.png" scale="10" id="image_tfr_bk5_ht"/>
         </xref></entry>
-       <entry>
-        Prefix pattern that describes the objects to be processed.
-        <p>You can include the entire path to the objects. You can also use Ant-style path patterns
-         to read objects recursively. </p>
-       </entry>
+       <entry id="entry-PrefixPattern">Prefix pattern that describes the objects to be processed.
+         <p>You can include the entire path to the objects. You can also use Ant-style path patterns
+         to read objects recursively. </p></entry>
       </row>
       <row id="S3BufferLimit">
        <entry>Buffer Limit (KB)</entry>
@@ -1448,7 +1446,7 @@
     <tbody>
      <row id="row-UseProxy">
       <entry>Use Proxy</entry>
-      <entry>Specifies whether to use a proxy to connect to Amazon S3.</entry>
+      <entry>Specifies whether to use a proxy to connect.</entry>
      </row>
      <row id="row-ProxyHost">
       <entry>Proxy Host</entry>
@@ -1851,10 +1849,11 @@
      </row>
      <row id="SalesforceIncludeDeleted">
       <entry>Include Deleted Records</entry>
-      <entry>Determines whether the SOQL query also retrieves deleted records from the Salesforce
-       recycle bin. <p>The query can retrieve deleted records when the stage uses the Salesforce
-        SOAP API or the Bulk API version 39.0 or later. Earlier versions of the Bulk API do not
-        support retrieving deleted records.</p></entry>
+      <entry><ph id="ph-DeletedRecords1">Determines whether the SOQL query also retrieves deleted
+        records from the Salesforce recycle bin.</ph><p><ph id="ph-DeletedRecords2">The query can
+         retrieve deleted records when the stage uses the Salesforce SOAP API or the Bulk API
+         version 39.0 or later. Earlier versions of the Bulk API do not support retrieving deleted
+         records.</ph></p></entry>
      </row>
     </tbody>
    </tgroup>
@@ -2439,6 +2438,11 @@ com_streamsets_pipeline_stage_plugin_navigator_NavigatorLineagePublisher</codebl
      </row>
     </thead>
     <tbody>
+     <row>
+      <entry>credentialStore.vault.def</entry>
+      <entry>Required. Defines the implementation of the Vault credential store. <p>Do not change
+        the default value.</p></entry>
+     </row>
      <row>
       <entry>credentialStore.vault.config.pathKey.separator</entry>
       <entry>Optional. Separator to use for the path and key values in the credential name argument

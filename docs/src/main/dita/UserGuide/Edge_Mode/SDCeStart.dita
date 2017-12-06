@@ -16,11 +16,10 @@
 -->
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
 <concept id="concept_zfb_lwl_pbb">
- <title>Starting SDCe</title>
+ <title>Starting SDC Edge</title>
  <conbody>
-        <p><indexterm>Data Collector
-                    Edge<indexterm>starting</indexterm></indexterm><indexterm>SDCe<indexterm>starting</indexterm></indexterm>To
-            start <ph
+        <p><indexterm>Data Collector Edge<indexterm>starting</indexterm></indexterm><indexterm>SDC
+                    Edge<indexterm>starting</indexterm></indexterm>To start <ph
                 conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/Edge-Short"/>,
             run the following command from the <ph
                 conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/Edge-Short"/>
@@ -31,6 +30,10 @@
                 conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/Edge-Short"/>
             with the debug log level enabled for troubleshooting, run the following
             command:<codeblock>bin/edge -debug</codeblock></p>
+        <p>To start <ph
+                conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/Edge-Short"/>
+            and send the log to the console, run the following
+            command:<codeblock>bin/edge -logToConsole</codeblock></p>
         <p>To start <ph
                 conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/Edge-Short"/>
             and an edge pipeline at the same time, run the following command from the <ph

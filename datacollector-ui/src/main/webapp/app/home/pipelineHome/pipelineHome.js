@@ -1182,7 +1182,7 @@ angular
           return c.name === 'statsAggregatorStage';
         });
         statsAggregatorStageConfig.value = "streamsets-datacollector-basic-lib::" +
-          "com_streamsets_pipeline_stage_destination_devnull_StatsDpmDirectlyDTarget::1";
+                 "com_streamsets_pipeline_stage_destination_devnull_StatsNullDTarget::1";
       }
 
       //Determine edges from input lanes and output lanes
@@ -1384,7 +1384,7 @@ angular
       if (!$scope.previewMode && !$scope.snapshotMode && $scope.selectedType === type && $scope.selectedObject && selectedObject && optionsLength <= 2 &&
         ((type === pipelineConstant.PIPELINE && $scope.selectedObject.info.pipelineId === selectedObject.info.pipelineId) ||
           (type === pipelineConstant.STAGE_INSTANCE && $scope.selectedObject.instanceName === selectedObject.instanceName))) {
-        //Previous selection remain same
+        // Previous selection remain same
         return;
       }
 
@@ -1430,7 +1430,7 @@ angular
         // Crate list of services where each item have both the definition and actual configuration values
         $scope.detailPaneServices = [];
         _.each($scope.detailPaneConfig.services, function(serviceConfig) {
-          let service = {};
+          var service = {};
           service.definition = pipelineService.getServiceDefinition(serviceConfig.service);
           service.config = serviceConfig;
           $scope.detailPaneServices.push(service);
@@ -1455,7 +1455,7 @@ angular
         }
 
       } else if (type === pipelineConstant.PIPELINE){
-        //Pipeline Configuration
+        // Pipeline Configuration
         $scope.stageSelected = false;
         $scope.detailPaneConfigDefn = $scope.pipelineConfigDefinition;
         $scope.detailPaneConfig = $scope.selectedObject = $scope.pipelineConfig;
@@ -1694,7 +1694,7 @@ angular
       var pipelineStatus = $rootScope.common.pipelineStatusMap[routeParamPipelineName],
         config = $scope.pipelineConfig;
       return (pipelineStatus && config && pipelineStatus.pipelineId === config.info.pipelineId &&
-      _.contains(['RUNNING', 'STARTING', 'CONNECT_ERROR', 'RETRY', 'STOPPING'], pipelineStatus.status));
+      _.contains(['STARTING', 'STARTING_ERROR', 'RUNNING', 'RUNNING_ERROR', 'RETRY', 'FINISHING', 'STOPPING', 'STOPPING_ERROR', 'CONNECTING', 'CONNECT_ERROR'], pipelineStatus.status));
     };
 
     /**

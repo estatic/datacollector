@@ -16,19 +16,52 @@
 package com.streamsets.pipeline.lib.waveanalytics;
 
 import com.streamsets.pipeline.api.ConfigDef;
+import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.lib.salesforce.ForceConfigBean;
 
 public class WaveAnalyticsConfigBean extends ForceConfigBean {
   @ConfigDef(
       required = true,
       type = ConfigDef.Type.STRING,
-      defaultValue = "",
       label = "Edgemart Alias",
       description = "The alias of a dataset, which must be unique across an organization.",
       displayPosition = 50,
       group = "FORCE"
   )
   public String edgemartAliasPrefix;
+
+  @ConfigDef(
+      required = false,
+      type = ConfigDef.Type.STRING,
+      label = "Edgemart Container",
+      description = "The name of the app that contains the dataset. If omitted, then the user's private app is used.",
+      displayPosition = 55,
+      group = "FORCE"
+  )
+  public String edgemartContainer;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "true",
+      label = "Append timestamp to alias",
+      description = "Enable this to append a timestamp to the Edgemart Alias. This will avoid datasets overwriting each other.",
+      displayPosition = 52,
+      group = "FORCE"
+  )
+  public boolean appendTimestamp = true;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.MODEL,
+      defaultValue = "OVERWRITE",
+      label = "Operation",
+      description = "Indicates which operation to use when you’re loading data into the dataset.",
+      displayPosition = 57,
+      group = "FORCE"
+  )
+  @ValueChooserModel(OperationChooserValues.class)
+  public Operation operation = Operation.OVERWRITE;
 
   @ConfigDef(
       required = true,
@@ -81,7 +114,6 @@ public class WaveAnalyticsConfigBean extends ForceConfigBean {
   @ConfigDef(
       required = false,
       type = ConfigDef.Type.TEXT,
-      defaultValue = "",
       label = "Metadata JSON",
       description = "Metadata in JSON format, which describes the structure of the uploaded file.",
       displayPosition = 100,

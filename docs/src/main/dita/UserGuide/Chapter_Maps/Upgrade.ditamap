@@ -41,7 +41,8 @@
    <topicref href="../Upgrade/Tarball-Step2-BackUp.dita"/>
    <topicref href="../Upgrade/Tarball-Step3-Install.dita">
     <topicref href="../Upgrade/Tarball-ManualStart.dita"/>
-    <topicref href="../Upgrade/Tarball-ServiceStart.dita"/>
+    <topicref href="../Upgrade/Tarball-ServiceStart_EL6.dita"/>
+    <topicref href="../Upgrade/Tarball-ServiceStart_EL7.dita"/>
    </topicref>
    <topicref href="../Upgrade/Tarball-Step4-EnvConfig.dita"/>
    <topicref href="../Upgrade/Tarball-Step5-UpdateConfigFiles.dita"/>
@@ -75,6 +76,14 @@
    <topicmeta>
     <shortdesc/>
    </topicmeta>
+   <topicref href="../Upgrade/PostUpgrade-DPMOnPrem.dita"/>
+   <topicref href="../Upgrade/PostUpgrade-LegacyLibraries.dita"/>
+   <topicref href="../Upgrade/PostUpgrade-ClouderaNav.dita"/>
+   <topicref href="../Upgrade/PostUpgrade-JDBCMultitable-QueryInterval.dita"/>
+   <topicref href="../Upgrade/PostUpgrade-JDBCQuery-CDC.dita"/>
+   <topicref href="../Upgrade/PostUpgrade-MongoDBdest-Upsert.dita"/>
+   <topicref href="../Upgrade/PostUpgrade-TimeZones.dita"/>
+   <topicref href="../Upgrade/PostUpgrade-Kudu.dita"/>
    <topicref href="../Upgrade/PostUpgrade-JDBCMultitable.dita"/>
    <topicref href="../Upgrade/PostUpgrade-Vault.dita"/>
    <topicref href="../Upgrade/PostUpgrade-JDBCProducer.dita"/>
@@ -82,7 +91,6 @@
    <topicref href="../Upgrade/2410DockerAuthentication.dita"/>
    <topicref href="../Upgrade/2400-PipelinePermissions.dita"/>
    <topicref href="../Upgrade/PostUpgrade-Elasticsearch.dita"/>
-   <topicref href="../Upgrade/PostUpgrade-Kudu.dita"/>
   </topicref>
   <topicref href="../Upgrade/Upgrade-ExternalSystems.dita" chunk="to-content">
    <topicmeta>

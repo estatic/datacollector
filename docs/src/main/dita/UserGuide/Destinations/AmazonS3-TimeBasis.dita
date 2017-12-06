@@ -18,12 +18,14 @@
 -->
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
 <concept id="concept_qtb_njg_vw">
- <title>Time Basis and Time-Based Buckets and Partition Prefixes</title>
+ <title>Time Basis and Data Time Zone for Time-Based Buckets and Partition Prefixes</title>
  <conbody>
-        <p><indexterm>time basis<indexterm>for time-based properties</indexterm></indexterm>The time
-            basis is the time used by the Amazon S3 destination to write records to a time-based
-            bucket or partition prefix. When the configured bucket or partition prefix does not
-            include time-based functions, you can ignore the time basis property.</p>
+        <p><indexterm>time basis, buckets, and partition prefixes<indexterm>for Amazon S3
+                    destination</indexterm></indexterm><indexterm>Amazon S3
+                    destinations<indexterm>time basis</indexterm></indexterm>The time basis and the
+            data time zone comprises the time used by the Amazon S3 destination to write records to
+            a time-based bucket or partition prefix. When the configured bucket or partition prefix
+            does not include time-based functions, you can ignore the time basis property.</p>
         <p>A bucket or partition prefix has a time component when it includes datetime variables,
             such as <codeph>${YYYY()}</codeph> or <codeph>${DD()}</codeph>, or when it includes an
             expression that evaluates to a datetime value, such as
@@ -37,15 +39,17 @@
                         writes based on the processing time and the configured bucket and partition
                         prefix. The processing time is the time associated with the <ph
                             conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/pName-long"
-                        /> running the pipeline. To use the processing time as the time basis, use
-                        the following expression: <codeblock>${time:now()}</codeblock>This is the
-                        default time basis. </dd>
+                        /> running the pipeline, by default. You can specify a different time zone
+                        by configuring the Data Time Zone property. To use the processing time as
+                        the time basis, use the following expression:
+                        <codeblock>${time:now()}</codeblock>This is the default time basis. </dd>
                 </dlentry>
                 <dlentry>
                     <dt>Record Time</dt>
                     <dd>When you use the time associated with a record as the time basis, you
                         specify a date field in the record. The destination writes data based on the
-                        datetimes associated with the records. </dd>
+                        datetimes associated with the records, adjusting for the value specified for
+                        the Data Time Zone property.</dd>
                     <dd>To use a time associated with the record, use an expression that calls a
                         field and resolves to a datetime value, such as
                             <codeph>${record:value("/Timestamp")}</codeph>. </dd>

@@ -208,7 +208,7 @@ angular.module('dataCollectorApp.common')
       },
 
       /**
-       * Enable DPM
+       * Enable SCH
        * @param dpmInfo
        */
       enableDPM: function(dpmInfo) {
@@ -221,7 +221,7 @@ angular.module('dataCollectorApp.common')
       },
 
       /**
-       * Disable DPM
+       * Disable SCH
        */
       disableDPM: function() {
         var url = apiBase + '/system/disableDPM';
@@ -232,7 +232,7 @@ angular.module('dataCollectorApp.common')
       },
 
       /**
-       * Create DPM Groups & Users
+       * Create SCH Groups & Users
        * @param dpmInfo
        * @returns {*}
        */
@@ -760,8 +760,8 @@ angular.module('dataCollectorApp.common')
        * @param pipelineEnvelope
        * @param overwrite
        */
-      importPipelineConfig: function(pipelineName, pipelineEnvelope, overwrite) {
-        var url = apiBase + '/pipeline/' + pipelineName + '/import?autoGeneratePipelineId=true';
+      importPipelineConfig: function(pipelineName, pipelineEnvelope, overwrite, autoGeneratePipelineId) {
+        var url = apiBase + '/pipeline/' + pipelineName + '/import?autoGeneratePipelineId=' + !!autoGeneratePipelineId;
         if (overwrite) {
           url += '&overwrite=' + overwrite;
         }
@@ -1657,7 +1657,7 @@ angular.module('dataCollectorApp.common')
        * @returns {*}
        */
       uploadSupportBundle: function (generators) {
-        var url = apiBase + '/system/bundle/upload?=generators=';
+        var url = apiBase + '/system/bundle/upload?generators=';
         return $http({
           method: 'GET',
           url: url + generators.join(',')

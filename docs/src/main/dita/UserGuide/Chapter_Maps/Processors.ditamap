@@ -23,6 +23,20 @@
   <topicref href="../Processors/Processors_overview.dita" chunk="to-content">
    <topicmeta><shortdesc></shortdesc></topicmeta>
   </topicref>
+  <topicref href="../Processors/Aggregator.dita" chunk="to-content">
+   <topicmeta><shortdesc></shortdesc></topicmeta>
+   <topicref href="../Processors/Aggregator-WindowType.dita">
+    <topicref href="../Processors/Aggregator-RollingWindow.dita"/>
+    <topicref href="../Processors/Aggregator-SlidingWindow.dita"/>
+   </topicref>
+   <topicref href="../Processors/Aggregator-CalculationComponents.dita"/>
+   <topicref href="../Processors/Aggregator-Functions.dita"/>
+   <topicref href="../Processors/Aggregator-EventGeneration.dita">
+    <topicref href="../Processors/Aggregator-EventRecords.dita"/>
+   </topicref>
+   <topicref href="../Processors/Aggregator-Monitoring.dita"/>
+   <topicref href="../Processors/Aggregator-Configuring.dita"/>
+  </topicref>
   <topicref href="../Processors/Base64Decoder.dita" chunk="to-content">
    <topicmeta><shortdesc></shortdesc></topicmeta>
    <topicref href="../Processors/Base64Decoder-Configuring.dita"/>
@@ -34,6 +48,10 @@
   <topicref href="../Processors/DataParser.dita" chunk="to-content">  <topicmeta><shortdesc></shortdesc></topicmeta>
    <topicref href="../Processors/DataParser-DataFormats.dita"/>
    <topicref href="../Processors/DataParser-Configuring.dita"/>
+  </topicref>
+  <topicref href="../Processors/Delay.dita" chunk="to-content">
+   <topicmeta><shortdesc></shortdesc></topicmeta>
+   <topicref href="../Processors/Delay-Configuring.dita"/>
   </topicref>
   <topicref href="../Processors/Expression.dita" chunk="to-content">
    <topicmeta><shortdesc></shortdesc></topicmeta>
@@ -264,6 +282,7 @@
    <topicmeta>
     <shortdesc/>
    </topicmeta>
+   <topicref href="../Processors/SalesforceLookup-Mode.dita"/>
    <topicref href="../Processors/SalesforceLookup-Cache.dita"/>
    <topicref href="../Processors/SalesforceLookup-Attributes.dita"/>
    <topicref href="../Processors/SalesforceLookup-APIVersion.dita"/>

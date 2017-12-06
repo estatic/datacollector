@@ -143,18 +143,35 @@
 
  
  <div class="body conbody"><p class="shortdesc">In <span class="ph">DPM</span>,
-        pipelines are the design of the dataflow. Jobs are the execution of the
-        dataflow.</p>
+        pipelines are the design of the dataflow. Jobs are the execution of the dataflow. Data
+        engineers design pipelines on an authoring <span class="ph">Data
+                  Collector</span>.
+        DevOps or site reliability engineers run jobs on groups of execution <span class="ph">Data
+                  Collector</span>s.</p>
 
-        <p class="p">As a DevOps or site reliability
-            engineer - the person responsible for ensuring that all services and systems are
-            scalable and reliable - you create <span class="ph">DPM</span>
-            jobs to run pipelines on groups of <span class="ph">Data
+        <p class="p">
+            
+        </p>
+
+        <p class="p">As a DevOps or site reliability engineer - the person responsible for ensuring that all
+            services and systems are scalable and reliable - you register both authoring and
+            execution <span class="ph">Data
+                  Collector</span>s
+            with <span class="ph">DPM</span>. You register <span class="ph">Data
+                  Collector</span>s
+            by manually administering them or by automatically provisioning them on a container
+            orchestration framework such as Kubernetes. All registered <span class="ph">Data
+                  Collector</span>s -
+            either manually administered or automatically provisioned - function in the same
+            way.</p>
+
+        <p class="p">You create <span class="ph">DPM</span>
+            jobs to run pipelines on groups of execution <span class="ph">Data
                   Collector</span>s.
             When you start a job on a group of <span class="ph">Data
                   Collector</span>s,
                 <span class="ph">DPM</span>
-            remotely runs the pipeline on all <span class="ph">Data
+            remotely runs the pipeline on the <span class="ph">Data
                   Collector</span>s
             in the group. This enables you to manage and orchestrate large scale dataflows run
             across multiple <span class="ph">Data
@@ -300,6 +317,30 @@
 </div>
 </div>
 <div class="navfooter"><!---->
-<span class="navparent"><a class="link" href="../DPM/DPM_title.html" title="Dataflow Performance Manager"><span class="navheader_label">Parent topic</span><span class="navheader_separator">: </span><span class="navheader_linktext">Dataflow Performance Manager</span></a></span>  </div><div class="footer" id="webhelp_copyright_information"></div>
+<span class="navparent"><a class="link" href="../DPM/DPM_title.html" title="Dataflow Performance Manager"><span class="navheader_label">Parent topic</span><span class="navheader_separator">: </span><span class="navheader_linktext">Dataflow Performance Manager</span></a></span>  </div><div class="footer" id="webhelp_copyright_information"><!--
+
+    Copyright 2017 StreamSets Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+--><!-- SDC google analytics --><script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-60917135-3', 'auto');
+  ga('send', 'pageview');
+</script></div>
 </body>
 </html>

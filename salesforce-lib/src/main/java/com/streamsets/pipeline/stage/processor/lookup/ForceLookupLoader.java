@@ -22,13 +22,10 @@ import com.sforce.ws.ConnectionException;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
-import com.streamsets.pipeline.lib.salesforce.DataType;
 import com.streamsets.pipeline.lib.salesforce.Errors;
-import com.streamsets.pipeline.lib.salesforce.ForceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
 
 class ForceLookupLoader extends CacheLoader<String, Map<String, Field>> {
@@ -47,6 +44,10 @@ class ForceLookupLoader extends CacheLoader<String, Map<String, Field>> {
 
   private Map<String, Field> lookupValuesForRecord(String preparedQuery) throws StageException {
     try {
+      if (!processor.recordCreator.metadataCacheExists()) {
+        processor.recordCreator.buildMetadataCacheFromQuery(processor.partnerConnection, preparedQuery);
+      }
+
       QueryResult queryResult = processor.conf.queryAll
           ? processor.partnerConnection.queryAll(preparedQuery)
           : processor.partnerConnection.query(preparedQuery);
@@ -58,11 +59,8 @@ class ForceLookupLoader extends CacheLoader<String, Map<String, Field>> {
       if (records.length > 0) {
         // TODO - handle multiple records (SDC-4739)
 
-        return ForceUtils.addFields(
+        return processor.recordCreator.addFields(
             records[0],
-            processor.metadataMap,
-            processor.conf.createSalesforceNsHeaders,
-            processor.conf.salesforceNsHeaderPrefix,
             processor.columnsToTypes);
       } else {
         // Salesforce returns no row. Use default values.

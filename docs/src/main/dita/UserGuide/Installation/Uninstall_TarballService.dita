@@ -35,27 +35,28 @@
         <steps>
             <step>
                 <cmd>Use one of the following methods to shut down <ph
-                    conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/pName-long"
-                />:</cmd>
+                        conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/pName-long"
+                    />:</cmd>
                 <choices id="choices_hwp_k2c_rx">
-                    <choice>To use the command line, use the following
-                        command:<codeblock>service sdc stop</codeblock></choice>
-                    <choice>To use the <ph
-                            conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/pName-long"
-                        /> UI, click <menucascade>
-                            <uicontrol>Administration</uicontrol>
-                            <uicontrol> Shut Down</uicontrol>
-                        </menucascade>. When the confirmation dialog box appears, click
-                            <uicontrol>Yes</uicontrol>.</choice>
+                    <choice>To use the command line, use the required command for your operating
+                            system.<p
+                            conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/shutdownServiceLinuxEL6"
+                            conrefend="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/shutdownServiceLinuxEL7"
+                        /></choice>
+                    <choice>
+                        <p
+                            conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/shutdownUI"
+                        />
+                    </choice>
                 </choices>
             </step>
             <step>
                 <cmd>Remove the <ph
                         conref="../Reusable_Content/ReusablePhrases.dita#concept_vhs_5tz_xp/pName-long"
                     /> directories.</cmd>
-                <info>For example, if you used the default directories, run the following command to
-                    remove the
-                    directories:<codeblock>rm -rf /etc/init.d/sdc  /etc/sdc /var/log/sdc /var/lib/sdc /var/lib/sdc-resources</codeblock></info>
+                <info>For example, if you used the default directories on Red Hat Enterprise Linux
+                    6, run the following command to remove the directories:
+                    <codeblock>rm -rf /etc/init.d/sdc  /etc/sdc /var/log/sdc /var/lib/sdc /var/lib/sdc-resources</codeblock></info>
             </step>
             <step>
                 <cmd>Remove the directory where you extracted the tarball.</cmd>
