@@ -477,7 +477,7 @@ public class OracleCDCSource extends BaseSource {
             String rsId = resultSet.getString(13);
             Object ssn = resultSet.getObject(14);
             String schema = String.valueOf(resultSet.getString(15));
-            SchemaAndTable schemaAndTable = new SchemaAndTable(table, schema);
+            SchemaAndTable schemaAndTable = new SchemaAndTable(schema, table);
             String xid = xidUsn + "." + xidSlt + "." + xidSqn;
             TransactionIdKey key = new TransactionIdKey(xid);
             bufferedRecordsLock.lock();
@@ -780,12 +780,12 @@ public class OracleCDCSource extends BaseSource {
   private EventRecord createEventRecord(
       DDL_EVENT type,
       String redoSQL,
-      SchemaAndTable table,
+      SchemaAndTable schemaAndTable,
       String scnSeq,
       boolean sendSchema
   ) {
     EventRecord event = getContext().createEventRecord(type.name(), 1, scnSeq);
-    event.getHeader().setAttribute(TABLE, table.getTable());
+    event.getHeader().setAttribute(TABLE, schemaAndTable.getTable());
     if (redoSQL != null) {
       event.getHeader().setAttribute(DDL_TEXT, redoSQL);
     }
@@ -795,7 +795,7 @@ public class OracleCDCSource extends BaseSource {
       // We actually don't know the schema at table creation ever, but just the schema when we started. So
       // trying to figure out the schema at the time of the DDL is not really possible since this DDL could have occured
       // before the source started. Since we allow only types to be bigger and no column drops, this is ok.
-      Map<String, Integer> schema = tableSchemas.get(table);
+      Map<String, Integer> schema = tableSchemas.get(schemaAndTable);
       Map<String, Field> fields = new HashMap<>();
       for (Map.Entry<String, Integer> column : schema.entrySet()) {
         fields.put(column.getKey(), Field.create(JDBCTypeNames.get(column.getValue())));
