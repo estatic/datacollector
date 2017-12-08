@@ -22,46 +22,38 @@ import org.apache.commons.lang.StringUtils;
  */
 public class SchemaAndTable {
 
-    private String schema;
-    private String table;
+  private final String schema;
+  private final String table;
 
-    public SchemaAndTable(String schema, String table) {
-        this.schema = schema;
-        this.table = table;
-    }
+  public SchemaAndTable(String schema, String table) {
+    this.schema = schema;
+    this.table = table;
+  }
 
-    public String getSchema() {
-        return schema;
-    }
+  public String getSchema() {
+    return schema;
+  }
 
-    public void setSchema(String schema) {
-        this.schema = schema;
-    }
+  public String getTable() {
+    return table;
+  }
 
-    public String getTable() {
-        return table;
-    }
+  public boolean isNotEmpty() {
+    return StringUtils.isNotEmpty(this.schema) && StringUtils.isNotEmpty(this.table);
+  }
 
-    public void setTable(String table) {
-        this.table = table;
+  @Override
+  public boolean equals(Object o) {
+    if (o instanceof SchemaAndTable) {
+      SchemaAndTable sat = (SchemaAndTable) o;
+      return StringUtils.equals(sat.getSchema(), this.schema) &&
+              StringUtils.equals(sat.getTable(), this.table);
     }
+    return false;
+  }
 
-    public boolean isNotEmpty() {
-        return StringUtils.isNotEmpty(this.schema) && StringUtils.isNotEmpty(this.table);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof SchemaAndTable) {
-            SchemaAndTable sat = (SchemaAndTable) o;
-            return StringUtils.equals(sat.getSchema(), this.schema) &&
-                    StringUtils.equals(sat.getTable(), this.table);
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        return this.schema.hashCode() + this.table.hashCode();
-    }
+  @Override
+  public int hashCode() {
+    return this.schema.hashCode() + this.table.hashCode();
+  }
 }
