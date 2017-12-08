@@ -55,6 +55,7 @@ public class CDCSourceConfigBean {
       required = false,
       type = ConfigDef.Type.STRING,
       label = "Exclude pattern",
+      description = "Regular expression which applies to both schema and table",
       displayPosition = 20,
       group = "CDC"
   )
