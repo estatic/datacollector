@@ -68,13 +68,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableSet;
-import java.util.TreeSet;
-import java.util.UUID;
+import java.util.*;
 
 import static com.streamsets.pipeline.stage.origin.lib.DataFormatParser.DATA_FORMAT_CONFIG_PREFIX;
 
@@ -615,6 +609,30 @@ public class RemoteDownloadSource extends BaseSource {
     // get files from current directory.
     remoteDir.refresh();
     theFiles = remoteDir.getChildren();
+    if (conf.excludeLatestFile) {
+      if (conf.sortBy == SortFileBy.FILECREATETIME_ASC || conf.sortBy == SortFileBy.FILECREATETIME_DESC) {
+        int direction = conf.sortBy == SortFileBy.FILECREATETIME_ASC ? 1 : -1;
+        Arrays.sort(theFiles, (Comparator<FileObject>) (b1, b2) -> {
+					try {
+						if (b1.getContent().getLastModifiedTime() > b2.getContent().getLastModifiedTime()) {
+							return 1 * direction;
+						} else if (b1.getContent().getLastModifiedTime() > b2.getContent().getLastModifiedTime()) {
+							return -1 * direction;
+						}
+						return 0;
+					} catch (FileSystemException e) {
+						return -1;
+					}
+				});
+      } else if (conf.sortBy == SortFileBy.FILENAME_ASC || conf.sortBy == SortFileBy.FILENAME_DESC) {
+        int direction = conf.sortBy == SortFileBy.FILENAME_ASC ? 1 : -1;
+        Arrays.sort(theFiles, (Comparator<FileObject>) (b1, b2) -> {
+          return b1.getName().compareTo(b2.getName());
+        });
+      }
+      theFiles = ArrayUtils.remove(theFiles, theFiles.length - 1);
+    }
+
 
     if (conf.processSubDirectories) {
       // append files from subdirectories.
