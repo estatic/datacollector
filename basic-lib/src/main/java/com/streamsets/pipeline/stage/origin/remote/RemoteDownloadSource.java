@@ -616,7 +616,7 @@ public class RemoteDownloadSource extends BaseSource {
 					try {
 						if (b1.getContent().getLastModifiedTime() > b2.getContent().getLastModifiedTime()) {
 							return 1 * direction;
-						} else if (b1.getContent().getLastModifiedTime() > b2.getContent().getLastModifiedTime()) {
+						} else if (b1.getContent().getLastModifiedTime() < b2.getContent().getLastModifiedTime()) {
 							return -1 * direction;
 						}
 						return 0;
