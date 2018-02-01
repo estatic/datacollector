@@ -614,12 +614,17 @@ public class RemoteDownloadSource extends BaseSource {
         int direction = conf.sortBy == SortFileBy.FILECREATETIME_ASC ? 1 : -1;
         Arrays.sort(theFiles, (Comparator<FileObject>) (b1, b2) -> {
           try {
-            if (b1.getContent().getLastModifiedTime() > b2.getContent().getLastModifiedTime()) {
-              return 1 * direction;
-            } else if (b1.getContent().getLastModifiedTime() < b2.getContent().getLastModifiedTime()) {
+            if (b1.getContent() == null) {
+              return direction;
+            }
+            if (b2.getContent() == null) {
               return -1 * direction;
             }
-            return 0;
+            LocalDateTime date1 = Instant.ofEpochMilli(
+                    b1.getContent().getLastModifiedTime()).atZone(ZoneId.systemDefault()).toLocalDateTime();
+            LocalDateTime date2 = Instant.ofEpochMilli(
+                    b2.getContent().getLastModifiedTime()).atZone(ZoneId.systemDefault()).toLocalDateTime();
+            return date1.compareTo(date2);
           } catch (FileSystemException e) {
             return direction;
           }
