@@ -621,7 +621,7 @@ public class RemoteDownloadSource extends BaseSource {
             }
             return 0;
           } catch (FileSystemException e) {
-            return -1;
+            return direction;
           }
         });
       } else if (conf.sortBy == SortFileBy.FILENAME_ASC || conf.sortBy == SortFileBy.FILENAME_DESC) {

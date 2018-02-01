@@ -23,8 +23,8 @@ public enum SortFileBy implements Label {
 	NONE("None"),
 	FILENAME_ASC("Filename ASC"),
 	FILENAME_DESC("Filename DESC"),
-	FILECREATETIME_ASC("File Last Mofified Time ASC"),
-	FILECREATETIME_DESC("File Last Mofified Time DESC");
+	FILECREATETIME_ASC("File Last Modified Time ASC"),
+	FILECREATETIME_DESC("File Last Modified Time DESC");
 
 	private final String label;
 
