@@ -68,13 +68,10 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableSet;
-import java.util.TreeSet;
-import java.util.UUID;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.*;
 
 import static com.streamsets.pipeline.stage.origin.lib.DataFormatParser.DATA_FORMAT_CONFIG_PREFIX;
 
@@ -621,6 +618,35 @@ public class RemoteDownloadSource extends BaseSource {
       theFiles = (FileObject[]) ArrayUtils.addAll(theFiles, remoteDir.findFiles(selector));
     }
 
+    if (conf.excludeLatestFile) {
+      if (conf.sortBy == SortFileBy.FILECREATETIME_ASC || conf.sortBy == SortFileBy.FILECREATETIME_DESC) {
+        int direction = conf.sortBy == SortFileBy.FILECREATETIME_ASC ? 1 : -1;
+        Arrays.sort(theFiles, (Comparator<FileObject>) (b1, b2) -> {
+          try {
+            if (b1.getContent() == null) {
+              return direction;
+            }
+            if (b2.getContent() == null) {
+              return -1 * direction;
+            }
+            LocalDateTime date1 = Instant.ofEpochMilli(
+                    b1.getContent().getLastModifiedTime()).atZone(ZoneId.systemDefault()).toLocalDateTime();
+            LocalDateTime date2 = Instant.ofEpochMilli(
+                    b2.getContent().getLastModifiedTime()).atZone(ZoneId.systemDefault()).toLocalDateTime();
+            return date1.compareTo(date2);
+          } catch (FileSystemException e) {
+            return direction;
+          }
+        });
+      } else if (conf.sortBy == SortFileBy.FILENAME_ASC || conf.sortBy == SortFileBy.FILENAME_DESC) {
+        int direction = conf.sortBy == SortFileBy.FILENAME_ASC ? 1 : -1;
+        Arrays.sort(theFiles, (Comparator<FileObject>) (b1, b2) -> {
+          return b1.getName().compareTo(b2.getName()) * direction;
+        });
+      }
+
+    }
+
     for (FileObject remoteFile : theFiles) {
       if (remoteFile.getType() != FileType.FILE) {
         continue;
@@ -628,6 +654,11 @@ public class RemoteDownloadSource extends BaseSource {
 
       //check if base name matches - not full path.
       if (!remoteFile.getName().getBaseName().matches(globToRegex(conf.filePattern))) {
+        continue;
+      }
+
+      // Skip latest file
+      if (conf.excludeLatestFile && theFiles[theFiles.length - 1].equals(remoteFile)) {
         continue;
       }
 

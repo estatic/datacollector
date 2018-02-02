@@ -196,6 +196,29 @@ public class RemoteDownloadConfigBean {
   )
   public String filePattern;
 
+	@ConfigDef(
+					required = false,
+					type = ConfigDef.Type.MODEL,
+					label = "Sort by",
+					defaultValue = "NONE",
+					description = "Select sort option",
+					group = "REMOTE",
+					displayPosition = 41
+	)
+	@ValueChooserModel(SortFileByChooserValue.class)
+	public SortFileBy sortBy = SortFileBy.NONE;
+
+	@ConfigDef(
+					required = false,
+					type = ConfigDef.Type.BOOLEAN,
+					label = "Exclude latest file",
+					defaultValue = "false",
+					description = "Check if need to exclude latest file",
+					group = "REMOTE",
+					displayPosition = 42
+	)
+	public Boolean excludeLatestFile = false;
+
   @ConfigDef(
       required = false,
       type = ConfigDef.Type.STRING,
