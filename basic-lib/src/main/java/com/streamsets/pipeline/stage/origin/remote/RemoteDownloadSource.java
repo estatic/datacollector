@@ -612,6 +612,11 @@ public class RemoteDownloadSource extends BaseSource {
     remoteDir.refresh();
     theFiles = remoteDir.getChildren();
 
+    if (conf.processSubDirectories) {
+      // append files from subdirectories.
+      theFiles = (FileObject[]) ArrayUtils.addAll(theFiles, remoteDir.findFiles(selector));
+    }
+
     if (conf.excludeLatestFile) {
       if (conf.sortBy == SortFileBy.FILECREATETIME_ASC || conf.sortBy == SortFileBy.FILECREATETIME_DESC) {
         int direction = conf.sortBy == SortFileBy.FILECREATETIME_ASC ? 1 : -1;
@@ -638,12 +643,7 @@ public class RemoteDownloadSource extends BaseSource {
           return b1.getName().compareTo(b2.getName()) * direction;
         });
       }
-      theFiles = ArrayUtils.remove(theFiles, theFiles.length - 1);
-    }
 
-    if (conf.processSubDirectories) {
-      // append files from subdirectories.
-      theFiles = (FileObject[]) ArrayUtils.addAll(theFiles, remoteDir.findFiles(selector));
     }
 
     for (FileObject remoteFile : theFiles) {
@@ -656,6 +656,11 @@ public class RemoteDownloadSource extends BaseSource {
         continue;
       }
 
+      // Skip latest file
+      if (conf.excludeLatestFile && theFiles[theFiles.length - 1].equals(remoteFile)) {
+        continue;
+      }
+
       long lastModified = remoteFile.getContent().getLastModifiedTime();
       RemoteFile tempFile = new RemoteFile(remoteFile.getName().getPath(), lastModified, remoteFile);
       if (shouldQueue(tempFile)) {
@@ -663,6 +668,9 @@ public class RemoteDownloadSource extends BaseSource {
         // So if it is the one of those, don't pull it in.
         fileQueue.add(tempFile);
       }
+    }
+    if (conf.excludeLatestFile) {
+
     }
   }
 
