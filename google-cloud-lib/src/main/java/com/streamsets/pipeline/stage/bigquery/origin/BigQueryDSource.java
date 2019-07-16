@@ -20,7 +20,7 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSource;
+import com.streamsets.pipeline.api.base.configurablestage.DSource;
 import com.streamsets.pipeline.stage.bigquery.lib.Groups;
 
 @StageDef(
@@ -30,8 +30,9 @@ import com.streamsets.pipeline.stage.bigquery.lib.Groups;
     icon="bigquery.png",
     execution = ExecutionMode.STANDALONE,
     producesEvents = true,
+    eventDefs = {BigQuerySuccessEvent.class},
     upgrader = BigQuerySourceUpgrader.class,
-    onlineHelpRefUrl = "index.html#Origins/BigQuery.html#task_n5w_ykv_q1b"
+    onlineHelpRefUrl ="index.html?contextID=task_n5w_ykv_q1b"
 )
 @ConfigGroups(Groups.class)
 public class BigQueryDSource extends DSource {

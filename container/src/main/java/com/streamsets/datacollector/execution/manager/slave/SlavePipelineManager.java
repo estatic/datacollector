@@ -15,6 +15,7 @@
  */
 package com.streamsets.datacollector.execution.manager.slave;
 
+import com.streamsets.datacollector.event.dto.PipelineStartEvent;
 import com.streamsets.datacollector.event.handler.remote.RemoteDataCollector;
 import com.streamsets.datacollector.execution.EventListenerManager;
 import com.streamsets.datacollector.execution.Manager;
@@ -47,6 +48,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 public class SlavePipelineManager extends AbstractTask implements Manager {
   private static final Logger LOG = LoggerFactory.getLogger(SlavePipelineManager.class);
@@ -69,7 +71,13 @@ public class SlavePipelineManager extends AbstractTask implements Manager {
   }
 
   @Override
-  public Previewer createPreviewer(String user, String name, String rev) {
+  public Previewer createPreviewer(
+      String user,
+      String name,
+      String rev,
+      List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
+      Function<Object, Void> afterActionsFunction
+  ) {
     throw new UnsupportedOperationException();
   }
 

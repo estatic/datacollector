@@ -23,12 +23,12 @@
     <parent>
         <groupId>com.streamsets</groupId>
         <artifactId>streamsets-datacollector-stage-lib-parent</artifactId>
-        <version>3.1.0.0-SNAPSHOT</version>
+        <version>3.10.0-SNAPSHOT</version>
         <relativePath>../stage-lib-parent</relativePath>
     </parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-apache-solr_6_1_0-lib</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <description>StreamSets Data Collector Apache Solr 6.1.0 Lib</description>
     <name>StreamSets Data Collector Apache Solr 6.1.0 Lib</name>
     <packaging>jar</packaging>
@@ -99,6 +99,10 @@
             <artifactId>jetty-xml</artifactId>
             <version>${solr.test.jetty.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.streamsets</groupId>
+            <artifactId>streamsets-datacollector-stagesupport</artifactId>
         </dependency>
 
         <dependency>

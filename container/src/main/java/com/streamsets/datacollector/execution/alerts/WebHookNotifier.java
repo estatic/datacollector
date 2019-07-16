@@ -30,6 +30,7 @@ import com.streamsets.datacollector.restapi.bean.MetricRegistryJson;
 import com.streamsets.datacollector.runner.PipelineRuntimeException;
 import com.streamsets.dc.execution.manager.standalone.ThreadUsage;
 import com.streamsets.pipeline.api.ExecutionMode;
+import com.streamsets.pipeline.api.StageException;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
@@ -181,7 +182,7 @@ public class WebHookNotifier implements StateEventListener {
                 );
               }
             } catch (Exception e) {
-              LOG.error("Error calling Webhook URL : {}", e.toString(), e);
+              LOG.error("Error calling Webhook URL '{}' on state {}: {}", webhookConfig.webhookUrl, toState.getStatus().name(), e.toString(), e);
             } finally {
               if (response != null) {
                 response.close();
@@ -193,22 +194,22 @@ public class WebHookNotifier implements StateEventListener {
     }
   }
 
-  private void configurePasswordAuth(WebhookCommonConfig webhookConfig, WebTarget webTarget) {
+  private void configurePasswordAuth(WebhookCommonConfig webhookConfig, WebTarget webTarget) throws StageException {
     if (webhookConfig.authType == AuthenticationType.BASIC) {
       webTarget.register(
-          HttpAuthenticationFeature.basic(webhookConfig.username, webhookConfig.password)
+          HttpAuthenticationFeature.basic(webhookConfig.username.get(), webhookConfig.password.get())
       );
     }
 
     if (webhookConfig.authType == AuthenticationType.DIGEST) {
       webTarget.register(
-          HttpAuthenticationFeature.digest(webhookConfig.username, webhookConfig.password)
+          HttpAuthenticationFeature.digest(webhookConfig.username.get(), webhookConfig.password.get())
       );
     }
 
     if (webhookConfig.authType == AuthenticationType.UNIVERSAL) {
       webTarget.register(
-          HttpAuthenticationFeature.universal(webhookConfig.username, webhookConfig.password)
+          HttpAuthenticationFeature.universal(webhookConfig.username.get(), webhookConfig.password.get())
       );
     }
   }

@@ -20,12 +20,18 @@ import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.BaseTarget;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
+import com.streamsets.pipeline.api.lineage.EndPointType;
+import com.streamsets.pipeline.api.lineage.LineageEvent;
+import com.streamsets.pipeline.api.lineage.LineageEventType;
+import com.streamsets.pipeline.api.lineage.LineageSpecificAttribute;
 import com.streamsets.pipeline.kafka.api.SdcKafkaProducer;
 import com.streamsets.pipeline.lib.generator.DataGenerator;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
 import com.streamsets.pipeline.lib.kafka.exception.KafkaConnectionException;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
+import com.streamsets.pipeline.stage.destination.lib.ResponseType;
+import com.streamsets.pipeline.stage.destination.lib.ToOriginResponseConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,43 +39,65 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class KafkaTarget extends BaseTarget {
 
   private static final Logger LOG = LoggerFactory.getLogger(KafkaTarget.class);
 
   private final KafkaTargetConfig conf;
+  private final ToOriginResponseConfig responseConf;
 
   private long recordCounter = 0;
   private SdcKafkaProducer kafkaProducer;
   private ErrorRecordHandler errorRecordHandler;
+  private Set<String> accessedTopic;
 
-  public KafkaTarget(KafkaTargetConfig conf) {
+  public KafkaTarget(KafkaTargetConfig conf, ToOriginResponseConfig responseConf) {
     this.conf = conf;
+    this.responseConf = responseConf;
   }
 
   @Override
   protected List<ConfigIssue> init() {
     List<ConfigIssue> issues = super.init();
-    conf.init(getContext(), issues);
+    boolean sendResponse = this.responseConf.sendResponseToOrigin &&
+        ResponseType.DESTINATION_RESPONSE.equals(this.responseConf.responseType);
+    conf.init(getContext(), sendResponse, issues);
     kafkaProducer = conf.getKafkaProducer();
     errorRecordHandler = new DefaultErrorRecordHandler(getContext());
+    accessedTopic = new HashSet<>();
     return issues;
   }
 
   @Override
   public void write(Batch batch) throws StageException {
+    List<Record> responseRecords = new ArrayList<>();
     if (conf.singleMessagePerBatch) {
-      writeOneMessagePerBatch(batch);
+      writeOneMessagePerBatch(batch, responseRecords);
     } else {
-      writeOneMessagePerRecord(batch);
+      writeOneMessagePerRecord(batch, responseRecords);
+    }
+
+    if (this.responseConf.sendResponseToOrigin) {
+      if (this.responseConf.responseType.equals(ResponseType.SUCCESS_RECORDS)) {
+        Iterator<Record> records = batch.getRecords();
+        while (records.hasNext()) {
+          getContext().toSourceResponse(records.next());
+        }
+      } else {
+        for (Record record :responseRecords) {
+          getContext().toSourceResponse(record);
+        }
+      }
     }
   }
 
-  private void writeOneMessagePerBatch(Batch batch) throws StageException {
+  private void writeOneMessagePerBatch(Batch batch, List<Record> responseRecords) throws StageException {
     int count = 0;
     //Map of topic->(partition->Records)
     Map<String, Map<Object, List<Record>>> perTopic = new HashMap<>();
@@ -118,6 +146,7 @@ public class KafkaTarget extends BaseTarget {
         String entryTopic = topicEntry.getKey();
         Map<Object, List<Record>> perPartition = topicEntry.getValue();
         if(perPartition != null) {
+          sendLineageEventIfNeeded(entryTopic);
           for (Map.Entry<Object, List<Record>> entry : perPartition.entrySet()) {
             Object partition = entry.getKey();
             List<Record> list = entry.getValue();
@@ -161,7 +190,7 @@ public class KafkaTarget extends BaseTarget {
               );
             }
             try {
-              kafkaProducer.write();
+              responseRecords.addAll(kafkaProducer.write(getContext()));
             } catch (StageException ex) {
               if (ex.getErrorCode().getCode().equals(KafkaErrors.KAFKA_69.name())) {
                 List<Exception> failedRecordException = (List<Exception>) ex.getParams()[1];
@@ -191,7 +220,7 @@ public class KafkaTarget extends BaseTarget {
   }
 
   @SuppressWarnings("unchecked")
-  private void writeOneMessagePerRecord(Batch batch) throws StageException {
+  private void writeOneMessagePerRecord(Batch batch, List<Record> responseRecords) throws StageException {
     long count = 0;
     Iterator<Record> records = batch.getRecords();
     List<Record> recordList = new ArrayList<>();
@@ -203,6 +232,7 @@ public class KafkaTarget extends BaseTarget {
         Object partitionKey = conf.getPartitionKey(record, topic);
         kafkaProducer.enqueueMessage(topic, serializeRecord(record), partitionKey);
         count++;
+        sendLineageEventIfNeeded(topic);
       } catch (KafkaConnectionException ex) {
         // Kafka connection exception is thrown when the client cannot connect to the list of brokers
         // even after retrying with backoff as specified in the retry and backoff config options
@@ -229,7 +259,7 @@ public class KafkaTarget extends BaseTarget {
       }
     }
     try {
-      kafkaProducer.write();
+      responseRecords.addAll(kafkaProducer.write(getContext()));
     } catch (StageException ex) {
       if (ex.getErrorCode().getCode().equals(KafkaErrors.KAFKA_69.name())) {
         List<Integer> failedRecordIndices = (List<Integer>) ex.getParams()[0];
@@ -267,5 +297,20 @@ public class KafkaTarget extends BaseTarget {
   public void destroy() {
     LOG.info("Wrote {} number of records to Kafka Broker", recordCounter);
     conf.destroy();
+  }
+
+  private void sendLineageEventIfNeeded(String topic) {
+    if (!accessedTopic.contains(topic)) {
+      LineageEvent event = getContext().createLineageEvent(LineageEventType.ENTITY_WRITTEN);
+      event.setSpecificAttribute(LineageSpecificAttribute.ENDPOINT_TYPE, EndPointType.KAFKA.name());
+      event.setSpecificAttribute(LineageSpecificAttribute.ENTITY_NAME, topic);
+      if (conf.metadataBrokerList != null) {
+        event.setSpecificAttribute(LineageSpecificAttribute.DESCRIPTION, conf.metadataBrokerList);
+      } else { // MapR doesn't have metadata broker list
+        event.setSpecificAttribute(LineageSpecificAttribute.DESCRIPTION, "MapR Streams Origin");
+      }
+      getContext().publishLineageEvent(event);
+      accessedTopic.add(topic);
+    }
   }
 }

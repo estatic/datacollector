@@ -15,6 +15,7 @@
  */
 package com.streamsets.datacollector.execution.snapshot;
 
+import com.google.common.collect.ImmutableList;
 import com.streamsets.datacollector.execution.Snapshot;
 import com.streamsets.datacollector.execution.SnapshotInfo;
 import com.streamsets.datacollector.execution.SnapshotStore;
@@ -29,9 +30,9 @@ import com.streamsets.pipeline.api.Record;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,7 +54,7 @@ public abstract class TestSnapshotStore {
   @Test
   public void testCreate() throws PipelineException {
     long before = System.currentTimeMillis();
-    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL);
+    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL, false);
     long after = System.currentTimeMillis();
     Assert.assertNotNull(snapshotInfo);
     Assert.assertEquals(SNAPSHOT_ID, snapshotInfo.getId());
@@ -65,9 +66,19 @@ public abstract class TestSnapshotStore {
     Assert.assertTrue(snapshotInfo.isInProgress());
   }
 
+  @Test(expected = PipelineException.class)
+  public void testCreateWhileSnapshotExists() throws PipelineException {
+    // Create snapshot
+    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL, false);
+    Assert.assertNotNull(snapshotInfo);
+
+    // Try to create it again
+    snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL, false);
+  }
+
   @Test
   public void testUpdateLabel() throws PipelineException {
-    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL);
+    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL, false);
     Assert.assertNotNull(snapshotInfo);
     Assert.assertEquals(SNAPSHOT_ID, snapshotInfo.getId());
     Assert.assertEquals(SNAPSHOT_LABEL, snapshotInfo.getLabel());
@@ -100,7 +111,7 @@ public abstract class TestSnapshotStore {
     Assert.assertNull(inputStream);
 
     //create snapshot - has snapshot info with "inProgress" but no data
-    snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL);
+    snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL, false);
 
     inputStream = snapshotStore.get(PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID).getOutput();
     Assert.assertNull(inputStream);
@@ -114,8 +125,8 @@ public abstract class TestSnapshotStore {
   }
 
   @Test
-  public void testSaveAndGet() throws PipelineException {
-    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL);
+  public void testSaveAndGet() throws Exception {
+    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL, false);
     Assert.assertTrue(snapshotInfo.isInProgress());
 
     snapshotStore.save(PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, 0, getSnapshotData());
@@ -131,13 +142,13 @@ public abstract class TestSnapshotStore {
   }
 
   @Test
-  public void testGetSummary() throws PipelineException {
+  public void testGetSummary() throws Exception {
     List<SnapshotInfo> summaryForPipeline = snapshotStore.getSummaryForPipeline(PIPELINE_NAME, PIPELINE_REV);
     Assert.assertNotNull(summaryForPipeline);
     Assert.assertEquals(0, summaryForPipeline.size());
 
     for(int i = 0; i < 3; i++) {
-      snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + i, SNAPSHOT_LABEL);
+      snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + i, SNAPSHOT_LABEL, false);
       snapshotStore.save(PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + i, 0, getSnapshotData());
     }
 
@@ -163,14 +174,14 @@ public abstract class TestSnapshotStore {
   }
 
   @Test
-  public void testDelete() throws PipelineException {
+  public void testDelete() throws Exception {
     //NO-OP since no snapshot exists
     snapshotStore.deleteSnapshot(PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID);
 
     //create and save
-    snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + 0, SNAPSHOT_LABEL + 0);
+    snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + 0, SNAPSHOT_LABEL + 0, false);
     snapshotStore.save(PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + 0, 0, getSnapshotData());
-    snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + 1, SNAPSHOT_LABEL + 1);
+    snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + 1, SNAPSHOT_LABEL + 1, false);
     snapshotStore.save(PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID + 1, 0, getSnapshotData());
     List<SnapshotInfo> summaryForPipeline = snapshotStore.getSummaryForPipeline(PIPELINE_NAME, PIPELINE_REV);
     Assert.assertEquals(2, summaryForPipeline.size());
@@ -198,8 +209,8 @@ public abstract class TestSnapshotStore {
   }
 
   @Test
-  public void testSnapshotClose() throws PipelineException, IOException {
-    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL);
+  public void testSnapshotClose() throws Exception {
+    SnapshotInfo snapshotInfo = snapshotStore.create(USER, PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, SNAPSHOT_LABEL, false);
     Assert.assertTrue(snapshotInfo.isInProgress());
 
     snapshotStore.save(PIPELINE_NAME, PIPELINE_REV, SNAPSHOT_ID, 0, getSnapshotData());
@@ -216,14 +227,20 @@ public abstract class TestSnapshotStore {
 
   }
 
-  private List<List<StageOutput>> getSnapshotData() {
+  private List<List<StageOutput>> getSnapshotData() throws Exception {
     List<List<StageOutput>> snapshotBatches = new ArrayList<>();
     snapshotBatches.add(createSnapshotData());
     snapshotBatches.add(createSnapshotData());
     return snapshotBatches;
   }
 
-  private List<StageOutput> createSnapshotData() {
+  private List<StageOutput> createSnapshotData() throws Exception  {
+    ErrorSink errorSink = new ErrorSink();
+    EventSink eventSink = new EventSink();
+    ImmutableList.of("source", "processor").forEach(instanceName -> {
+      errorSink.registerInterceptorsForStage(instanceName, Collections.emptyList());
+      eventSink.registerInterceptorsForStage(instanceName, Collections.emptyList());
+    });
 
     List<StageOutput> snapshot = new ArrayList<>(2);
 
@@ -247,7 +264,7 @@ public abstract class TestSnapshotStore {
     Map<String, List<Record>> so1 = new HashMap<>(1);
     so1.put("lane", records1);
 
-    StageOutput s1 = new StageOutput("source", so1, new ErrorSink(), new EventSink());
+    StageOutput s1 = new StageOutput("source", so1, errorSink, eventSink);
     snapshot.add(s1);
 
     List<Record> records2 = new ArrayList<>(1);
@@ -267,7 +284,7 @@ public abstract class TestSnapshotStore {
 
     Map<String, List<Record>> so2 = new HashMap<>(1);
     so2.put("lane", records2);
-    StageOutput s2 = new StageOutput("processor", so2, new ErrorSink(), new EventSink());
+    StageOutput s2 = new StageOutput("processor", so2, errorSink, eventSink);
     snapshot.add(s2);
 
     return snapshot;

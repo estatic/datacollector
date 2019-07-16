@@ -17,25 +17,28 @@ package com.streamsets.pipeline.stage.destination.kafka;
 
 
 import com.streamsets.pipeline.api.ConfigDef;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.StatsAggregatorStage;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.config.DataFormat;
+import com.streamsets.pipeline.stage.destination.lib.ToOriginResponseConfig;
 
 @StageDef(
-    version = 3,
+    version = 4,
     label = "Write to Kafka",
     description = "Writes Pipeline Statistic records to Kafka",
     onlineHelpRefUrl = "",
     upgrader = KafkaTargetUpgrader.class)
-@StatsAggregatorStage
 @HideConfigs(
     preconditions = true,
     onErrorRecord = true,
-    value = {"conf.dataFormat", "conf.singleMessagePerBatch"}
+    value = {"conf.dataFormat", "conf.singleMessagePerBatch", "responseConf.sendResponseToOrigin"}
 )
+@StatsAggregatorStage
+@HideStage(HideStage.Type.STATS_AGGREGATOR_STAGE)
 @GenerateResourceBundle
 public class StatsKafkaDTarget extends KafkaDTarget {
 
@@ -53,7 +56,7 @@ public class StatsKafkaDTarget extends KafkaDTarget {
   @Override
   protected Target createTarget() {
     conf.dataFormat = DataFormat.SDC_JSON;
-    return new KafkaTarget(conf);
+    return new KafkaTarget(conf, new ToOriginResponseConfig());
   }
 
 }

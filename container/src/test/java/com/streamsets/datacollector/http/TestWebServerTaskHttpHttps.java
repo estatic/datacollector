@@ -24,6 +24,7 @@ import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.main.RuntimeModule;
 import com.streamsets.datacollector.main.StandaloneRuntimeInfo;
 import com.streamsets.datacollector.util.Configuration;
+import com.streamsets.lib.security.http.RegistrationResponseDelegate;
 import com.streamsets.lib.security.http.RemoteSSOService;
 import com.streamsets.lib.security.http.SSOPrincipal;
 import com.streamsets.lib.security.http.SSOService;
@@ -36,10 +37,8 @@ import org.glassfish.jersey.client.filter.CsrfProtectionFilter;
 import org.junit.Assert;
 import org.junit.Test;
 
-import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import javax.servlet.ServletContextEvent;
@@ -64,7 +63,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 
 import static com.streamsets.datacollector.util.AwaitConditionUtil.waitForStart;
 
@@ -90,7 +88,7 @@ public class TestWebServerTaskHttpHttps {
     runtimeInfo = new StandaloneRuntimeInfo(
         RuntimeModule.SDC_PROPERTY_PREFIX,
         new MetricRegistry(),
-        Collections.<ClassLoader>emptyList()
+        Collections.emptyList()
     ) {
       @Override
       public String getConfigDir() {
@@ -136,16 +134,6 @@ public class TestWebServerTaskHttpHttps {
     File dir = new File("target", UUID.randomUUID().toString());
     Assert.assertTrue(dir.mkdirs());
     return dir.getAbsolutePath();
-  }
-
-  private Callable<Boolean> isWebServerTaskRunning(final WebServerTask ws) {
-    return new Callable<Boolean>() {
-      @Override
-      public Boolean call() throws Exception {
-        ws.getServerURI();
-        return true;
-      }
-    };
   }
 
   @Test
@@ -281,12 +269,7 @@ public class TestWebServerTaskHttpHttps {
     };
     sc.init(null, trustAllCerts, new java.security.SecureRandom());
     conn.setSSLSocketFactory(sc.getSocketFactory());
-    conn.setHostnameVerifier(new HostnameVerifier() {
-      @Override
-      public boolean verify(String s, SSLSession sslSession) {
-        return true;
-      }
-    });
+    conn.setHostnameVerifier((s, sslSession) -> true);
   }
 
   @Test
@@ -340,12 +323,7 @@ public class TestWebServerTaskHttpHttps {
     final WebServerTask ws = createWebServerTask(confDir, conf);
     try {
       ws.initTask();
-      new Thread() {
-        @Override
-        public void run() {
-          ws.runTask();
-        }
-      }.start();
+      new Thread(ws::runTask).start();
 
       waitForStart(ws);
 
@@ -361,7 +339,7 @@ public class TestWebServerTaskHttpHttps {
   }
 
   @Test
-  public void testHttpRedirectToHttpss() throws Exception {
+  public void testHttpRedirectToHttps() throws Exception {
     Configuration conf = new Configuration();
     int httpPort = NetworkUtils.getRandomPort();
     int httpsPort = NetworkUtils.getRandomPort();
@@ -500,6 +478,10 @@ public class TestWebServerTaskHttpHttps {
     @Override
     public void clearCaches() {
 
+    }
+
+    @Override
+    public void setRegistrationResponseDelegate(RegistrationResponseDelegate delegate) {
     }
   }
 

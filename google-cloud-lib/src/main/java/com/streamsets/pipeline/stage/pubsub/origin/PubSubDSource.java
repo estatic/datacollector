@@ -21,7 +21,7 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DPushSource;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 import com.streamsets.pipeline.stage.pubsub.lib.Groups;
 
 @StageDef(
@@ -30,7 +30,7 @@ import com.streamsets.pipeline.stage.pubsub.lib.Groups;
     description = "Consumes messages from a Google Pub/Sub subscription",
     icon = "pubsub.png",
     execution = ExecutionMode.STANDALONE,
-    onlineHelpRefUrl = "index.html#Origins/PubSub.html#task_jvp_f5l_r1b"
+    onlineHelpRefUrl ="index.html?contextID=task_jvp_f5l_r1b"
 )
 @ConfigGroups(Groups.class)
 public class PubSubDSource extends DPushSource {

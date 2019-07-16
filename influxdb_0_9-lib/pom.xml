@@ -23,18 +23,18 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-stage-lib-parent</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../stage-lib-parent</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-influxdb_0_9-lib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector InfluxDB 0.9+ Lib</description>
   <name>StreamSets Data Collector InfluxDB 0.9+ Lib</name>
   <packaging>jar</packaging>
 
   <properties>
-    <influxdb-java.version>2.1</influxdb-java.version>
+    <influxdb-java.version>2.14</influxdb-java.version>
   </properties>
 
   <dependencies>
@@ -42,7 +42,7 @@
     <dependency>
       <groupId>org.influxdb</groupId>
       <artifactId>influxdb-java</artifactId>
-      <version>2.1</version>
+      <version>${influxdb-java.version}</version>
     </dependency>
 
     <!-- Common StreamSets Dependencies -->

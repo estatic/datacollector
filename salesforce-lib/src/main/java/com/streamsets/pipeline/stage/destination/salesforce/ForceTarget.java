@@ -42,7 +42,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.xml.namespace.QName;
+import java.net.URISyntaxException;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -55,6 +57,7 @@ public class ForceTarget extends BaseTarget {
   private static final Logger LOG = LoggerFactory.getLogger(ForceTarget.class);
   private static final String SOBJECT_NAME = "sObjectNameTemplate";
   private static final String EXTERNAL_ID_NAME = "externalIdField";
+  private static final String CONF_PREFIX = "conf";
   private ErrorRecordHandler errorRecordHandler;
 
   public final ForceTargetConfigBean conf;
@@ -83,6 +86,8 @@ public class ForceTarget extends BaseTarget {
   private class ForceSessionRenewer implements SessionRenewer {
     @Override
     public SessionRenewalHeader renewSession(ConnectorConfig config) throws ConnectionException {
+      LOG.info("Renewing Salesforce session");
+
       try {
         partnerConnection = Connector.newConnection(ForceUtils.getPartnerConfig(conf, new ForceSessionRenewer()));
       } catch (StageException e) {
@@ -104,33 +109,28 @@ public class ForceTarget extends BaseTarget {
     // Validate configuration values and open any required resources.
     List<ConfigIssue> issues = super.init();
     Target.Context context = getContext();
+    Optional
+        .ofNullable(conf.init(context, CONF_PREFIX))
+        .ifPresent(issues::addAll);
 
     errorRecordHandler = new DefaultErrorRecordHandler(context);
 
     sObjectNameVars = getContext().createELVars();
     sObjectNameEval = context.createELEval(SOBJECT_NAME);
-    ELUtils.validateExpression(sObjectNameEval,
-        sObjectNameVars,
-        conf.sObjectNameTemplate,
+    ELUtils.validateExpression(conf.sObjectNameTemplate,
         context,
         Groups.FORCE.getLabel(),
         SOBJECT_NAME,
-        Errors.FORCE_12,
-        String.class,
-        issues
+        Errors.FORCE_12, issues
     );
 
     externalIdFieldVars = getContext().createELVars();
     externalIdFieldEval = context.createELEval(EXTERNAL_ID_NAME);
-    ELUtils.validateExpression(externalIdFieldEval,
-        externalIdFieldVars,
-        conf.externalIdField,
+    ELUtils.validateExpression(conf.externalIdField,
         context,
         Groups.FORCE.getLabel(),
         EXTERNAL_ID_NAME,
-        Errors.FORCE_24,
-        String.class,
-        issues
+        Errors.FORCE_24, issues
     );
 
     if (issues.isEmpty()) {
@@ -146,9 +146,12 @@ public class ForceTarget extends BaseTarget {
       try {
         ConnectorConfig partnerConfig = ForceUtils.getPartnerConfig(conf, new ForceSessionRenewer());
         partnerConnection = Connector.newConnection(partnerConfig);
+        if (conf.mutualAuth.useMutualAuth) {
+          ForceUtils.setupMutualAuth(partnerConfig, conf.mutualAuth);
+        }
         bulkConnection = ForceUtils.getBulkConnection(partnerConfig, conf);
         LOG.info("Successfully authenticated as {}", conf.username);
-      } catch (ConnectionException | AsyncApiException | StageException ce) {
+      } catch (ConnectionException | AsyncApiException | StageException | URISyntaxException ce) {
         LOG.error("Can't connect to SalesForce", ce);
         issues.add(getContext().createConfigIssue(Groups.FORCE.name(),
             "connectorConfig",

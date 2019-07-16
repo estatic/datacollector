@@ -86,7 +86,7 @@
              ng-class="{'show-name-column': header.showNameColumn}">
 
           <span class="system-pipeline-label"
-                ng-if="isSystemPipeline(pipeline)">SCH system</span>
+                ng-if="isSystemPipeline(pipeline)">Control Hub system</span>
 
           <span class="system-pipeline-label"
                 ng-if="isDpmControlledPipeline(pipeline)">SCH</span>
@@ -166,16 +166,23 @@
             </li>
 
             <li role="presentation">
-              <a href="#" dropdown-toggle ng-click="exportPipelineConfig(pipeline, false, $event)">
+              <a href="#" dropdown-toggle ng-click="exportPipelineConfig(pipeline, false, false, $event)">
                 <i class="glyphicon glyphicon-export"></i>
                 <span>{{'global.form.export' | translate}}</span>
               </a>
             </li>
 
             <li role="presentation" ng-if="isAuthorized([userRoles.admin, userRoles.creator, userRoles.manager]) && pipeline.valid">
-              <a href="#" dropdown-toggle ng-click="exportPipelineConfig(pipeline, true, $event)">
+              <a href="#" dropdown-toggle ng-click="exportPipelineConfig(pipeline, true, false, $event)">
                 <i class="glyphicon glyphicon-export"></i>
                 <span>{{'global.form.exportWithLibraryDefinitions' | translate}}</span>
+              </a>
+            </li>
+
+            <li role="presentation" ng-if="isAuthorized([userRoles.admin, userRoles.creator, userRoles.manager]) && pipeline.valid">
+              <a href="#" dropdown-toggle ng-click="exportPipelineConfig(pipeline, true, true, $event)">
+                <i class="glyphicon glyphicon-export"></i>
+                <span>{{'global.form.exportWithPlainTextCredentials' | translate}}</span>
               </a>
             </li>
 
@@ -283,3 +290,11 @@
     </ul>
   </div>
 </section>
+
+<div class="help-panel-center-parent" ng-if="filteredPipelines.length === 0">
+  <ng-include ng-if="selectedPipelineLabel === 'system:edgePipelines'" src="'edgeHelpTemplate'"></ng-include>
+  <ng-include ng-if="selectedPipelineLabel === 'system:microServicePipelines'" src="'microServiceHelpTemplate'"></ng-include>
+</div>
+
+
+

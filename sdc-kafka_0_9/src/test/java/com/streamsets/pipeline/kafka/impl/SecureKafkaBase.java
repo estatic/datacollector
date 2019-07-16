@@ -29,6 +29,7 @@ import com.streamsets.pipeline.kafka.api.SdcKafkaConsumer;
 import com.streamsets.pipeline.kafka.api.SdcKafkaConsumerFactory;
 import com.streamsets.pipeline.kafka.api.SdcKafkaProducer;
 import com.streamsets.pipeline.kafka.api.SdcKafkaProducerFactory;
+import com.streamsets.pipeline.lib.kafka.KafkaAutoOffsetReset;
 import com.streamsets.pipeline.lib.kafka.KafkaConstants;
 import com.streamsets.pipeline.sdk.ContextInfoCreator;
 import com.streamsets.testing.SingleForkNoReuseTest;
@@ -117,7 +118,10 @@ public abstract class SecureKafkaBase {
       sourceContext,
       consumerConfig,
       "test",
-      100
+      100,
+      false,
+      KafkaAutoOffsetReset.EARLIEST.name().toLowerCase(),
+      0
     );
     SdcKafkaConsumerFactory sdcKafkaConsumerFactory = SdcKafkaConsumerFactory.create(consumerFactorySettings);
     SdcKafkaConsumer sdcKafkaConsumer = sdcKafkaConsumerFactory.create();
@@ -134,7 +138,8 @@ public abstract class SecureKafkaBase {
       kafkaProducerConfigs,
       PartitionStrategy.DEFAULT,
       "localhost:" + getSecurePort(),
-      DataFormat.JSON
+      DataFormat.JSON,
+      false
     );
     SdcKafkaProducerFactory sdcKafkaProducerFactory = SdcKafkaProducerFactory.create(settings);
     SdcKafkaProducer sdcKafkaProducer = sdcKafkaProducerFactory.create();
@@ -144,7 +149,7 @@ public abstract class SecureKafkaBase {
     for(int i = 0; i < 10; i++) {
       sdcKafkaProducer.enqueueMessage(getTopic(), message.getBytes(), "0");
     }
-    sdcKafkaProducer.write();
+    sdcKafkaProducer.write(null);
 
     // read 10 messages
     List<MessageAndOffset> read = new ArrayList<>();

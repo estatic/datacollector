@@ -22,8 +22,9 @@ import com.streamsets.pipeline.api.Label;
 public enum Groups implements Label {
   MAPREDUCE("MapReduce"),
   JOB("Job"),
+  AVRO_CONVERSION("Avro Conversion"),
   AVRO_PARQUET("Avro to Parquet"),
-
+  AVRO_ORC("Avro to ORC"),
   ;
 
   private final String label;

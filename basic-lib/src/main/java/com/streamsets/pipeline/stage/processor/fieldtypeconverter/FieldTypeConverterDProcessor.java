@@ -21,9 +21,10 @@ import com.streamsets.pipeline.api.ConfigDef.Type;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +34,8 @@ import java.util.List;
     label = "Field Type Converter",
     description = "Converts the data type of a field(s)",
     icon = "converter.png",
-    onlineHelpRefUrl = "index.html#Processors/FieldTypeConverter.html#task_g23_2tq_wq",
+    onlineHelpRefUrl ="index.html?contextID=task_g23_2tq_wq",
+    flags = StageBehaviorFlags.PURE_FUNCTION,
     upgrader = FieldTypeConverterProcessorUpgrader.class
 )
 @ConfigGroups(Groups.class)

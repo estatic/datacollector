@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 StreamSets Inc.
+ * Copyright 2018 StreamSets Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/**
-  * Copyright 2017 StreamSets Inc.
-  *
-  * Licensed under the Apache Software Foundation (ASF) under one
-  * or more contributor license agreements.  See the NOTICE file
-  * distributed with this work for additional information
-  * regarding copyright ownership.  The ASF licenses this file
-  * to you under the Apache License, Version 2.0 (the
-  * "License"); you may not use this file except in compliance
-  * with the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
 package com.streamsets.pipeline.spark
 
 import java.io.File
@@ -43,7 +24,7 @@ import com.streamsets.pipeline.{BootstrapCluster, ClusterFunctionProvider}
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
-
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -62,9 +43,24 @@ object Driver {
   private var offsetManager: KafkaOffsetManager = _
   private var partitionCount = -1
 
-  def foreach(dstream: DStream[(Array[Byte], Array[Byte])], kafkaOffsetManager: KafkaOffsetManager) {
-    dstream.foreachRDD(rdd => process(rdd))
+  def foreach(dstream: DStream[ConsumerRecord[Array[Byte], Array[Byte]]], kafkaOffsetManager: KafkaOffsetManager) {
     offsetManager = kafkaOffsetManager
+    dstream.foreachRDD(rdd => {
+      process(
+        rdd.map(c => {
+          (c.key(), c.value())
+        })
+      )
+      offsetManager.saveOffsets(rdd)
+    })
+  }
+
+  def foreachTuple(dstream: DStream[(Array[Byte], Array[Byte])], kafkaOffsetManager: KafkaOffsetManager) {
+    offsetManager = kafkaOffsetManager
+    dstream.foreachRDD(rdd => {
+       process(rdd)
+       offsetManager.saveOffsets(rdd)
+     })
   }
 
   def process(rdd: RDD[(Array[Byte], Array[Byte])]): Unit = synchronized {
@@ -83,7 +79,13 @@ object Driver {
     if (partitionCount == -1) {
       // Count the number of executors (subtract 1 since the getExecutorStorageStatus
       // returns the storage stages for the driver as well.
-      partitionCount = rdd.sparkContext.getExecutorStorageStatus.length - 1
+      if(rdd.sparkContext.getClass.getMethods.map(_.getName).filter(_ matches "getExecutorStorageStatus").length > 0){
+        // For Spark versions < 2.4.0
+        partitionCount = rdd.sparkContext.getExecutorStorageStatus.length - 1
+      }else{
+        // For Spark versions >= 2.4.0
+        partitionCount = rdd.sparkContext.statusTracker.getExecutorInfos.length
+      }
     }
 
     def repartition[T: ClassTag](rdd: RDD[T]) : RDD[T] = {
@@ -148,7 +150,6 @@ object Driver {
 
     })
     nextResult.count()
-    offsetManager.saveOffsets(rdd)
   }
 
   def extractArchives(mesosHomeDir: String): Boolean = {

@@ -22,7 +22,6 @@ import io.swagger.annotations.ApiModelProperty;
 import java.util.ArrayList;
 import java.util.List;
 
-
 // This class was originally generated, however it's now maintained manually
 @ApiModel(description = "")
 public class StageDefinitionJson   {
@@ -51,7 +50,10 @@ public class StageDefinitionJson   {
     CLUSTER_YARN_STREAMING("CLUSTER_YARN_STREAMING"),
     CLUSTER_MESOS_STREAMING("CLUSTER_MESOS_STREAMING"),
     SLAVE("SLAVE"),
-    EDGE("EDGE")
+    EDGE("EDGE"),
+    EMR_BATCH("EMR_BATCH"),
+    BATCH("BATCH"),
+    STREAMING("STREAMING"),
     ;
 
     private final String value;
@@ -81,7 +83,9 @@ public class StageDefinitionJson   {
   private Integer outputStreams = null;
   private String outputStreamLabelProviderClass = null;
   private List<String> outputStreamLabels = new ArrayList<String>();
+  private String outputStreamsDrivenByConfig = null;
   private List<ServiceDependencyDefinitionJson> services = null;
+  private List<String> hideStage = null;
   private List<ExecutionModesEnum> executionModes = new ArrayList<ExecutionModesEnum>();
   private String description = null;
   private Boolean privateClassLoader = null;
@@ -94,7 +98,14 @@ public class StageDefinitionJson   {
   private Boolean resetOffset = null;
   private Boolean producingEvents = null;
   private String onlineHelpRefUrl = null;
-
+  private Boolean sendsResponse = null;
+  private Boolean beta = null;
+  private Integer inputStreams = null;
+  private String inputStreamLabelProviderClass = null;
+  private List<String> inputStreamLabels = null;
+  private List<String> eventDefs = new ArrayList<>();
+  private Boolean bisectable = false;
+  private String yamlUpgrader;
 
   /**
    **/
@@ -276,12 +287,35 @@ public class StageDefinitionJson   {
   /**
    **/
   @ApiModelProperty(value = "")
+  @JsonProperty("outputStreamsDrivenByConfig")
+  public String getOutputStreamsDrivenByConfig() {
+    return outputStreamsDrivenByConfig;
+  }
+  public void setOutputStreamsDrivenByConfig(String outputStreamsDrivenByConfig) {
+    this.outputStreamsDrivenByConfig = outputStreamsDrivenByConfig;
+  }
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
   @JsonProperty("services")
   public List<ServiceDependencyDefinitionJson> getServices() {
     return services;
   }
   public void setServices(List<ServiceDependencyDefinitionJson> services) {
     this.services = services;
+  }
+
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
+  @JsonProperty("hideStage")
+  public List<String> getHideStage() {
+    return hideStage;
+  }
+  public void setHideStage(List<String>hideStage ) {
+    this.hideStage = hideStage;
   }
 
 
@@ -424,4 +458,91 @@ public class StageDefinitionJson   {
   public void setOnlineHelpRefUrl(String onlineHelpRefUrl) {
     this.onlineHelpRefUrl = onlineHelpRefUrl;
   }
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
+  @JsonProperty("sendsResponse")
+  public Boolean getSendsResponse() {
+    return sendsResponse;
+  }
+  public void setSendsResponse(Boolean sendsResponse) {
+    this.sendsResponse = sendsResponse;
+  }
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
+  @JsonProperty("beta")
+  public Boolean getBeta() {
+    return beta;
+  }
+  public void setBeta(Boolean beta) {
+    this.beta = beta;
+  }
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
+  @JsonProperty("inputStreams")
+  public Integer getInputStreams() {
+    return inputStreams;
+  }
+  public void setInputStreams(Integer inputStreams) {
+    this.inputStreams = inputStreams;
+  }
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
+  @JsonProperty("inputStreamLabelProviderClass")
+  public String getInputStreamLabelProviderClass() {
+    return inputStreamLabelProviderClass;
+  }
+  public void setInputStreamLabelProviderClass(String inputStreamLabelProviderClass) {
+    this.inputStreamLabelProviderClass = inputStreamLabelProviderClass;
+  }
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
+  @JsonProperty("inputStreamLabels")
+  public List<String> getInputStreamLabels() {
+    return inputStreamLabels;
+  }
+  public void setInputStreamLabels(List<String> inputStreamLabels) {
+    this.inputStreamLabels = inputStreamLabels;
+  }
+
+  public List<String> getEventDefs() {
+    return eventDefs;
+  }
+  public void setEventDefs(List<String> eventDefs) {
+    this.eventDefs = eventDefs;
+  }
+
+
+  /**
+   **/
+  @ApiModelProperty(value = "")
+  @JsonProperty("bisectable")
+  public Boolean isBisectable() {
+    return bisectable;
+  }
+
+  public void setBisectable(Boolean bisectable) {
+    this.bisectable = bisectable;
+  }
+
+  @ApiModelProperty(value = "")
+  @JsonProperty("yamlUpgrader")
+  public String getYamlUpgrader() {
+    return yamlUpgrader;
+  }
+
+  public StageDefinitionJson setYamlUpgrader(String yamlUpgrader) {
+    this.yamlUpgrader = yamlUpgrader;
+    return this;
+  }
+
 }

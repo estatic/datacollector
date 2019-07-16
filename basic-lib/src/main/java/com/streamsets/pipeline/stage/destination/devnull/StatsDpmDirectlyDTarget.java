@@ -18,22 +18,28 @@ package com.streamsets.pipeline.stage.destination.devnull;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.StatsAggregatorStage;
 
 @StageDef(
     version = 1,
-    label = "Write to DPM directly",
-    description = "Writes pipeline statistics to DPM directly without any aggregation",
+    label = "Write Directly to Control Hub - statistics are not aggregated across Data Collectors",
+    description = "Writes pipeline statistics to Control Hub directly without any aggregation",
     icon="",
     execution = {
         ExecutionMode.STANDALONE,
+        ExecutionMode.CLUSTER_BATCH,
+        ExecutionMode.CLUSTER_YARN_STREAMING,
+        ExecutionMode.CLUSTER_MESOS_STREAMING,
+        ExecutionMode.EMR_BATCH,
         ExecutionMode.EDGE
     },
     onlineHelpRefUrl = ""
 )
 @HideConfigs(preconditions = true, onErrorRecord = true)
 @StatsAggregatorStage
+@HideStage(HideStage.Type.STATS_AGGREGATOR_STAGE)
 @GenerateResourceBundle
 public class StatsDpmDirectlyDTarget extends NullDTarget {
 }

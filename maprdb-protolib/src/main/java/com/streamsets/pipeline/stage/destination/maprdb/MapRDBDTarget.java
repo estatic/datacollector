@@ -25,8 +25,8 @@ import com.streamsets.pipeline.stage.destination.hbase.HBaseDTarget;
   version = 1,
   label = "MapR DB",
   description = "Writes to a MapR DB",
-  icon = "mapr.png",
-  onlineHelpRefUrl = "index.html#Destinations/MapRDB.html#task_pgk_p2z_yv"
+  icon = "mapr_db.png",
+  onlineHelpRefUrl ="index.html?contextID=task_pgk_p2z_yv"
 )
 @HideConfigs(
   value = {
@@ -48,6 +48,7 @@ public class MapRDBDTarget extends HBaseDTarget {
         implicitFieldMapping,
         ignoreMissingFieldPath,
         ignoreInvalidColumn,
+        validateTableExistence,
         timeDriver
     );
   }

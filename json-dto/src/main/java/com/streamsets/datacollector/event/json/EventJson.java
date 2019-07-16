@@ -16,5 +16,4 @@
 package com.streamsets.datacollector.event.json;
 
 public interface EventJson {
-
 }

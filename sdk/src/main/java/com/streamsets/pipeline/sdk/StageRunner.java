@@ -15,23 +15,19 @@
  */
 package com.streamsets.pipeline.sdk;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import com.streamsets.datacollector.config.StageType;
-import com.streamsets.datacollector.el.RuntimeEL;
 import com.streamsets.datacollector.email.EmailSender;
 import com.streamsets.datacollector.json.JsonMapperImpl;
 import com.streamsets.datacollector.lineage.LineagePublisherDelegator;
 import com.streamsets.datacollector.main.RuntimeInfo;
-import com.streamsets.datacollector.main.RuntimeModule;
-import com.streamsets.datacollector.main.StandaloneRuntimeInfo;
+import com.streamsets.datacollector.runner.SourceResponseSink;
 import com.streamsets.datacollector.runner.StageContext;
 import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.util.ContainerError;
 import com.streamsets.pipeline.api.BatchMaker;
-import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.DeliveryGuarantee;
+import com.streamsets.pipeline.api.EventRecord;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.OnRecordError;
 import com.streamsets.pipeline.api.Record;
@@ -39,48 +35,34 @@ import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.ext.DataCollectorServices;
 import com.streamsets.pipeline.api.ext.json.JsonMapper;
 import com.streamsets.pipeline.api.impl.ErrorMessage;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.api.lineage.LineageEvent;
+import com.streamsets.pipeline.api.service.ServiceDependency;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 @SuppressWarnings("unchecked")
-public abstract class StageRunner<S extends Stage> {
+public abstract class StageRunner<S extends Stage> extends ProtoRunner {
   private static final Logger LOG = LoggerFactory.getLogger(StageRunner.class);
-
-  static {
-    RuntimeInfo runtimeInfo = new StandaloneRuntimeInfo(RuntimeModule.SDC_PROPERTY_PREFIX, new MetricRegistry(),
-        Collections.singletonList(StageRunner.class.getClassLoader())
-    );
-    try {
-      RuntimeEL.loadRuntimeConfiguration(runtimeInfo);
-    } catch (IOException ex) {
-      throw new RuntimeException(ex);
-    }
-  }
-
-  enum Status { CREATED, INITIALIZED, DESTROYED}
 
   private final Class<S> stageClass;
   private final S stage;
   private final Stage.Info info;
   private final StageContext context;
+  private final List<ServiceRunner> services;
   private final List<LineageEvent> lineageEvents;
-  private Status status;
 
   private static Stage getStage(Class<? extends Stage> klass) {
     try {
@@ -103,113 +85,13 @@ public abstract class StageRunner<S extends Stage> {
     return (def != null) ? def.version() : -1;
   }
 
-  private Set<String> getStageConfigurationFields(Class<? extends Stage> klass) throws Exception {
-    Set<String> names = new HashSet<>();
-    for (Field field : klass.getFields()) {
-      if (field.isAnnotationPresent(ConfigDef.class)) {
-        names.add(field.getName());
-      }
+  private Set<Class> getDeclaredServices(Class<? extends Stage> klass) {
+    StageDef def = getStageDefinition(klass);
+    Set<Class> declaredServices = new HashSet<>();
+    for(ServiceDependency service : def.services()) {
+      declaredServices.add(service.service());
     }
-    return names;
-  }
-
-  private Set<String> getComplexFieldConfigs(Class<?> klass) throws Exception {
-    Set<String> names = new HashSet<>();
-    for (Field field : klass.getFields()) {
-      if (field.isAnnotationPresent(ConfigDef.class)) {
-        names.add(field.getName());
-      }
-    }
-    return names;
-  }
-
-  @SuppressWarnings("unchecked")
-  private void configureStage(S stage, Map<String, Object> configuration) {
-    try {
-      Set<String> fields = getStageConfigurationFields(stage.getClass());
-      Set<String> configs = configuration.keySet();
-      if (!fields.equals(configs)) {
-        Set<String> missingConfigs = Sets.difference(fields, configs);
-        Set<String> extraConfigs = Sets.difference(configs, fields);
-
-        missingConfigs = filterNonActiveConfigurationsFromMissing(stage, configuration, missingConfigs);
-        if (missingConfigs.size() + extraConfigs.size() > 0) { //x
-          throw new RuntimeException(Utils.format(
-              "Invalid stage configuration for '{}', Missing configurations '{}' and invalid configurations '{}'",
-              stage.getClass().getName(), missingConfigs, extraConfigs));
-        }
-      }
-      for (Field field : stage.getClass().getFields()) {
-        if (field.isAnnotationPresent(ConfigDef.class)) {
-          ConfigDef configDef = field.getAnnotation(ConfigDef.class);
-          if (isConfigurationActive(configDef, configuration)) {
-            if ( configDef.type() != ConfigDef.Type.MAP) {
-              field.set(stage, configuration.get(field.getName()));
-            } else {
-              //we need to handle special case of List of Map elements with key/value entries
-              Object value = configuration.get(field.getName());
-              if (value != null && value instanceof List) {
-                Map map = new HashMap();
-                for (Map element : (List<Map>) value) {
-                  if (!element.containsKey("key") || !element.containsKey("value")) {
-                    throw new RuntimeException(Utils.format("Invalid stage configuration for '{}' Map as list must have" +
-                                                            " a List of Maps all with 'key' and 'value' entries",
-                                                            field.getName()));
-                  }
-                  String k = (String) element.get("key");
-                  String v = (String) element.get("value");
-                  map.put(k, v);
-                }
-                value = map;
-              }
-              field.set(stage, value);
-            }
-          }
-        }
-      }
-    } catch (Exception ex) {
-      if (ex instanceof RuntimeException) {
-        throw (RuntimeException) ex;
-      }
-      throw new RuntimeException(ex);
-    }
-  }
-
-  private Set<String> filterNonActiveConfigurationsFromMissing(S stage, Map<String, Object> configuration,
-      Set<String> missingConfigs) {
-    missingConfigs = new HashSet<>(missingConfigs);
-    Iterator<String> it = missingConfigs.iterator();
-    while (it.hasNext()) {
-      String name = it.next();
-      try {
-        Field field = stage.getClass().getField(name);
-        ConfigDef annotation = field.getAnnotation(ConfigDef.class);
-        if (!annotation.required() || !isConfigurationActive(annotation, configuration)) {
-          it.remove();
-        }
-      } catch (Exception ex) {
-        throw new RuntimeException(ex);
-      }
-    }
-    return missingConfigs;
-  }
-
-  private boolean isConfigurationActive(ConfigDef configDef, Map<String, Object> configuration) {
-    String dependsOn = configDef.dependsOn();
-    if (!dependsOn.isEmpty()) {
-      Object dependsOnValue = configuration.get(dependsOn);
-      if (dependsOnValue != null) {
-        String valueStr = dependsOnValue.toString();
-        for (String trigger : configDef.triggeredByValue()) {
-          if (valueStr.equals(trigger)) {
-            return true;
-          }
-        }
-        return false;
-      }
-      return false;
-    }
-    return true;
+    return declaredServices;
   }
 
   @SuppressWarnings("unchecked")
@@ -225,7 +107,8 @@ public abstract class StageRunner<S extends Stage> {
     ExecutionMode executionMode,
     DeliveryGuarantee deliveryGuarantee,
     String resourcesDir,
-    RuntimeInfo runtimeInfo
+    RuntimeInfo runtimeInfo,
+    List<ServiceRunner> services
   ) {
     this(
       stageClass,
@@ -240,7 +123,8 @@ public abstract class StageRunner<S extends Stage> {
       executionMode,
       deliveryGuarantee,
       resourcesDir,
-      runtimeInfo
+      runtimeInfo,
+      services
     );
   }
 
@@ -257,7 +141,8 @@ public abstract class StageRunner<S extends Stage> {
     ExecutionMode executionMode,
     DeliveryGuarantee deliveryGuarantee,
     String resourcesDir,
-    RuntimeInfo runtimeInfo
+    RuntimeInfo runtimeInfo,
+    List<ServiceRunner> services
   ) {
 
     if(DataCollectorServices.instance().get(JsonMapper.SERVICE_KEY) == null) {
@@ -267,15 +152,16 @@ public abstract class StageRunner<S extends Stage> {
     Utils.checkNotNull(stage, "stage");
     Utils.checkNotNull(configuration, "configuration");
     Utils.checkNotNull(outputLanes, "outputLanes");
+    Utils.checkState(getStageDefinition(stageClass) != null, Utils.format("@StageDef annotation not found on class {} (provided the right DStage as stageClass argument?)", stageClass.toString()));
     this.stageClass = stageClass;
     this.stage = stage;
     try {
-      configureStage(stage, configuration);
+      configureObject(stage, configuration);
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
     String name = getName(stage.getClass());
-    int version = getVersion(stage.getClass());
+    int version = getVersion(stageClass);
     String instanceName = name + "_1";
     info = ContextInfoCreator.createInfo(name, version, instanceName);
     Map<String, Class<?>[]> configToElDefMap;
@@ -288,6 +174,23 @@ public abstract class StageRunner<S extends Stage> {
     stageSdcConf.forEach((k, v) -> sdcConfiguration.set("stage.conf_" + k, v));
     this.lineageEvents = new ArrayList<>();
 
+    // Prepare services structure
+    this.services = services;
+    Map<Class, Object> serviceMap = new HashMap<>();
+    for(ServiceRunner serviceRunner : services) {
+      serviceMap.put(serviceRunner.getServiceClass(), serviceRunner.getService());
+    }
+
+    // Validate that we have all the services that are needed for the stage proper execution
+    Set<Class> declaredServices = getDeclaredServices(stageClass);
+    Set<Class> givenServices = serviceMap.keySet();
+    Set<Class> missingServices = Sets.difference(declaredServices, givenServices);
+    Set<Class> extraServices = Sets.difference(givenServices, declaredServices);
+    if(!missingServices.isEmpty() || !extraServices.isEmpty()) {
+      throw new RuntimeException(Utils.format("Services mismatch - missing ({}), extra({})", missingServices, extraServices));
+    }
+
+    // Create StageContext instance
     context = new StageContext(
         instanceName,
         stageType,
@@ -303,14 +206,14 @@ public abstract class StageRunner<S extends Stage> {
         new EmailSender(new Configuration()),
         sdcConfiguration,
         new LineagePublisherDelegator.ListDelegator(this.lineageEvents),
-        runtimeInfo
+        runtimeInfo,
+        serviceMap
     );
+    context.getErrorSink().registerInterceptorsForStage(getInfo().getInstanceName(), Collections.emptyList());
+    context.getEventSink().registerInterceptorsForStage(getInfo().getInstanceName(), Collections.emptyList());
     status = Status.CREATED;
   }
 
-  void ensureStatus(Status status) {
-    Utils.checkState(this.status == status, Utils.format("Current status '{}', expected '{}'", this.status, status));
-  }
 
   public S getStage() {
     return stage;
@@ -327,15 +230,24 @@ public abstract class StageRunner<S extends Stage> {
   @SuppressWarnings("unchecked")
   public List<Stage.ConfigIssue> runValidateConfigs() throws StageException {
     try {
-      LOG.debug("Stage '{}' validateConfgis starts", getInfo().getInstanceName());
+      LOG.debug("Stage '{}' validateConfigs starts", getInfo().getInstanceName());
       ensureStatus(Status.CREATED);
       try {
-        return stage.init(getInfo(), getContext());
+        // Initialize Services first
+        List<Stage.ConfigIssue> issues = new ArrayList<>();
+        for(ServiceRunner serviceRunner : services) {
+          issues.addAll(serviceRunner.runValidateConfigs());
+        }
+
+        // Then the stage itself
+        issues.addAll(stage.init(getInfo(), getContext()));
+
+        return issues;
       } finally {
         stage.destroy();
       }
     } finally {
-      LOG.debug("Stage '{}' validateConfigs starts", getInfo().getInstanceName());
+      LOG.debug("Stage '{}' validateConfigs ends", getInfo().getInstanceName());
     }
   }
 
@@ -343,6 +255,13 @@ public abstract class StageRunner<S extends Stage> {
   public void runInit() throws StageException {
     LOG.debug("Stage '{}' init starts", getInfo().getInstanceName());
     ensureStatus(Status.CREATED);
+
+    // Initialize services first
+    for(ServiceRunner serviceRunner : services) {
+      serviceRunner.runInit();
+    }
+
+    // Then the stage itself
     List<Stage.ConfigIssue> issues = stage.init(getInfo(), getContext());
     if (!issues.isEmpty()) {
       List<String> list = new ArrayList<>(issues.size());
@@ -357,13 +276,21 @@ public abstract class StageRunner<S extends Stage> {
 
   public void runDestroy() throws StageException {
     LOG.debug("Stage '{}' destroy starts", getInfo().getInstanceName());
-    ensureStatus(Status.INITIALIZED);
+    // Running destroy on CREATED is valid, because the initialization could have failed (leaving the state in INITALIZED)
+    // and even main execution could run destory() on component that never run init() - especially in multi-threaded
+    // pipelines.
+    ensureStatus(Status.INITIALIZED, Status.CREATED);
+
+    for(ServiceRunner serviceRunner : services) {
+      serviceRunner.runDestroy();
+    }
+
     stage.destroy();
     status = Status.DESTROYED;
     LOG.debug("Stage '{}' destroy ends", getInfo().getInstanceName());
   }
 
-  public List<Record> getErrorRecords() {
+  public List<Record> getErrorRecords() throws StageException {
     return context.getErrorSink().getErrorRecords(info.getInstanceName());
   }
 
@@ -380,8 +307,8 @@ public abstract class StageRunner<S extends Stage> {
     context.getErrorSink().clear();
   }
 
-  public List<Record> getEventRecords() {
-    return context.getEventSink().getStageEvents(info.getInstanceName());
+  public List<EventRecord> getEventRecords() throws StageException {
+    return context.getEventSink().getStageEventsAsEventRecords(info.getInstanceName());
   }
 
   public void clearEvents() {
@@ -394,6 +321,14 @@ public abstract class StageRunner<S extends Stage> {
 
   public void clearLineageEvents() {
     this.lineageEvents.clear();
+  }
+
+  public SourceResponseSink getSourceResponseSink() {
+    return context.getSourceResponseSink();
+  }
+
+  public void setSourceResponseSink(SourceResponseSink sourceResponseSink) {
+    context.setSourceResponseSink(sourceResponseSink);
   }
 
   public static class Output {
@@ -436,6 +371,7 @@ public abstract class StageRunner<S extends Stage> {
     OnRecordError onRecordError;
     String resourcesDir;
     RuntimeInfo runtimeInfo;
+    List<ServiceRunner> services;
 
     protected Builder(Class<S> stageClass, S stage) {
       this.stageClass =stageClass;
@@ -446,6 +382,7 @@ public abstract class StageRunner<S extends Stage> {
       this.constants = new HashMap<>();
       this.stageSdcConf = new HashMap<>();
       this.runtimeInfo = new SdkRuntimeInfo("", null,  null);
+      this.services = new ArrayList<>();
     }
 
     @SuppressWarnings("unchecked")
@@ -504,6 +441,16 @@ public abstract class StageRunner<S extends Stage> {
 
     public B setRuntimeInfo(RuntimeInfo runtimeInfo) {
       this.runtimeInfo = runtimeInfo;
+      return (B) this;
+    }
+
+    public B addService(Class serviceClass, Object service) {
+      this.services.add(new ServiceRunner.Builder(serviceClass, service).build());
+      return (B) this;
+    }
+
+    public B addService(ServiceRunner runner) {
+      this.services.add(runner);
       return (B) this;
     }
 

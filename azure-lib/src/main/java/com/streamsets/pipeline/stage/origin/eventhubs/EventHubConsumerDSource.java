@@ -22,18 +22,18 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DPushSource;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 import com.streamsets.pipeline.lib.eventhubs.EventHubConfigBean;
 import com.streamsets.pipeline.lib.eventhubs.Groups;
 
 @StageDef(
     version = 1,
-    label = "Azure Event Hub Consumer",
+    label = "Azure IoT/Event Hub Consumer",
     description = "Reads data from Azure Event Hub",
     icon = "event-hubs-multithreaded.png",
     execution = {ExecutionMode.STANDALONE},
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/AzureEventHub.html#task_t14_c5q_1bb"
+    onlineHelpRefUrl ="index.html?contextID=task_t14_c5q_1bb"
 )
 @HideConfigs({
     "consumerConfigBean.dataFormatConfig.jsonContent"

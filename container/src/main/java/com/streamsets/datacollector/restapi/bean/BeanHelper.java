@@ -27,6 +27,8 @@ import com.streamsets.datacollector.config.ModelDefinition;
 import com.streamsets.datacollector.config.ModelType;
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.config.PipelineDefinition;
+import com.streamsets.datacollector.config.PipelineFragmentConfiguration;
+import com.streamsets.datacollector.config.PipelineFragmentDefinition;
 import com.streamsets.datacollector.config.PipelineRulesDefinition;
 import com.streamsets.datacollector.config.RawSourceDefinition;
 import com.streamsets.datacollector.config.RuleDefinitions;
@@ -35,7 +37,6 @@ import com.streamsets.datacollector.config.ServiceDefinition;
 import com.streamsets.datacollector.config.ServiceDependencyDefinition;
 import com.streamsets.datacollector.config.StageConfiguration;
 import com.streamsets.datacollector.config.StageDefinition;
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.datacollector.config.ThresholdType;
 import com.streamsets.datacollector.el.ElConstantDefinition;
 import com.streamsets.datacollector.el.ElFunctionArgumentDefinition;
@@ -51,8 +52,11 @@ import com.streamsets.datacollector.record.RecordImpl;
 import com.streamsets.datacollector.runner.production.SourceOffset;
 import com.streamsets.datacollector.store.PipelineInfo;
 import com.streamsets.datacollector.store.PipelineRevInfo;
+import com.streamsets.pipeline.api.AntennaDoctorMessage;
 import com.streamsets.pipeline.api.Config;
 import com.streamsets.pipeline.api.ExecutionMode;
+import com.streamsets.pipeline.api.HideStage;
+import com.streamsets.pipeline.api.StageType;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -183,6 +187,32 @@ public class BeanHelper {
     return stageConfigurationJson.getStageConfiguration();
   }
 
+  public static List<PipelineFragmentConfiguration> unwrapPipelineFragementConfigurations(
+      List<PipelineFragmentConfigurationJson> fragmentConfigurationJson
+  ) {
+    if (fragmentConfigurationJson == null) {
+      return null;
+    }
+    List<PipelineFragmentConfiguration> configs = new ArrayList<>(fragmentConfigurationJson.size());
+    for (PipelineFragmentConfigurationJson s : fragmentConfigurationJson) {
+      configs.add(s.getFragmentConfiguration());
+    }
+    return configs;
+  }
+
+  public static List<PipelineFragmentConfigurationJson> wrapPipelineFragmentConfigurations(
+      List<PipelineFragmentConfiguration> fragmentConfigurations
+  ) {
+    if(fragmentConfigurations == null) {
+      return null;
+    }
+    List<PipelineFragmentConfigurationJson> configs = new ArrayList<>(fragmentConfigurations.size());
+    for(PipelineFragmentConfiguration s : fragmentConfigurations) {
+      configs.add(new PipelineFragmentConfigurationJson(s));
+    }
+    return configs;
+  }
+
   public static List<StageConfigurationJson> wrapStageConfigurations(List<StageConfiguration> stageConfiguration) {
     if(stageConfiguration == null) {
       return null;
@@ -287,6 +317,24 @@ public class BeanHelper {
       return null;
     }
     return pipelineConfigurationJson.getPipelineConfiguration();
+  }
+
+  public static PipelineFragmentConfigurationJson wrapPipelineFragmentConfiguration(
+      PipelineFragmentConfiguration pipelineFragmentConfiguration
+  ) {
+    if(pipelineFragmentConfiguration == null) {
+      return null;
+    }
+    return new PipelineFragmentConfigurationJson(pipelineFragmentConfiguration);
+  }
+
+  public static PipelineFragmentConfiguration unwrapPipelineFragmentConfiguration(
+      PipelineFragmentConfigurationJson pipelineFragmentConfigurationJson
+  ) {
+    if(pipelineFragmentConfigurationJson == null) {
+      return null;
+    }
+    return pipelineFragmentConfigurationJson.getFragmentConfiguration();
   }
 
   public static PipelineInfo unwrapPipelineInfo(PipelineInfoJson pipelineInfoJson) {
@@ -621,6 +669,15 @@ public class BeanHelper {
     return new PipelineDefinitionJson(pipelineDefinition);
   }
 
+  public static PipelineFragmentDefinitionJson wrapPipelineFragmentDefinition(
+      PipelineFragmentDefinition pipelineFragmentDefinition
+  ) {
+    if(pipelineFragmentDefinition == null) {
+      return null;
+    }
+    return new PipelineFragmentDefinitionJson(pipelineFragmentDefinition);
+  }
+
   public static PipelineRulesDefinitionJson wrapPipelineRulesDefinition(
       PipelineRulesDefinition pipelineRulesDefinition
   ) {
@@ -852,6 +909,8 @@ public class BeanHelper {
         return MetricElementJson.HISTOGRAM_MEAN;
       case HISTOGRAM_MEDIAN:
         return MetricElementJson.HISTOGRAM_MEDIAN;
+      case HISTOGRAM_P50:
+        return MetricElementJson.HISTOGRAM_P50;
       case HISTOGRAM_P75:
         return MetricElementJson.HISTOGRAM_P75;
       case HISTOGRAM_P95:
@@ -961,6 +1020,8 @@ public class BeanHelper {
         return MetricElement.HISTOGRAM_MEAN;
       case HISTOGRAM_MEDIAN:
         return MetricElement.HISTOGRAM_MEDIAN;
+      case HISTOGRAM_P50:
+        return MetricElement.HISTOGRAM_P50;
       case HISTOGRAM_P75:
         return MetricElement.HISTOGRAM_P75;
       case HISTOGRAM_P95:
@@ -1221,6 +1282,12 @@ public class BeanHelper {
         return ExecutionModeJson.SLAVE;
       case EDGE:
         return ExecutionModeJson.EDGE;
+      case EMR_BATCH:
+        return ExecutionModeJson.EMR_BATCH;
+      case BATCH:
+        return ExecutionModeJson.BATCH;
+      case STREAMING:
+        return ExecutionModeJson.STREAMING;
       default:
         throw new IllegalArgumentException("Unrecognized execution mode: " + executionMode);
     }
@@ -1246,6 +1313,12 @@ public class BeanHelper {
         return ExecutionMode.SLAVE;
       case EDGE:
         return ExecutionMode.EDGE;
+      case EMR_BATCH:
+        return ExecutionMode.EMR_BATCH;
+      case BATCH:
+        return ExecutionMode.BATCH;
+      case STREAMING:
+        return ExecutionMode.STREAMING;
       default:
         throw new IllegalArgumentException("Unrecognized execution mode: " + executionModeJson);
     }
@@ -1307,5 +1380,23 @@ public class BeanHelper {
     return services.stream()
       .map(ServiceConfigurationJson::getServiceConfiguration)
       .collect(Collectors.toList());
+  }
+
+  public static List<String> wrapHideStage(List<HideStage.Type> hideStage) {
+    if(hideStage == null) {
+      return null;
+    }
+
+    return hideStage.stream()
+      .map(HideStage.Type::name)
+      .collect(Collectors.toList());
+  }
+
+  public static List<AntennaDoctorMessageJson> wrapAntennaDoctorMessages(List<AntennaDoctorMessage> messages) {
+    if(messages == null) {
+      return null;
+    }
+
+    return messages.stream().map(AntennaDoctorMessageJson::new).collect(Collectors.toList());
   }
 }

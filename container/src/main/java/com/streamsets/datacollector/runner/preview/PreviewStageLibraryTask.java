@@ -15,18 +15,24 @@
  */
 package com.streamsets.datacollector.runner.preview;
 
+import com.streamsets.datacollector.classpath.ClasspathValidatorResult;
 import com.streamsets.datacollector.config.ConfigDefinition;
 import com.streamsets.datacollector.config.CredentialStoreDefinition;
+import com.streamsets.datacollector.config.InterceptorDefinition;
 import com.streamsets.datacollector.config.LineagePublisherDefinition;
 import com.streamsets.datacollector.config.PipelineDefinition;
+import com.streamsets.datacollector.config.PipelineFragmentDefinition;
 import com.streamsets.datacollector.config.PipelineRulesDefinition;
 import com.streamsets.datacollector.config.ServiceDefinition;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.config.StageLibraryDefinition;
-import com.streamsets.datacollector.config.StageType;
+import com.streamsets.datacollector.config.StageLibraryDelegateDefinitition;
+import com.streamsets.datacollector.restapi.bean.EventDefinitionJson;
+import com.streamsets.datacollector.restapi.bean.RepositoryManifestJson;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
 import com.streamsets.datacollector.task.TaskWrapper;
 import com.streamsets.pipeline.api.ExecutionMode;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.StageUpgrader;
 
 import java.util.Arrays;
@@ -44,6 +50,7 @@ public class PreviewStageLibraryTask extends TaskWrapper implements StageLibrary
       PreviewStageLibraryTask.class.getClassLoader(), LIBRARY, "Preview", new Properties(), null, null, null);
 
   private static final StageDefinition PLUG_STAGE =  new StageDefinition(
+      null,
       PREVIEW_LIB,
       false,
       PreviewPlugTarget.class,
@@ -72,7 +79,15 @@ public class PreviewStageLibraryTask extends TaskWrapper implements StageLibrary
       false,
       false,
       false,
-      Collections.emptyList()
+      Collections.emptyList(),
+      Collections.emptyList(),
+      false,
+      false,
+      -1,
+      null,
+      false,
+      Collections.emptyList(),
+      null
   );
 
   private final StageLibraryTask library;
@@ -88,6 +103,11 @@ public class PreviewStageLibraryTask extends TaskWrapper implements StageLibrary
   }
 
   @Override
+  public PipelineFragmentDefinition getPipelineFragment() {
+    return library.getPipelineFragment();
+  }
+
+  @Override
   public PipelineRulesDefinition getPipelineRules() {
     return library.getPipelineRules();
   }
@@ -99,27 +119,32 @@ public class PreviewStageLibraryTask extends TaskWrapper implements StageLibrary
 
   @Override
   public List<LineagePublisherDefinition> getLineagePublisherDefinitions() {
-    return Collections.emptyList();
+    return library.getLineagePublisherDefinitions();
   }
 
   @Override
   public LineagePublisherDefinition getLineagePublisherDefinition(String library, String name) {
-    return null;
+    return this.library.getLineagePublisherDefinition(library, name);
   }
 
   @Override
   public List<CredentialStoreDefinition> getCredentialStoreDefinitions() {
-    return Collections.emptyList();
+    return library.getCredentialStoreDefinitions();
   }
 
   @Override
   public List<ServiceDefinition> getServiceDefinitions() {
-    return Collections.emptyList();
+    return library.getServiceDefinitions();
   }
 
   @Override
   public ServiceDefinition getServiceDefinition(Class serviceInterface, boolean forExecution) {
-    return null;
+    return library.getServiceDefinition(serviceInterface, forExecution);
+  }
+
+  @Override
+  public List<InterceptorDefinition> getInterceptorDefinitions() {
+    return library.getInterceptorDefinitions();
   }
 
   @Override
@@ -144,10 +169,50 @@ public class PreviewStageLibraryTask extends TaskWrapper implements StageLibrary
   }
 
   @Override
+  public List<ClasspathValidatorResult> validateStageLibClasspath() {
+    return library.validateStageLibClasspath();
+  }
+
+  @Override
+  public List<StageLibraryDelegateDefinitition> getStageLibraryDelegateDefinitions() {
+    return library.getStageLibraryDelegateDefinitions();
+  }
+
+  @Override
+  public StageLibraryDelegateDefinitition getStageLibraryDelegateDefinition(String stageLibrary, Class exportedInterface) {
+    return library.getStageLibraryDelegateDefinition(stageLibrary, exportedInterface);
+  }
+
+  @Override
+  public List<StageLibraryDefinition> getLoadedStageLibraries() {
+    return library.getLoadedStageLibraries();
+  }
+
+  @Override
   public void releaseStageClassLoader(ClassLoader classLoader) {
     if (classLoader != PLUG_STAGE.getClass().getClassLoader()) {
       library.releaseStageClassLoader(classLoader);
     }
+  }
+
+  @Override
+  public List<RepositoryManifestJson> getRepositoryManifestList() {
+    return null;
+  }
+
+  @Override
+  public boolean isMultipleOriginSupported() {
+    return false;
+  }
+
+  @Override
+  public List<String> getLegacyStageLibs() {
+    return library.getLegacyStageLibs();
+  }
+
+  @Override
+  public Map<String, EventDefinitionJson> getEventDefinitions() {
+    return library.getEventDefinitions();
   }
 
 }

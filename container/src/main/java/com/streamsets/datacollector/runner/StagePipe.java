@@ -22,22 +22,16 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Supplier;
-import com.streamsets.datacollector.config.StageType;
-import com.streamsets.datacollector.memory.MemoryMonitor;
-import com.streamsets.datacollector.memory.MemoryUsageCollector;
-import com.streamsets.datacollector.memory.MemoryUsageCollectorResourceBundle;
 import com.streamsets.datacollector.metrics.MetricsConfigurator;
 import com.streamsets.datacollector.restapi.bean.CounterJson;
 import com.streamsets.datacollector.restapi.bean.HistogramJson;
 import com.streamsets.datacollector.restapi.bean.MeterJson;
 import com.streamsets.datacollector.restapi.bean.MetricRegistryJson;
 import com.streamsets.datacollector.util.AggregatorUtil;
-import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.validation.Issue;
 import com.streamsets.pipeline.api.Batch;
 import com.streamsets.pipeline.api.StageException;
-
+import com.streamsets.pipeline.api.StageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +46,6 @@ public class StagePipe extends Pipe<StagePipe.Context> {
   //Runtime stat gauge name
   public static final String RUNTIME_STATS_GAUGE = "RuntimeStatsGauge";
   private Timer processingTimer;
-  private Counter memoryConsumedCounter;
   private Meter inputRecordsMeter;
   private Meter outputRecordsMeter;
   private Meter errorRecordsMeter;
@@ -68,30 +61,42 @@ public class StagePipe extends Pipe<StagePipe.Context> {
   private Map<String, Counter> outputRecordsPerLaneCounter;
   private Map<String, Meter> outputRecordsPerLaneMeter;
   private StagePipe.Context context;
-  private final ResourceControlledScheduledExecutor scheduledExecutorService;
-  private final MemoryUsageCollectorResourceBundle memoryUsageCollectorResourceBundle;
   private final String name;
   private final String rev;
-  private final Configuration configuration;
   private final MetricRegistryJson metricRegistryJson;
   private Map<String, Object> batchMetrics;
   FilterRecordBatch.Predicate[] predicates;
 
   @VisibleForTesting
-  StagePipe(StageRuntime stage, List<String> inputLanes, List<String> outputLanes, List<String> eventLanes) {
-    this("myPipeline", "0", new Configuration(), stage, inputLanes, outputLanes, eventLanes, new ResourceControlledScheduledExecutor(0.02f),
-      new MemoryUsageCollectorResourceBundle(), null);
+  StagePipe(
+    StageRuntime stage,
+    List<String> inputLanes,
+    List<String> outputLanes,
+    List<String> eventLanes
+  ) {
+    this(
+      "myPipeline",
+      "0",
+      stage,
+      inputLanes,
+      outputLanes,
+      eventLanes,
+      null
+    );
   }
 
-  public StagePipe(String name, String rev, Configuration configuration, StageRuntime stage, List<String> inputLanes,
-                   List<String> outputLanes, List<String> eventLanes, ResourceControlledScheduledExecutor scheduledExecutorService,
-                   MemoryUsageCollectorResourceBundle memoryUsageCollectorResourceBundle, MetricRegistryJson metricRegistryJson) {
+  public StagePipe(
+    String name,
+    String rev,
+    StageRuntime stage,
+    List<String> inputLanes,
+    List<String> outputLanes,
+    List<String> eventLanes,
+    MetricRegistryJson metricRegistryJson
+  ) {
     super(stage, inputLanes, outputLanes, eventLanes);
     this.name = name;
     this.rev = rev;
-    this.configuration = configuration;
-    this.scheduledExecutorService = scheduledExecutorService;
-    this.memoryUsageCollectorResourceBundle = memoryUsageCollectorResourceBundle;
     this.metricRegistryJson = metricRegistryJson;
     this.batchMetrics = new HashMap<>();
   }
@@ -103,7 +108,6 @@ public class StagePipe extends Pipe<StagePipe.Context> {
       MetricRegistry metrics = getStage().getContext().getMetrics();
       String metricsKey = "stage." + getStage().getConfiguration().getInstanceName();
       processingTimer = MetricsConfigurator.createStageTimer(metrics, metricsKey + ".batchProcessing", name, rev);
-      memoryConsumedCounter = MetricsConfigurator.createStageCounter(metrics, metricsKey + ".memoryConsumed", name, rev);
       inputRecordsMeter = MetricsConfigurator.createStageMeter(metrics, metricsKey + ".inputRecords", name, rev);
       outputRecordsMeter = MetricsConfigurator.createStageMeter(metrics, metricsKey + ".outputRecords", name, rev);
       errorRecordsMeter = MetricsConfigurator.createStageMeter(metrics, metricsKey + ".errorRecords", name, rev);
@@ -160,7 +164,7 @@ public class StagePipe extends Pipe<StagePipe.Context> {
         stageErrorsHistogram.update(stageErrorsHistogramJson.getCount());
       }
 
-      if (getStage().getConfiguration().getOutputAndEventLanes().size() > 0) {
+      if (!getStage().getConfiguration().getOutputAndEventLanes().isEmpty()) {
         outputRecordsPerLaneCounter = new HashMap<>();
         outputRecordsPerLaneMeter = new HashMap<>();
         for (String lane : getStage().getConfiguration().getOutputAndEventLanes()) {
@@ -186,19 +190,6 @@ public class StagePipe extends Pipe<StagePipe.Context> {
         }
       }
       this.context = pipeContext;
-      if (configuration.get("monitor.memory", false)) {
-        LOG.info("Starting memory collector for {}", getStage().getInfo().getInstanceName());
-        scheduledExecutorService.submit(
-          new MemoryMonitor(memoryConsumedCounter,
-            new Supplier<MemoryUsageCollector>() {
-              @Override
-              public MemoryUsageCollector get() {
-                return new MemoryUsageCollector.Builder()
-                  .setMemoryUsageCollectorResourceBundle(memoryUsageCollectorResourceBundle)
-                  .setStageRuntime(getStage()).build();
-              }
-            }));
-      }
       createRuntimeStatsGauge(metrics);
 
       predicates = new FilterRecordBatch.Predicate[2];
@@ -211,19 +202,30 @@ public class StagePipe extends Pipe<StagePipe.Context> {
 
   @Override
   @SuppressWarnings("unchecked")
-  public void process(PipeBatch pipeBatch) throws StageException, PipelineRuntimeException {
+  public void process(PipeBatch pipeBatch) throws StageException {
     BatchMakerImpl batchMaker = pipeBatch.startStage(this);
     BatchImpl batchImpl = pipeBatch.getBatch(this);
     ErrorSink errorSink = pipeBatch.getErrorSink();
     EventSink eventSink = pipeBatch.getEventSink();
+    ProcessedSink processedSink = pipeBatch.getProcessedSink();
+    SourceResponseSink sourceResponseSink = pipeBatch.getSourceResponseSink();
     String previousOffset = pipeBatch.getPreviousOffset();
 
     // Filter batch by stage's preconditions
-    getStage().setErrorAndEventSink(errorSink, eventSink);
+    getStage().setSinks(errorSink, eventSink, processedSink, sourceResponseSink);
     Batch batch = new FilterRecordBatch(batchImpl, predicates, getStage().getContext());
 
     long start = System.currentTimeMillis();
-    String newOffset = getStage().execute(previousOffset, pipeBatch.getBatchSize(), batch, batchMaker, errorSink, eventSink);
+    String newOffset = getStage().execute(
+        previousOffset,
+        pipeBatch.getBatchSize(),
+        batch,
+        batchMaker,
+        errorSink,
+        eventSink,
+        processedSink,
+        sourceResponseSink
+    );
     if (isSource()) {
       pipeBatch.setNewOffset(newOffset);
     }
@@ -247,7 +249,7 @@ public class StagePipe extends Pipe<StagePipe.Context> {
     ErrorSink errorSink,
     EventSink eventSink,
     String newOffset
-  ) {
+  ) throws StageException {
     long processingTime = System.currentTimeMillis() - startTimeInStage;
     processingTimer.update(processingTime, TimeUnit.MILLISECONDS);
 
@@ -275,7 +277,7 @@ public class StagePipe extends Pipe<StagePipe.Context> {
     increaseStageErrorMetrics(stageErrorsCount);
 
     Map<String, Integer> outputRecordsPerLane = new HashMap<>();
-    if (getStage().getConfiguration().getOutputLanes().size() > 0) {
+    if (!getStage().getConfiguration().getOutputLanes().isEmpty()) {
       for (String lane : getStage().getConfiguration().getOutputLanes()) {
         int outputRecords = batchMaker.getSize(lane);
         outputRecordsPerLane.put(lane, outputRecords);
@@ -284,7 +286,7 @@ public class StagePipe extends Pipe<StagePipe.Context> {
       }
     }
 
-    if(getStage().getConfiguration().getEventLanes().size() > 0) {
+    if(!getStage().getConfiguration().getEventLanes().isEmpty()) {
       String lane = getStage().getConfiguration().getEventLanes().get(0);
       int eventRecords = eventSink.getStageEvents(getStage().getInfo().getInstanceName()).size();
       outputRecordsPerLane.put(lane, eventRecords);
@@ -305,7 +307,10 @@ public class StagePipe extends Pipe<StagePipe.Context> {
 
     // In this is source pipe, update source-specific metrics
     if(isSource()) {
-      context.getRuntimeStats().setTimeOfLastReceivedRecord(System.currentTimeMillis());
+      if (outputRecordsCount > 0) {
+        context.getRuntimeStats().setTimeOfLastReceivedRecord(System.currentTimeMillis());
+      }
+      //Empty batches will increment batch count
       context.getRuntimeStats().incBatchCount();
     }
 
@@ -319,17 +324,14 @@ public class StagePipe extends Pipe<StagePipe.Context> {
   }
 
   @Override
-  public void destroy(PipeBatch pipeBatch) {
+  public void destroy(PipeBatch pipeBatch) throws StageException {
     EventSink eventSink = pipeBatch.getEventSink();
     ErrorSink errorSink = pipeBatch.getErrorSink();
+    ProcessedSink processedSink = pipeBatch.getProcessedSink();
 
-    getStage().destroy(errorSink, eventSink);
+    getStage().destroy(errorSink, eventSink, processedSink);
 
     pipeBatch.completeStage(this);
-  }
-
-  public long getMemoryConsumed() {
-    return memoryConsumedCounter.getCount();
   }
 
   public Map<String, Object> getBatchMetrics() {
@@ -340,12 +342,7 @@ public class StagePipe extends Pipe<StagePipe.Context> {
   private Gauge<Object> createRuntimeStatsGauge(MetricRegistry metricRegistry) {
     Gauge<Object> runtimeStatsGauge = MetricsConfigurator.getGauge(metricRegistry, RUNTIME_STATS_GAUGE);
     if(runtimeStatsGauge == null) {
-      runtimeStatsGauge = new Gauge<Object>() {
-        @Override
-        public Object getValue() {
-          return context.getRuntimeStats();
-        }
-      };
+      runtimeStatsGauge = () -> context.getRuntimeStats();
       try {
         MetricsConfigurator.createGauge(metricRegistry, RUNTIME_STATS_GAUGE, runtimeStatsGauge, name ,rev);
       } catch (Exception e) {
@@ -374,7 +371,7 @@ public class StagePipe extends Pipe<StagePipe.Context> {
 
   public interface Context extends Pipe.Context {
 
-    public RuntimeStats getRuntimeStats();
+    RuntimeStats getRuntimeStats();
 
   }
 }

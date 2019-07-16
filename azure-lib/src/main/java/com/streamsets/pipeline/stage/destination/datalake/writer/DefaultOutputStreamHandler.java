@@ -15,37 +15,35 @@
  */
 package com.streamsets.pipeline.stage.destination.datalake.writer;
 
-import com.microsoft.azure.datalake.store.ADLFileOutputStream;
+import com.google.common.base.Strings;
 import com.microsoft.azure.datalake.store.ADLStoreClient;
 import com.microsoft.azure.datalake.store.IfExists;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.el.ELEvalException;
+import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.lib.generator.StreamCloseEventHandler;
-import org.apache.commons.io.output.CountingOutputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 final class DefaultOutputStreamHandler implements OutputStreamHelper {
-  private final static String DOT = ".";
+  private static final Logger LOG = LoggerFactory.getLogger(DefaultOutputStreamHandler.class);
+  private static final String DOT = ".";
 
   private final ADLStoreClient client;
   private final String uniquePrefix;
   private final String fileNameSuffix;
-  private final Map<String, Long> filePathCount;
   private final long maxRecordsPerFile;
   private final long maxFileSize;
   private final String tempFileName;
-  private final String uniqueId;
-  private CountingOutputStream countingOutputStream;
   private final ConcurrentLinkedQueue<String> closedPaths;
 
-  public DefaultOutputStreamHandler(
+  DefaultOutputStreamHandler(
       ADLStoreClient client,
       String uniquePrefix,
       String fileNameSuffix,
@@ -54,80 +52,64 @@ final class DefaultOutputStreamHandler implements OutputStreamHelper {
       long maxFileSize,
       ConcurrentLinkedQueue<String> closedPaths
   ) {
-    filePathCount = new HashMap<>();
     this.client = client;
     this.uniquePrefix = uniquePrefix;
     this.fileNameSuffix = fileNameSuffix;
-    this.uniqueId = uniqueId;
     this.maxRecordsPerFile = maxRecordsPerFile;
     this.maxFileSize = maxFileSize;
-    this.tempFileName = TMP_FILE_PREFIX + uniquePrefix + "-" + uniqueId + getExtention();
+    this.tempFileName = TMP_FILE_PREFIX + uniquePrefix + "-" +
+        uniqueId.replaceAll(":", "-") + getExtension();
     this.closedPaths = closedPaths;
   }
 
   @Override
-  public CountingOutputStream getOutputStream(String filePath)
-      throws StageException, IOException {
-    ADLFileOutputStream stream;
-    if (!client.checkExists(filePath)) {
-      stream = client.createFile(filePath, IfExists.FAIL);
-    } else {
-      stream = client.getAppendStream(filePath);
-    }
-
-    countingOutputStream = new CountingOutputStream(stream);
-
-    return countingOutputStream;
+  public OutputStream getOutputStream(String filePath) throws IOException {
+    // we should open the new file, never append to existing file
+    return client.createFile(filePath, IfExists.FAIL);
   }
 
   @Override
-  public void commitFile(String dirPath) throws IOException {
-    String filePath = dirPath + "/" +
-        tempFileName.replaceFirst(TMP_FILE_PREFIX + uniquePrefix + "-" + uniqueId, uniquePrefix + "-" + UUID.randomUUID());
-    client.rename(dirPath + "/" + tempFileName, filePath);
+  public void commitFile(String tmpFilePath) throws IOException {
+    String dirPath = getDirPathForFile(tmpFilePath);
+    String filePath = dirPath + "/" + uniquePrefix + "-" + UUID.randomUUID() + getExtension();
+    String tmpFileToRename = dirPath + "/" + tempFileName;
+    LOG.debug("Renaming {} to {}", tmpFileToRename, filePath);
+    boolean renamed = client.rename(tmpFileToRename, filePath);
+    if (!renamed) {
+      String errorMessage = Utils.format("Failed to rename file '{}' to '{}'", tmpFileToRename, filePath);
+      LOG.error(errorMessage);
+      throw new IOException(tmpFileToRename);
+    }
     closedPaths.add(filePath);
   }
 
   @Override
   public String getTempFilePath(String dirPath, Record record, Date recordTime) throws ELEvalException {
-    String tmpFilePath = TMP_FILE_PREFIX + uniquePrefix + "-" + uniqueId + getExtention();
-    return dirPath + "/" + tmpFilePath;
+    return dirPath + "/" + tempFileName;
   }
 
   @Override
-  public void clearStatus() throws IOException {
-    for (String dirPath : filePathCount.keySet()) {
-      commitFile(dirPath);
-    }
-    filePathCount.clear();
-  }
-
-  @Override
-  public boolean shouldRoll(String dirPath) {
+  public boolean shouldRoll(DataLakeDataGenerator dataGenerator) {
     if (maxRecordsPerFile <= 0 && maxFileSize <= 0) {
       return false;
     }
 
-    Long count = filePathCount.get(dirPath);
-    long size = countingOutputStream.getByteCount();
+    String tmpFilePath = dataGenerator.getFilePath() + '/' + tempFileName;
 
-    if (count == null) {
-      count = 1L;
-    }
-
-    if (maxRecordsPerFile > 0 && count >= maxRecordsPerFile) {
-      filePathCount.put(dirPath, 1L);
+    if (maxRecordsPerFile > 0 && dataGenerator.getRecordCount() >= maxRecordsPerFile) {
+      LOG.debug(
+          "Max Records per file reached, Num of records {} in the file path {}",
+          dataGenerator.getRecordCount(),
+          tmpFilePath
+      );
       return true;
     }
 
-    if (maxFileSize > 0 && size >= maxFileSize) {
-      filePathCount.put(dirPath, 1L);
+    if (maxFileSize > 0 && dataGenerator.getByteCount() >= maxFileSize) {
+      LOG.debug("Max File Size reached, Size {} of the file path {}", dataGenerator.getByteCount(), tmpFilePath);
       return true;
     }
 
-    count++;
-
-    filePathCount.put(dirPath, count);
     return false;
   }
 
@@ -136,14 +118,11 @@ final class DefaultOutputStreamHandler implements OutputStreamHelper {
     return null;
   }
 
-  private String getExtention() {
+  private String getExtension() {
     StringBuilder extension = new StringBuilder();
-
-    if (fileNameSuffix != null && !fileNameSuffix.isEmpty()) {
-      extension.append(DOT);
-      extension = extension.append(fileNameSuffix);
+    if (!Strings.isNullOrEmpty(fileNameSuffix)) {
+      extension.append(DOT).append(fileNameSuffix);
     }
-
     return extension.toString();
   }
 }

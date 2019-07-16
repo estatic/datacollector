@@ -38,7 +38,11 @@ public class Solr06TargetFactory extends SdcSolrTargetFactory {
         settings.getZookeeperConnect(),
         settings.getDefaultCollection(),
         settings.getKerberosAuth(),
-        settings.getSkipValidation()
+        settings.getSkipValidation(),
+        settings.isWaitFlush(),
+        settings.isWaitSearcher(),
+        settings.isSoftCommit(),
+        settings.getIgnoreOptionalFields()
     );
   }
 

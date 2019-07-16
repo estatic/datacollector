@@ -16,45 +16,47 @@
 package com.streamsets.pipeline.stage.devtest.rawdata;
 
 import com.streamsets.pipeline.api.BatchMaker;
+import com.streamsets.pipeline.api.EventRecord;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.BaseSource;
-import com.streamsets.pipeline.config.DataFormat;
-import com.streamsets.pipeline.stage.origin.lib.DataFormatParser;
-import com.streamsets.pipeline.stage.origin.lib.DataParserFormatConfig;
+import com.streamsets.pipeline.support.service.ServicesUtil;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class RawDataSource extends BaseSource  {
-  private final DataFormatParser parser;
   private final String rawData;
+  private final String eventData;
   private final boolean stopAfterFirstBatch;
 
   public RawDataSource(
-      DataFormat dataFormat,
-      DataParserFormatConfig dataFormatConfig,
       String rawData,
+      String eventData,
       boolean stopAfterFirstBatch
   ) {
     this.rawData = rawData;
-    this.parser = new DataFormatParser(RawDataSourceGroups.RAW.name(), dataFormat, dataFormatConfig, null);
+    this.eventData = eventData;
     this.stopAfterFirstBatch = stopAfterFirstBatch;
   }
 
   @Override
   public List<Stage.ConfigIssue> init() {
-    List<Stage.ConfigIssue> issues = new ArrayList<>();
-    issues.addAll(parser.init(this.getContext()));
-    return issues;
+    return super.init();
   }
 
   @Override
   public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
-    List<Record> records = parser.parse(this.getContext(), "rawData", rawData.getBytes(parser.getCharset()));
-    for(Record record: records) {
+    for (Record record : ServicesUtil.parseAll(getContext(), getContext(), false, "rawData", rawData.getBytes())) {
       batchMaker.addRecord(record);
+    }
+
+    if(eventData != null && !eventData.isEmpty()) {
+      for (Record record : ServicesUtil.parseAll(getContext(), getContext(), false, "eventData", eventData.getBytes())) {
+        EventRecord event = getContext().createEventRecord("raw-data-event", 1, record.getHeader().getSourceId());
+        event.set(record.get());
+        getContext().toEvent(event);
+      }
     }
 
     if(stopAfterFirstBatch) {

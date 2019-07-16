@@ -25,14 +25,12 @@ import com.streamsets.datacollector.validation.Issue;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.impl.CreateByRef;
 
-import com.streamsets.pipeline.api.service.Service;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
 import java.util.Collections;
-import java.util.concurrent.Callable;
 
 public class TestStageRuntime {
   private PipelineBean pipelineBean;
@@ -42,6 +40,10 @@ public class TestStageRuntime {
   private StageDefinition def;
   private StageContext context;
   private StageRuntime runtime;
+  private InterceptorContext preInterceptorContext;
+  private InterceptorRuntime preInterceptor;
+  private InterceptorContext postInterceptorContext;
+  private InterceptorRuntime postInterceptor;
   private ServiceRuntime serviceRuntime;
 
   @Before
@@ -63,9 +65,25 @@ public class TestStageRuntime {
 
     this.context = Mockito.mock(StageContext.class);
 
+    this.preInterceptorContext = Mockito.mock(InterceptorContext.class);
+    this.preInterceptor = Mockito.mock(InterceptorRuntime.class);
+    Mockito.when(preInterceptor.getContext()).thenReturn(preInterceptorContext);
+
+    this.postInterceptorContext = Mockito.mock(InterceptorContext.class);
+    this.postInterceptor = Mockito.mock(InterceptorRuntime.class);
+    Mockito.when(postInterceptor.getContext()).thenReturn(postInterceptorContext);
+
     this.serviceRuntime = Mockito.mock(ServiceRuntime.class);
 
-    this.runtime = new StageRuntime(pipelineBean, stageBean, ImmutableList.of(serviceRuntime));
+    this.runtime = new StageRuntime(
+      pipelineBean,
+      stageBean,
+      Collections.singletonList(serviceRuntime),
+      Collections.singletonList(preInterceptor),
+      Collections.singletonList(postInterceptor),
+      null,
+      null
+    );
     runtime.setContext(context);
   }
 
@@ -77,7 +95,7 @@ public class TestStageRuntime {
     runtime.execute(() -> {
       Assert.assertFalse(CreateByRef.isByRef());
       return null;
-    }, null, null);
+    }, null, null, null, null);
 
     // by value, preview
     Mockito.when(def.getRecordsByRef()).thenReturn(false);
@@ -85,7 +103,7 @@ public class TestStageRuntime {
     runtime.execute(() -> {
       Assert.assertFalse(CreateByRef.isByRef());
       return null;
-    }, null, null);
+    }, null, null, null, null);
 
     // by ref, no preview
     Mockito.when(def.getRecordsByRef()).thenReturn(true);
@@ -93,7 +111,7 @@ public class TestStageRuntime {
     runtime.execute(() -> {
       Assert.assertTrue(CreateByRef.isByRef());
       return null;
-    }, null, null);
+    }, null, null, null, null);
 
     // by ref, preview
     Mockito.when(def.getRecordsByRef()).thenReturn(true);
@@ -101,13 +119,13 @@ public class TestStageRuntime {
     runtime.execute(() -> {
       Assert.assertFalse(CreateByRef.isByRef());
       return null;
-    }, null, null);
+    }, null, null, null, null);
   }
 
   @Test
   public void testReleaseClassLoader() throws Exception {
     Mockito.verify(stageBean, Mockito.never()).releaseClassLoader();
-    runtime.destroy(new ErrorSink(), new EventSink());
+    runtime.destroy(new ErrorSink(), new EventSink(), new ProcessedSink());
     Mockito.verify(stageBean, Mockito.times(1)).releaseClassLoader();
   }
 
@@ -126,5 +144,28 @@ public class TestStageRuntime {
     Mockito.when(serviceRuntime.init()).thenReturn(ImmutableList.of(Mockito.mock(Issue.class)));
     runtime.init();
     Mockito.verify(stage, Mockito.never()).init(Mockito.any(), Mockito.any());
+  }
+
+  @Test
+  public void testInterceptorInit() throws Exception {
+    Mockito.verify(preInterceptor, Mockito.never()).init();
+    Mockito.verify(preInterceptorContext, Mockito.never()).setAllowCreateStage(Mockito.anyBoolean());
+    Mockito.verify(preInterceptorContext, Mockito.never()).getStageRuntimes();
+
+    Mockito.verify(postInterceptor, Mockito.never()).init();
+    Mockito.verify(postInterceptorContext, Mockito.never()).setAllowCreateStage(Mockito.anyBoolean());
+    Mockito.verify(postInterceptorContext, Mockito.never()).getStageRuntimes();
+
+    runtime.init();
+
+    Mockito.verify(preInterceptor, Mockito.times(1)).init();
+    Mockito.verify(preInterceptorContext, Mockito.times(1)).setAllowCreateStage(true);
+    Mockito.verify(preInterceptorContext, Mockito.times(1)).setAllowCreateStage(false);
+    Mockito.verify(preInterceptorContext, Mockito.times(1)).getIssues();
+
+    Mockito.verify(postInterceptor, Mockito.times(1)).init();
+    Mockito.verify(postInterceptorContext, Mockito.times(1)).setAllowCreateStage(true);
+    Mockito.verify(postInterceptorContext, Mockito.times(1)).setAllowCreateStage(false);
+    Mockito.verify(postInterceptorContext, Mockito.times(1)).getIssues();
   }
 }

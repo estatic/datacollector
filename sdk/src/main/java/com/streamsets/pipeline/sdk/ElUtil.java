@@ -15,6 +15,7 @@
  */
 package com.streamsets.pipeline.sdk;
 
+import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
 import com.streamsets.datacollector.el.ELEvaluator;
 import com.streamsets.datacollector.el.ELVariables;
 import com.streamsets.pipeline.api.ConfigDefBean;
@@ -36,7 +37,7 @@ public class ElUtil {
 
   private ElUtil() {}
 
-  public static Map<String, Class<?>[]> getConfigToElDefMap(Class<?> stageClass) throws Exception {
+  public static Map<String, Class<?>[]> getConfigToElDefMap(Class<?> stageClass) {
     Map<String, Class<?>[]> configToElDefMap = new HashMap<>();
     for (Field field : stageClass.getFields()) {
       if (field.isAnnotationPresent(ConfigDef.class)) {
@@ -83,7 +84,7 @@ public class ElUtil {
   }
 
   public static ELEval createElEval(String configName, Class ...elDefs) {
-    return new ELEvaluator(configName, getElDefClasses(elDefs));
+    return new ELEvaluator(configName, ConcreteELDefinitionExtractor.get(), getElDefClasses(elDefs));
   }
 
   public static ELVars createELVars() {

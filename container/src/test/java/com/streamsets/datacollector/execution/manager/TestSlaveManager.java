@@ -16,6 +16,7 @@
 package com.streamsets.datacollector.execution.manager;
 
 import com.codahale.metrics.MetricRegistry;
+import com.streamsets.datacollector.credential.CredentialStoresTask;
 import com.streamsets.datacollector.execution.EventListenerManager;
 import com.streamsets.datacollector.execution.Manager;
 import com.streamsets.datacollector.execution.PipelineStateStore;
@@ -36,6 +37,7 @@ import com.streamsets.datacollector.store.AclStoreTask;
 import com.streamsets.datacollector.store.PipelineStoreTask;
 import com.streamsets.datacollector.store.impl.FileAclStoreTask;
 import com.streamsets.datacollector.store.impl.SlavePipelineStoreTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.util.LockCache;
 import com.streamsets.datacollector.util.TestUtil;
@@ -135,9 +137,21 @@ public class TestSlaveManager {
 
     @Provides
     @Singleton
+    public CredentialStoresTask provideCredentialsTask() {
+      return Mockito.mock(CredentialStoresTask.class);
+    }
+
+    @Provides
+    @Singleton
     @Named("runnerExecutor")
     public SafeScheduledExecutorService provideRunnerExecutor() {
       return new SafeScheduledExecutorService(10, "runner");
+    }
+
+    @Provides
+    @Singleton
+    public StatsCollector provideStatsCollector() {
+      return Mockito.mock(StatsCollector.class);
     }
 
     @Provides

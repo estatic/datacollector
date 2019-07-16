@@ -17,12 +17,18 @@ package com.streamsets.pipeline.stage.origin.multikafka;
 
 import com.google.common.base.Throwables;
 import com.streamsets.pipeline.api.BatchContext;
+import com.streamsets.pipeline.api.DeliveryGuarantee;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
+import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.BasePushSource;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
 import com.streamsets.pipeline.api.impl.Utils;
+import com.streamsets.pipeline.api.lineage.EndPointType;
+import com.streamsets.pipeline.api.lineage.LineageEvent;
+import com.streamsets.pipeline.api.lineage.LineageEventType;
+import com.streamsets.pipeline.api.lineage.LineageSpecificAttribute;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.lib.kafka.KafkaConstants;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
@@ -33,9 +39,9 @@ import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.HeaderAttributeConstants;
 import com.streamsets.pipeline.stage.origin.multikafka.loader.KafkaConsumerLoader;
+import org.apache.commons.lang.StringUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -103,25 +109,31 @@ public class MultiKafkaSource extends BasePushSource {
 
         // protected loop. want it to finish completely, or not start at all.
         // only 2 conditions that we want to halt execution. must handle gracefully
+        List<ConsumerRecord<String, byte[]>> list = new ArrayList<>();
+        long startTime = System.currentTimeMillis();
+
         while(!getContext().isStopped() && !Thread.interrupted()) {
-          BatchContext batchContext = getContext().startBatch();
-          ErrorRecordHandler errorRecordHandler = new DefaultErrorRecordHandler(getContext(), batchContext);
+          long pollInterval = Math.max(0, conf.batchWaitTime - (System.currentTimeMillis() - startTime));
+          if (pollInterval == 0) {
+            sendBatchCommitAndCleanList(getContext().getDeliveryGuarantee(), list);
+            startTime = System.currentTimeMillis();
+          } else {
+            ConsumerRecords<String, byte[]> messages = consumer.poll(pollInterval);
 
-          ConsumerRecords<String, byte[]> messages = consumer.poll(conf.batchWaitTime);
-          if(!messages.isEmpty()) {
-            for(ConsumerRecord<String, byte[]> message : messages) {
-              createRecord(
-                  errorRecordHandler,
-                  message.topic(),
-                  message.partition(),
-                  message.offset(),
-                  message.value()
-              ).forEach(batchContext.getBatchMaker()::addRecord);
+            if(!messages.isEmpty()) {
+              for (ConsumerRecord<String, byte[]> item : messages) {
+                list.add(item);
+                if (list.size() == conf.maxBatchSize) {
+                  sendBatchCommitAndCleanList(getContext().getDeliveryGuarantee(), list);
+                  startTime = System.currentTimeMillis();
+                }
+              }
+              messagesProcessed += messages.count();
+
+              LOG.trace("Kafka thread {} finished processing {} messages", this.threadID, messages.count());
+            } else {
+              LOG.trace("No records returned from consumer.poll()");
             }
-
-            getContext().processBatch(batchContext);
-            messagesProcessed += messages.count();
-            LOG.trace("Kafka thread {} finished processing {} messages", this.threadID, messages.count());
           }
         }
       } catch (Exception e) {
@@ -134,6 +146,31 @@ public class MultiKafkaSource extends BasePushSource {
 
       LOG.info("multi kafka thread {} consumed {} messages", threadID, messagesProcessed);
       return messagesProcessed;
+    }
+
+    private void sendBatchCommitAndCleanList(
+        DeliveryGuarantee deliveryGuarantee,
+        List<ConsumerRecord<String, byte[]>> listOfMessages
+    ) throws StageException {
+      if (deliveryGuarantee == DeliveryGuarantee.AT_MOST_ONCE) {
+        consumer.commitSync();
+      }
+      boolean batchSucessful = sendBatch(listOfMessages);
+      if (batchSucessful && deliveryGuarantee == DeliveryGuarantee.AT_LEAST_ONCE) {
+        consumer.commitSync();
+      }
+      listOfMessages.clear();
+    }
+
+    private boolean sendBatch(List<ConsumerRecord<String, byte[]>> list) throws StageException {
+      BatchContext batchContext = getContext().startBatch();
+      ErrorRecordHandler errorRecordHandler = new DefaultErrorRecordHandler(getContext(), batchContext);
+      for (ConsumerRecord<String, byte[]> mm : list) {
+        createRecord(errorRecordHandler, mm.topic(), mm.partition(), mm.offset(), mm.value()).forEach(
+            batchContext.getBatchMaker()::addRecord);
+      }
+      LOG.debug("Multi Kafka sendBatch {}", list.size());
+      return getContext().processBatch(batchContext);
     }
 
     private List<Record> createRecord(
@@ -220,7 +257,13 @@ public class MultiKafkaSource extends BasePushSource {
     }
 
     executor = Executors.newFixedThreadPool(getNumberOfThreads());
-
+    for (String topic: conf.topicList) {
+      LineageEvent event = getContext().createLineageEvent(LineageEventType.ENTITY_READ);
+      event.setSpecificAttribute(LineageSpecificAttribute.ENDPOINT_TYPE, EndPointType.KAFKA.name());
+      event.setSpecificAttribute(LineageSpecificAttribute.ENTITY_NAME, topic);
+      event.setSpecificAttribute(LineageSpecificAttribute.DESCRIPTION, conf.brokerURI);
+      getContext().publishLineageEvent(event);
+    }
     return issues;
   }
 
@@ -238,11 +281,18 @@ public class MultiKafkaSource extends BasePushSource {
     CountDownLatch startProcessingGate = new CountDownLatch(numThreads);
 
     // Run all the threads
+    Stage.Context context = getContext();
     for(int i = 0; i < numThreads; i++) {
       try {
         futures.add(executor.submit(new MultiTopicCallable(i,
             conf.topicList,
-            KafkaConsumerLoader.createConsumer(getKafkaProperties()),
+            KafkaConsumerLoader.createConsumer(
+                getKafkaProperties(context),
+                context,
+                conf.kafkaAutoOffsetReset,
+                conf.timestampToSearchOffsets,
+                conf.topicList
+            ),
             startProcessingGate
         )));
       } catch (Exception e) {
@@ -275,17 +325,21 @@ public class MultiKafkaSource extends BasePushSource {
   }
 
   //no trespassing...
-  private Properties getKafkaProperties() {
+  private Properties getKafkaProperties(Stage.Context context) {
     Properties props = new Properties();
     props.putAll(conf.kafkaOptions);
 
     props.setProperty("bootstrap.servers", conf.brokerURI);
     props.setProperty("group.id", conf.consumerGroup);
     props.setProperty("max.poll.records", String.valueOf(batchSize));
-    props.setProperty("enable.auto.commit", "true");
-    props.setProperty("auto.commit.interval.ms", "1000");
     props.setProperty(KafkaConstants.KEY_DESERIALIZER_CLASS_CONFIG, conf.keyDeserializer.getKeyClass());
     props.setProperty(KafkaConstants.VALUE_DESERIALIZER_CLASS_CONFIG, conf.valueDeserializer.getValueClass());
+    props.setProperty(KafkaConstants.CONFLUENT_SCHEMA_REGISTRY_URL_CONFIG, StringUtils.join(conf.dataFormatConfig.schemaRegistryUrls, ","));
+    props.setProperty(KafkaConstants.AUTO_COMMIT_OFFEST, "false");
+
+    if(context.isPreview()) {
+      props.setProperty(KafkaConstants.AUTO_OFFSET_RESET_CONFIG, KafkaConstants.AUTO_OFFSET_RESET_PREVIEW_VALUE);
+    }
 
     return props;
   }

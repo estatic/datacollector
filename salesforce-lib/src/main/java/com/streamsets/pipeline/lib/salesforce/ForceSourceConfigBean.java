@@ -54,7 +54,9 @@ public class ForceSourceConfigBean extends ForceInputConfigBean {
       type = ConfigDef.Type.BOOLEAN,
       defaultValue = "false",
       label = "Use PK Chunking",
-      description = "Enables automatic primary key (PK) chunking for the bulk query job.",
+      description = "Enables automatic primary key (PK) chunking for the bulk query job. " +
+          "Note that the 'Query All' option and offsets are not used with PK Chunking, " +
+          "and the SOQL Query cannot contain an ORDER BY clause, or contain the Id field in a WHERE clause.",
       displayPosition = 74,
       dependsOn = "useBulkAPI",
       triggeredByValue = "true",
@@ -114,7 +116,6 @@ public class ForceSourceConfigBean extends ForceInputConfigBean {
       displayPosition = 82,
       dependencies = {
           @Dependency(configName = "queryExistingData", triggeredByValues = "true"),
-          @Dependency(configName = "usePKChunking", triggeredByValues = "false")
       },
       group = "QUERY"
   )
@@ -154,7 +155,7 @@ public class ForceSourceConfigBean extends ForceInputConfigBean {
   public long queryInterval;
 
   @ConfigDef(
-      required = true,
+      required = false,
       type = ConfigDef.Type.STRING,
       defaultValue = "000000000000000",
       label = "Initial Offset",
@@ -163,14 +164,13 @@ public class ForceSourceConfigBean extends ForceInputConfigBean {
       displayPosition = 90,
       dependencies = {
           @Dependency(configName = "queryExistingData", triggeredByValues = "true"),
-          @Dependency(configName = "usePKChunking", triggeredByValues = "false")
       },
       group = "QUERY"
   )
   public String initialOffset;
 
   @ConfigDef(
-      required = true,
+      required = false,
       type = ConfigDef.Type.STRING,
       defaultValue = "Id",
       label = "Offset Field",
@@ -178,7 +178,6 @@ public class ForceSourceConfigBean extends ForceInputConfigBean {
       displayPosition = 100,
       dependencies = {
           @Dependency(configName = "queryExistingData", triggeredByValues = "true"),
-          @Dependency(configName = "usePKChunking", triggeredByValues = "false")
       },
       group = "QUERY"
   )
@@ -239,6 +238,20 @@ public class ForceSourceConfigBean extends ForceInputConfigBean {
   public String platformEvent;
 
   @ConfigDef(
+          required = false,
+          type = ConfigDef.Type.STRING,
+          label = "Change Data Capture Object",
+          description = "The object for which you want to receive change events. Leave blank to receive all change events.",
+          displayPosition = 126,
+          dependencies = {
+                  @Dependency(configName = "subscribeToStreaming", triggeredByValues = "true"),
+                  @Dependency(configName = "subscriptionType", triggeredByValues = "CDC"),
+          },
+          group = "SUBSCRIBE"
+  )
+  public String cdcObject;
+
+  @ConfigDef(
       required = true,
       type = ConfigDef.Type.MODEL,
       label = "Replay Option",
@@ -253,6 +266,18 @@ public class ForceSourceConfigBean extends ForceInputConfigBean {
   )
   @ValueChooserModel(ReplayOptionChooserValues.class)
   public ReplayOption replayOption = ReplayOption.NEW_EVENTS;
+
+  @ConfigDef(
+      required = false,
+      type = ConfigDef.Type.BOOLEAN,
+      label = "Disable Query Validation",
+      description = "Disables validation of query formatting such as " +
+          "presence of ${OFFSET} or ORDER BY clause.",
+      defaultValue = "false",
+      displayPosition = 300,
+      group = "ADVANCED"
+  )
+  public boolean disableValidation = false;
 
   @ConfigDefBean(groups = {"FORCE", "QUERY", "SUBSCRIBE", "ADVANCED"})
   public BasicConfig basicConfig = new BasicConfig();

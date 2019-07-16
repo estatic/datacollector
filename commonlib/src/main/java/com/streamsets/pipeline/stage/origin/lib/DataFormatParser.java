@@ -29,6 +29,7 @@ import com.streamsets.pipeline.lib.parser.DataParserException;
 import com.streamsets.pipeline.lib.parser.DataParserFactory;
 import com.streamsets.pipeline.lib.parser.DataParserFactoryBuilder;
 import com.streamsets.pipeline.lib.parser.RecoverableDataParserException;
+import com.streamsets.pipeline.lib.parser.excel.WorkbookParserConstants;
 import com.streamsets.pipeline.lib.parser.log.LogDataFormatValidator;
 import com.streamsets.pipeline.lib.parser.log.RegExConfig;
 import com.streamsets.pipeline.lib.parser.net.netflow.NetflowDataParserFactory;
@@ -47,6 +48,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -175,7 +178,7 @@ public class DataFormatParser {
             dataFormatConfig.customLogFormat,
             dataFormatConfig.regex,
             dataFormatConfig.grokPatternDefinition,
-            dataFormatConfig.grokPattern,
+            Arrays.asList(dataFormatConfig.grokPattern),
             dataFormatConfig.enableLog4jCustomLogFormat,
             dataFormatConfig.log4jCustomLogFormat,
             dataFormatConfig.onParseError,
@@ -280,6 +283,9 @@ public class DataFormatParser {
       case SYSLOG:
         // nothing to validate
         break;
+      case EXCEL:
+        // nothing to validate
+        break;
       default:
         issues.add(
             context.createConfigIssue(
@@ -338,7 +344,13 @@ public class DataFormatParser {
           .setConfig(DelimitedDataConstants.IGNORE_EMPTY_LINES_CONFIG, dataFormatConfig.csvIgnoreEmptyLines)
           .setConfig(DelimitedDataConstants.ALLOW_EXTRA_COLUMNS, dataFormatConfig.csvAllowExtraColumns)
           .setConfig(DelimitedDataConstants.EXTRA_COLUMN_PREFIX, dataFormatConfig.csvExtraColumnPrefix)
-          ;
+          .setConfig(
+              DelimitedDataConstants.MULTI_CHARACTER_FIELD_DELIMITER_CONFIG,
+              dataFormatConfig.multiCharacterFieldDelimiter
+          ).setConfig(
+              DelimitedDataConstants.MULTI_CHARACTER_LINE_DELIMITER_CONFIG,
+              dataFormatConfig.multiCharacterLineDelimiter
+          );
         break;
       case XML:
         builder.setMaxDataLen(dataFormatConfig.xmlMaxObjectLen);
@@ -388,6 +400,13 @@ public class DataFormatParser {
           .setConfig(NetflowDataParserFactory.OUTPUT_VALUES_MODE_KEY, dataFormatConfig.netflowOutputValuesMode)
           .setConfig(NetflowDataParserFactory.MAX_TEMPLATE_CACHE_SIZE_KEY, dataFormatConfig.maxTemplateCacheSize)
           .setConfig(NetflowDataParserFactory.TEMPLATE_CACHE_TIMEOUT_MS_KEY, dataFormatConfig.templateCacheTimeoutMs);
+        break;
+      case EXCEL:
+        builder
+            .setMaxDataLen(-1)
+            .setConfig(WorkbookParserConstants.SKIP_CELLS_WITH_NO_HEADER, dataFormatConfig.excelSkipCellsWithNoHeader)
+            .setConfig(WorkbookParserConstants.HEADER, dataFormatConfig.excelHeader)
+            .setConfig(WorkbookParserConstants.SHEETS, dataFormatConfig.excelReadAllSheets ? Collections.emptyList() : dataFormatConfig.excelSheetNames);
         break;
       default:
         throw new IllegalStateException(Utils.format("Unknown data format: {}", dataFormat));

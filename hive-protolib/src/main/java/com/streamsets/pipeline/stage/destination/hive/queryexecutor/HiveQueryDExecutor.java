@@ -22,7 +22,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PipelineLifecycleStage;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DExecutor;
+import com.streamsets.pipeline.api.base.configurablestage.DExecutor;
 
 /**
  */
@@ -34,7 +34,7 @@ import com.streamsets.pipeline.configurablestage.DExecutor;
     privateClassLoader = true,
     producesEvents = true,
     upgrader = HiveQueryExecutorUpgrader.class,
-    onlineHelpRefUrl = "index.html#Executors/HiveQuery.html#task_mgm_4lk_fx"
+    onlineHelpRefUrl ="index.html?contextID=task_mgm_4lk_fx"
 )
 @ConfigGroups(value = Groups.class)
 @HideConfigs({

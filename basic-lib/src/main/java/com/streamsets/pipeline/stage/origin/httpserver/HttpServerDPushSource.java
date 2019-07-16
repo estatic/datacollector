@@ -24,8 +24,8 @@ import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 import com.streamsets.pipeline.config.DataFormat;
-import com.streamsets.pipeline.configurablestage.DPushSource;
 import com.streamsets.pipeline.lib.http.DataFormatChooserValues;
 import com.streamsets.pipeline.lib.httpsource.RawHttpConfigs;
 import com.streamsets.pipeline.stage.origin.lib.DataParserFormatConfig;
@@ -39,7 +39,7 @@ import static com.streamsets.pipeline.config.OriginAvroSchemaSource.SOURCE;
     icon="httpserver_multithreaded.png",
     execution = {ExecutionMode.STANDALONE, ExecutionMode.EDGE},
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/HTTPServer.html#task_pgw_b3b_4y",
+    onlineHelpRefUrl ="index.html?contextID=task_pgw_b3b_4y",
     upgrader = HttpServerPushSourceUpgrader.class
 )
 @ConfigGroups(Groups.class)
@@ -49,7 +49,8 @@ import static com.streamsets.pipeline.config.OriginAvroSchemaSource.SOURCE;
     "httpConfigs.tlsConfigBean.trustStoreFilePath",
     "httpConfigs.tlsConfigBean.trustStoreType",
     "httpConfigs.tlsConfigBean.trustStorePassword",
-    "httpConfigs.tlsConfigBean.trustStoreAlgorithm"
+    "httpConfigs.tlsConfigBean.trustStoreAlgorithm",
+    "httpConfigs.needClientAuth"
 })
 @GenerateResourceBundle
 public class HttpServerDPushSource extends DPushSource {

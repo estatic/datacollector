@@ -107,7 +107,7 @@ public class OpcUaClientSource implements PushSource {
   private OpcUaClient opcUaClient;
   private List<NodeId> nodeIds;
   private NodeId rootNodeId;
-  private boolean destroyed = false;
+  private volatile boolean destroyed = false;
   private final static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private Stopwatch stopwatch = null;
 
@@ -362,11 +362,12 @@ public class OpcUaClientSource implements PushSource {
 
   private void reConnect() {
     try {
-      opcUaClient.disconnect().get();
+      opcUaClient.disconnect().get(conf.requestTimeoutMillis, TimeUnit.MILLISECONDS);
       opcUaClient = createClient();
-      opcUaClient.connect().get();
+      opcUaClient.connect().get(conf.requestTimeoutMillis, TimeUnit.MILLISECONDS);
     } catch (Exception ex) {
       LOG.error(Errors.OPC_UA_02.getMessage(), ex.getMessage(), ex);
+      errorQueue.offer(new StageException(Errors.OPC_UA_02, ex.getMessage(), ex));
     }
   }
 
@@ -389,8 +390,11 @@ public class OpcUaClientSource implements PushSource {
         })
         .exceptionally(ex -> {
           LOG.warn(Errors.OPC_UA_12.getMessage(), ex.getMessage());
+          errorQueue.offer(new StageException(Errors.OPC_UA_12, ex.getMessage(), ex));
           reConnect();
-          pollForData();
+          if (ThreadUtil.sleep(conf.pollingInterval)) {
+            pollForData();
+          }
           return null;
         });
   }

@@ -22,6 +22,10 @@ public class TargetFactorySettings {
   private String defaultCollection;
   private boolean kerberosAuth;
   private boolean skipValidation;
+  private final boolean waitFlush;
+  private final boolean waitSearcher;
+  private final boolean softCommit;
+  private boolean ignoreOptionalFields;
 
   public TargetFactorySettings (
       String instanceType,
@@ -29,7 +33,11 @@ public class TargetFactorySettings {
       String zookeeperConnect,
       String defaultCollection,
       boolean kerberosAuth,
-      boolean skipValidation
+      boolean skipValidation,
+      boolean waitFlush,
+      boolean waitSearcher,
+      boolean softCommit,
+      boolean ignoreOptionalFields
   ) {
     this.instanceType = instanceType;
     this.solrURI = solrURI;
@@ -37,6 +45,10 @@ public class TargetFactorySettings {
     this.defaultCollection = defaultCollection;
     this.kerberosAuth = kerberosAuth;
     this.skipValidation = skipValidation;
+    this.waitFlush = waitFlush;
+    this.waitSearcher = waitSearcher;
+    this.softCommit = softCommit;
+    this.ignoreOptionalFields = ignoreOptionalFields;
   }
 
   public String getInstanceType() {
@@ -61,5 +73,21 @@ public class TargetFactorySettings {
 
   public boolean getSkipValidation() {
     return skipValidation;
+  }
+
+  public boolean isWaitFlush() {
+    return waitFlush;
+  }
+
+  public boolean isWaitSearcher() {
+    return waitSearcher;
+  }
+
+  public boolean isSoftCommit() {
+    return softCommit;
+  }
+
+  public boolean getIgnoreOptionalFields() {
+    return ignoreOptionalFields;
   }
 }

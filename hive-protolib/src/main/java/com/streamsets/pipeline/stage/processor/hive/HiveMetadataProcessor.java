@@ -90,6 +90,7 @@ public class HiveMetadataProcessor extends RecordProcessor {
   private final String timeDriver;
   private final DecimalDefaultsConfig decimalDefaultsConfig;
   private final TimeZone timeZone;
+  private final boolean convertTimesToString;
   private final HMPDataFormat dataFormat;
   private final String commentExpression;
   private final Map<String, String> metadataHeaderAttributeConfigs;
@@ -159,6 +160,7 @@ public class HiveMetadataProcessor extends RecordProcessor {
       String timeDriver,
       DecimalDefaultsConfig decimalDefaultsConfig,
       TimeZone timezone,
+      boolean convertTimesToString,
       HMPDataFormat dataFormat,
       String commentExpression,
       Map<String, String> metadataHeaderAttributeConfigs
@@ -176,6 +178,7 @@ public class HiveMetadataProcessor extends RecordProcessor {
     this.decimalDefaultsConfig = decimalDefaultsConfig;
     partitionTypeInfo = new LinkedHashMap<>();
     this.timeZone = timezone;
+    this.convertTimesToString = convertTimesToString;
     this.dataFormat = dataFormat;
     this.commentExpression = commentExpression;
     this.metadataHeaderAttributeConfigs = metadataHeaderAttributeConfigs;
@@ -296,26 +299,16 @@ public class HiveMetadataProcessor extends RecordProcessor {
           String attributeNameExpression = entry.getKey();
           String attributeValueExpression = entry.getValue();
 
-          ELUtils.validateExpression(
-                  elEvals.metadataHeaderAttributeEL,
-                  getContext().createELVars(),
-                  attributeNameExpression,
+          ELUtils.validateExpression(attributeNameExpression,
                   getContext(),
                   ATTRIBUTE_EXPRESSION,
                   "headerAttributeConfigs",
-                  Errors.HIVE_METADATA_12,
-                  Object.class,
-                  issues);
-          ELUtils.validateExpression(
-                  elEvals.metadataHeaderAttributeEL,
-                  getContext().createELVars(),
-                  attributeValueExpression,
+                  Errors.HIVE_METADATA_12, issues);
+          ELUtils.validateExpression(attributeValueExpression,
                   getContext(),
                   ATTRIBUTE_EXPRESSION,
                   "headerAttributeConfigs",
-                  Errors.HIVE_METADATA_12,
-                  Object.class,
-                  issues);
+                  Errors.HIVE_METADATA_12, issues);
         }
       } else {
         metadataHeadersToAddExist = false;
@@ -424,7 +417,9 @@ public class HiveMetadataProcessor extends RecordProcessor {
           decimalDefaultsConfig.scaleExpression,
           decimalDefaultsConfig.precisionExpression,
           commentExpression,
-          variables
+          variables,
+          convertTimesToString,
+          (TimeZone) timeZone.clone()
       );
 
       if (recordStructure.isEmpty()) {  // If record has no data to process, No-op
@@ -577,7 +572,11 @@ public class HiveMetadataProcessor extends RecordProcessor {
           if (metadataHeadersToAddExist) {
             partitionMetadataHeaderAttributeMap = generateResolvedHeaderAttributeMap(metadataHeaderAttributeConfigs, variables);
           }
-          handleNewPartition(partitionValMap, pCache, dbName, tableName, targetPath, batchMaker, qualifiedName, diff, partitionMetadataHeaderAttributeMap);
+          // Create new partition metadata record. 'targetPath' contains a custom location only when table is external.
+          // We want to use custom partition locations only for external tables since Hive 3.1 raises an error when
+          // specifying the location for partitions of managed tables.
+          handleNewPartition(partitionValMap, pCache, dbName, tableName, targetPath, externalTable, batchMaker,
+              qualifiedName, diff, partitionMetadataHeaderAttributeMap);
         }
       }
 
@@ -715,12 +714,12 @@ public class HiveMetadataProcessor extends RecordProcessor {
   }
 
   /**
-   * Generate a record for new partition. It creates a new Record
-   * and fill in metadata.
+   * Generate a record for new partition. It creates a new Record and fill in metadata.
    * @param database database name
    * @param tableName table name
    * @param partitionList New partition to be created
-   * @param location Direcotry path
+   * @param location Directory path in Hadoop filesystem for the new partition.
+   * @param customLocation Whether the {@code location} is a custom path or the default path defined by Hive.
    * @return New metadata record
    * @throws StageException
    */
@@ -730,6 +729,7 @@ public class HiveMetadataProcessor extends RecordProcessor {
       String tableName,
       LinkedHashMap<String, String> partitionList,
       String location,
+      boolean customLocation,
       Map<String, String> metadataHeaderAttributes) throws StageException {
 
     //creating a record with uuid as postfix so multiple SDCs won't generate the record with same id.
@@ -739,6 +739,7 @@ public class HiveMetadataProcessor extends RecordProcessor {
         tableName,
         partitionList,
         location,
+        customLocation,
         dataFormat
     );
     metadataRecord.set(metadataField);
@@ -756,13 +757,15 @@ public class HiveMetadataProcessor extends RecordProcessor {
       String database,
       String tableName,
       String location,
+      boolean customLocation,
       BatchMaker batchMaker,
       String qualifiedName,
       Map<PartitionInfoCacheSupport.PartitionValues, String> diff,
       Map<String, String> metadataHeaderAttributes
   ) throws StageException {
 
-    Record r = generateNewPartitionRecord(database, tableName, partitionValMap, location, metadataHeaderAttributes);
+    Record r = generateNewPartitionRecord(database, tableName, partitionValMap, location, customLocation,
+        metadataHeaderAttributes);
     batchMaker.addRecord(r, hmsLane);
     if (pCache != null) {
       pCache.updateState(diff);

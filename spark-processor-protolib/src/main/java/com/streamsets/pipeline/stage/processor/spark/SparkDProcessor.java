@@ -21,7 +21,7 @@ import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 import java.util.concurrent.Semaphore;
 
@@ -31,7 +31,7 @@ import java.util.concurrent.Semaphore;
     description = "Process Records in Spark",
     icon = "spark-logo-hd.png",
     execution = {ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_MESOS_STREAMING, ExecutionMode.CLUSTER_YARN_STREAMING},
-    onlineHelpRefUrl = "index.html#Processors/Spark.html#task_g1p_gqn_zx",
+    onlineHelpRefUrl ="index.html?contextID=task_g1p_gqn_zx",
     privateClassLoader = true
 )
 @GenerateResourceBundle

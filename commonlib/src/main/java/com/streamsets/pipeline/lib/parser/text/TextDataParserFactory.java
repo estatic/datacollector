@@ -54,7 +54,7 @@ public class TextDataParserFactory extends DataParserFactory {
 
   public static final Set<Class<? extends Enum>> MODES = Collections.emptySet();
 
-  static final String TEXT_FIELD_NAME = "text";
+  public static final String TEXT_FIELD_NAME = "text";
   static final String TRUNCATED_FIELD_NAME = "truncated";
 
   private final GenericObjectPool<StringBuilder> stringBuilderPool;
@@ -72,6 +72,16 @@ public class TextDataParserFactory extends DataParserFactory {
   @Override
   public DataParser getParser(String id, Reader reader, long offset) throws DataParserException {
     return createParser(id, createReader(reader), offset);
+  }
+
+  @Override
+  public void destroy() {
+    if (stringBuilderPool != null) {
+      stringBuilderPool.clear();
+      stringBuilderPool.close();
+    }
+
+    super.destroy();
   }
 
   private DataParser createParser(String id, OverrunReader reader, long offset) throws DataParserException {

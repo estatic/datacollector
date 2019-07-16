@@ -23,7 +23,9 @@ import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.lib.el.RecordEL;
 import com.streamsets.pipeline.stage.destination.mapreduce.Groups;
 import com.streamsets.pipeline.stage.destination.mapreduce.MapReduceErrors;
-import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroparquet.AvroParquetConfig;
+import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroconvert.AvroConversionCommonConfig;
+import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroorc.AvroOrcConfig;
+import com.streamsets.pipeline.lib.converter.AvroParquetConfig;
 import org.apache.hadoop.mapreduce.Job;
 
 import java.util.ArrayList;
@@ -79,7 +81,13 @@ public class JobConfig {
   public Map<String, String> jobConfigs;
 
   @ConfigDefBean
+  public AvroConversionCommonConfig avroConversionCommonConfig;
+
+  @ConfigDefBean
   public AvroParquetConfig avroParquetConfig;
+
+  @ConfigDefBean
+  public AvroOrcConfig avroOrcConfig;
 
   private Class<Callable<Job>> jobCreator;
 

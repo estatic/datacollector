@@ -23,6 +23,7 @@ import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.sdk.RecordCreator;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingMode;
 import com.streamsets.pipeline.stage.processor.scripting.ScriptingProcessorTestUtil;
+import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordType;
 import org.junit.Test;
 
 import java.util.Date;
@@ -410,7 +411,7 @@ public class TestJythonProcessor {
             "  output.write(record);\n"
     );
 
-    ScriptingProcessorTestUtil.verifyNullField(JythonProcessor.class, processor, record);
+    ScriptingProcessorTestUtil.verifyNullField(JythonDProcessor.class, processor, record);
   }
 
   @Test
@@ -429,7 +430,7 @@ public class TestJythonProcessor {
         ProcessingMode.RECORD,
         script
     );
-    ScriptingProcessorTestUtil.verifyCreateRecord(JythonProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyCreateRecord(JythonDProcessor.class, processor);
   }
 
   @Test
@@ -438,6 +439,7 @@ public class TestJythonProcessor {
     String value = "value1";
     String script = "for record in records:\n" +
         "  record.attributes['" + headerKey + "'] = '" + value + "'\n" +
+        "  record.attributes.remove('remove')\n" +
         "  output.write(record)";
 
     Processor processor = new JythonProcessor(
@@ -446,7 +448,21 @@ public class TestJythonProcessor {
     );
 
     Record record = RecordCreator.create();
-    ScriptingProcessorTestUtil.verifyRecordHeaderAttribute(JythonProcessor.class, processor, record);
+    ScriptingProcessorTestUtil.verifyRecordHeaderAttribute(JythonDProcessor.class, processor, record);
+  }
+
+  @Test
+  public void testAccessSdcRecord() throws Exception {
+    String script = "for record in records:\n" +
+        "  record.attributes['attr'] = record.sdcRecord.get('/value').getAttribute('attr')\n" +
+        "  output.write(record)";
+
+    Processor processor = new JythonProcessor(
+        ProcessingMode.RECORD,
+        script
+    );
+
+    ScriptingProcessorTestUtil.verifyAccessToSdcRecord(JythonDProcessor.class, processor);
   }
 
   @Test
@@ -462,9 +478,11 @@ public class TestJythonProcessor {
         ProcessingMode.BATCH,
         script,
         initScript,
-        destroyScript
+        destroyScript,
+        ScriptRecordType.NATIVE_OBJECTS,
+        new HashMap<>()
     );
-    ScriptingProcessorTestUtil.verifyInitDestroy(JythonProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyInitDestroy(JythonDProcessor.class, processor);
   }
 
   @Test
@@ -473,7 +491,16 @@ public class TestJythonProcessor {
         "  record.value['company'] = sdcFunctions.pipelineParameters()['company']\n" +
         "  output.write(record)";
     Processor processor = new JythonProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyConstants(JythonProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyConstants(JythonDProcessor.class, processor);
+  }
+
+  @Test
+  public void testIsPreview() throws Exception {
+    String script = "for record in records:\n" +
+        "  record.value['isPreview'] = sdcFunctions.isPreview();\n" +
+        "  output.write(record)";
+    Processor processor = new JythonProcessor(ProcessingMode.BATCH, script);
+    ScriptingProcessorTestUtil.verifyIsPreview(JythonDProcessor.class, processor);
   }
 
   private static final String WRITE_ERROR_SCRIPT = "for record in records:\n  error.write(record, 'oops')\n";
@@ -484,7 +511,7 @@ public class TestJythonProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordStopPipeline(JythonProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordStopPipeline(JythonDProcessor.class, processor);
   }
 
   @Test
@@ -493,9 +520,8 @@ public class TestJythonProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordDiscard(JythonProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordDiscard(JythonDProcessor.class, processor);
   }
-
 
   @Test
   public void testErrorRecordErrorSink() throws Exception {
@@ -503,6 +529,43 @@ public class TestJythonProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordErrorSink(JythonProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordErrorSink(JythonDProcessor.class, processor);
+  }
+
+  @Test
+  public void testSdcRecord() throws Exception {
+    String script = "from com.streamsets.pipeline.api import Field\n" +
+      "for record in records:\n" +
+      "  record.sdcRecord.set('/new', Field.create(Field.Type.STRING, 'new-value'))\n" +
+      "  record.sdcRecord.get('/old').setAttribute('attr', 'attr-value')\n" +
+      "  output.write(record)\n";
+
+    Processor processor = new JythonProcessor(
+        ProcessingMode.RECORD,
+        script,
+        "",
+        "",
+        ScriptRecordType.SDC_RECORDS,
+        new HashMap<>()
+     );
+    ScriptingProcessorTestUtil.verifySdcRecord(JythonDProcessor.class, processor);
+  }
+
+  @Test
+  public void testUserParams() throws Exception {
+    String script =  "for record in records:\n" +
+        "  record.value['user-param-key'] = sdcUserParams['user-param-key']\n" +
+        "  output.write(record)";
+    Map<String, String> userParams = new HashMap<>();
+    userParams.put("user-param-key", "user-param-value");
+    Processor processor = new JythonProcessor(
+        ProcessingMode.RECORD,
+        script,
+        "",
+        "",
+        ScriptRecordType.NATIVE_OBJECTS,
+        userParams
+     );
+    ScriptingProcessorTestUtil.verifyUserParams(JythonDProcessor.class, processor);
   }
 }

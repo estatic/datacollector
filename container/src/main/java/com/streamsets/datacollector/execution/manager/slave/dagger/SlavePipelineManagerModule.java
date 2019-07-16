@@ -15,6 +15,8 @@
  */
 package com.streamsets.datacollector.execution.manager.slave.dagger;
 
+import com.streamsets.datacollector.antennadoctor.AntennaDoctorModule;
+import com.streamsets.datacollector.blobstore.BlobStoreModule;
 import com.streamsets.datacollector.credential.CredentialStoresModule;
 import com.streamsets.datacollector.execution.executor.SlaveExecutorModule;
 import com.streamsets.datacollector.execution.manager.slave.SlavePipelineManager;
@@ -25,6 +27,7 @@ import com.streamsets.datacollector.lineage.LineageModule;
 import com.streamsets.datacollector.store.SlaveAclStoreModule;
 import com.streamsets.datacollector.store.SlavePipelineStoreModule;
 
+import com.streamsets.datacollector.usagestats.StatsCollectorModule;
 import dagger.Module;
 
 /**
@@ -41,8 +44,11 @@ import dagger.Module;
     SlaveRunnerProviderModule.class,
     SlaveCacheSnapshotStoreModule.class,
     LineageModule.class,
-    CredentialStoresModule.class
-})
+    BlobStoreModule.class,
+    CredentialStoresModule.class,
+    StatsCollectorModule.class,
+    AntennaDoctorModule.class
+  })
 public class SlavePipelineManagerModule {
 
 }

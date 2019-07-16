@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class MqttClientSource implements PushSource, MqttCallback {
 
   private static final Logger LOG = LoggerFactory.getLogger(MqttClientSource.class);
+  private static final String TOPIC_HEADER_NAME = "topic";
   private final MqttClientConfigBean commonConf;
   private final MqttClientSourceConfigBean subscriberConf;
   private final MqttClientCommon mqttClientCommon;
@@ -54,6 +55,7 @@ public class MqttClientSource implements PushSource, MqttCallback {
   private AtomicLong counter = new AtomicLong();
   private BlockingQueue<Exception> errorQueue;
   private List<Exception> errorList;
+  private boolean connectionLostError = false;
 
   MqttClientSource(MqttClientConfigBean commonConf, MqttClientSourceConfigBean subscriberConf) {
     this.commonConf = commonConf;
@@ -92,12 +94,9 @@ public class MqttClientSource implements PushSource, MqttCallback {
   @Override
   public void produce(Map<String, String> map, int i) throws StageException {
     try {
-      mqttClient = mqttClientCommon.createMqttClient(this);
-      for (String topicFilter: subscriberConf.topicFilters) {
-        mqttClient.subscribe(topicFilter, commonConf.qos.getValue());
-      }
+      initializeClient();
 
-      while (!context.isStopped()) {
+      while (!context.isStopped() && !connectionLostError) {
         dispatchHttpReceiverErrors(100);
       }
 
@@ -106,6 +105,14 @@ public class MqttClientSource implements PushSource, MqttCallback {
       }
     } catch(MqttException me) {
       throw new StageException(Errors.MQTT_04, me, me);
+    }
+  }
+
+  private void initializeClient() throws MqttException, StageException {
+    connectionLostError = false;
+    mqttClient = mqttClientCommon.createMqttClient(this);
+    for (String topicFilter: subscriberConf.topicFilters) {
+      mqttClient.subscribe(topicFilter, commonConf.qos.getValue());
     }
   }
 
@@ -137,25 +144,33 @@ public class MqttClientSource implements PushSource, MqttCallback {
 
   @Override
   public void connectionLost(Throwable throwable) {
-    throw new RuntimeException((new StageException(Errors.MQTT_00, throwable, throwable)));
+    destroy();
+    try {
+      initializeClient();
+    } catch(Exception ex) {
+      errorQueue.offer(ex);
+      LOG.warn("Error while reconnecting to MQTT: {}", ex.toString(), ex);
+      connectionLostError = true;
+    }
   }
 
   @Override
-  public void messageArrived(String s, MqttMessage mqttMessage) throws Exception {
+  public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
     String requestId = System.currentTimeMillis() + "." + counter.getAndIncrement();
     try (DataParser parser = parserFactory.getParser(requestId, mqttMessage.getPayload())) {
-      process(parser);
+      process(topic, parser);
     } catch (DataParserException ex) {
       errorQueue.offer(ex);
       LOG.warn("Error while processing request payload from: {}", ex.toString(), ex);
     }
   }
 
-  private void process(DataParser parser) throws IOException, DataParserException {
+  private void process(String topic, DataParser parser) throws IOException, DataParserException {
     BatchContext batchContext = context.startBatch();
     List<Record> records = new ArrayList<>();
     Record parsedRecord = parser.parse();
     while (parsedRecord != null) {
+      parsedRecord.getHeader().setAttribute(TOPIC_HEADER_NAME, topic);
       records.add(parsedRecord);
       parsedRecord = parser.parse();
     }

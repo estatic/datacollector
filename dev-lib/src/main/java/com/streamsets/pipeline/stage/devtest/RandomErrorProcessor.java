@@ -17,6 +17,7 @@ package com.streamsets.pipeline.stage.devtest;
 
 import com.streamsets.pipeline.api.Batch;
 import com.streamsets.pipeline.api.ConfigDef;
+import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageDef;
@@ -35,8 +36,16 @@ import java.util.Random;
   label = "Dev Random Error",
   description = "Generates error records and silently discards records as specified.",
   icon= "dev.png",
+  execution = {
+      ExecutionMode.STANDALONE,
+      ExecutionMode.CLUSTER_BATCH,
+      ExecutionMode.CLUSTER_YARN_STREAMING,
+      ExecutionMode.CLUSTER_MESOS_STREAMING,
+      ExecutionMode.EMR_BATCH,
+      ExecutionMode.EDGE
+  },
   upgrader = RandomErrorProcessorUpgrader.class,
-  onlineHelpRefUrl = "index.html#Pipeline_Design/DevStages.html"
+  onlineHelpRefUrl ="index.html#datacollector/UserGuide/Pipeline_Design/DevStages.html"
 )
 public class RandomErrorProcessor extends SingleLaneProcessor {
   private Random random;

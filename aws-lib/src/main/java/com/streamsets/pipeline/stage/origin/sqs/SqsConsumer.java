@@ -17,6 +17,7 @@ package com.streamsets.pipeline.stage.origin.sqs;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSAsync;
 import com.amazonaws.services.sqs.AmazonSQSAsyncClientBuilder;
@@ -27,10 +28,10 @@ import com.google.common.base.Throwables;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.ToErrorContext;
 import com.streamsets.pipeline.api.base.BasePushSource;
+import com.streamsets.pipeline.api.service.dataformats.DataFormatParserService;
+import com.streamsets.pipeline.lib.aws.AwsRegion;
 import com.streamsets.pipeline.lib.executor.SafeScheduledExecutorService;
-import com.streamsets.pipeline.lib.parser.DataParserFactory;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
-import com.streamsets.pipeline.stage.lib.aws.AWSRegions;
 import com.streamsets.pipeline.stage.lib.aws.AWSUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,7 +61,6 @@ public class SqsConsumer extends BasePushSource {
   private final SqsConsumerConfigBean conf;
   private final BlockingQueue<Throwable> error = new SynchronousQueue<>();
 
-  private DataParserFactory parserFactory;
   private ExecutorService executorService;
 
   private ClientConfiguration clientConfiguration;
@@ -75,7 +75,7 @@ public class SqsConsumer extends BasePushSource {
   protected List<ConfigIssue> init() {
     List<ConfigIssue> issues = super.init();
 
-    if (conf.region == AWSRegions.OTHER && (conf.endpoint == null || conf.endpoint.isEmpty())) {
+    if (conf.region == AwsRegion.OTHER && (conf.endpoint == null || conf.endpoint.isEmpty())) {
       issues.add(getContext().createConfigIssue(
           Groups.SQS.name(),
           SQS_CONFIG_PREFIX + "endpoint",
@@ -85,20 +85,8 @@ public class SqsConsumer extends BasePushSource {
       return issues;
     }
 
-    conf.dataFormatConfig.stringBuilderPoolSize = getNumberOfThreads();
-
-    if (issues.isEmpty()) {
-      conf.dataFormatConfig.init(
-          getContext(),
-          conf.dataFormat,
-          Groups.SQS.name(),
-          SQS_DATA_FORMAT_CONFIG_PREFIX,
-          ONE_MB,
-          issues
-      );
-
-      parserFactory = conf.dataFormatConfig.getParserFactory();
-    }
+    // Propagate StringBuilder size to the service
+    getContext().getService(DataFormatParserService.class).setStringBuilderPoolSize(getNumberOfThreads());
 
     try {
       clientConfiguration = AWSUtil.getClientConfiguration(conf.proxyConfig);
@@ -125,8 +113,16 @@ public class SqsConsumer extends BasePushSource {
       return issues;
     }
 
-    AmazonSQS validationClient = AmazonSQSClientBuilder.standard().withRegion(conf.region.getLabel())
-        .withClientConfiguration(clientConfiguration).withCredentials(credentials).build();
+    AmazonSQSClientBuilder builder = AmazonSQSClientBuilder.standard()
+        .withClientConfiguration(clientConfiguration)
+        .withCredentials(credentials);
+    if(conf.region == AwsRegion.OTHER) {
+      builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(conf.endpoint, null));
+    } else {
+      builder.withRegion(conf.region.getId());
+    }
+
+    AmazonSQS validationClient = builder.build();
 
     for (int i = 0; i < conf.queuePrefixes.size(); i++) {
       final String queueNamePrefix = conf.queuePrefixes.get(i);
@@ -159,9 +155,14 @@ public class SqsConsumer extends BasePushSource {
 
   private AmazonSQSAsync buildAsyncClient() {
     final AmazonSQSAsyncClientBuilder builder = AmazonSQSAsyncClientBuilder.standard();
-    builder.setRegion(conf.region.getLabel());
+    if(conf.region == AwsRegion.OTHER) {
+      builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(conf.endpoint, null));
+    } else {
+      builder.withRegion(conf.region.getId());
+    }
     builder.setCredentials(credentials);
     builder.setClientConfiguration(clientConfiguration);
+
     return builder.build();
   }
 
@@ -200,8 +201,7 @@ public class SqsConsumer extends BasePushSource {
               conf.numberOfMessagesPerRequest,
               conf.maxBatchTimeMs,
               conf.maxBatchSize,
-              parserFactory,
-              conf.region.getLabel(),
+              conf.region.getId(),
               conf.sqsAttributesOption,
               new DefaultErrorRecordHandler(getContext(), (ToErrorContext) getContext()),
               conf.pollWaitTimeSeconds,

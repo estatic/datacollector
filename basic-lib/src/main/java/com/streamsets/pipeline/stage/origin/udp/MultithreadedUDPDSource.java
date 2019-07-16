@@ -22,9 +22,8 @@ import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 import com.streamsets.pipeline.api.impl.Utils;
-import com.streamsets.pipeline.configurablestage.DPushSource;
-import com.streamsets.pipeline.lib.parser.udp.ParserConfig;
 
 @StageDef(
     version = 1,
@@ -34,7 +33,7 @@ import com.streamsets.pipeline.lib.parser.udp.ParserConfig;
     icon = "udp.png",
     execution = ExecutionMode.STANDALONE,
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/UDPMulti.html#task_g2k_v5f_5bb"
+    onlineHelpRefUrl ="index.html?contextID=task_g2k_v5f_5bb"
 )
 
 @ConfigGroups(Groups.class)

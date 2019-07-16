@@ -16,6 +16,9 @@
 package com.streamsets.datacollector.runner;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
+import com.streamsets.datacollector.antennadoctor.AntennaDoctor;
+import com.streamsets.datacollector.antennadoctor.engine.context.AntennaDoctorStageContext;
 import com.streamsets.datacollector.config.StageConfiguration;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.creation.PipelineBean;
@@ -39,7 +42,6 @@ import com.streamsets.pipeline.api.impl.Utils;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +55,10 @@ public class StageRuntime implements PushSourceContextDelegate {
   private final StageBean stageBean;
   private final Stage.Info info;
   private final Collection<ServiceRuntime> services;
+  private final List<InterceptorRuntime> preInterceptors;
+  private final List<InterceptorRuntime> postInterceptors;
+  private final AntennaDoctor antennaDoctor;
+  private final AntennaDoctorStageContext antennaDoctorContext;
   private StageContext context;
   private volatile long runnerThread;
 
@@ -76,7 +82,11 @@ public class StageRuntime implements PushSourceContextDelegate {
   public StageRuntime(
     PipelineBean pipelineBean,
     final StageBean stageBean,
-    Collection<ServiceRuntime> services
+    Collection<ServiceRuntime> services,
+    List<InterceptorRuntime> preInterceptors,
+    List<InterceptorRuntime> postInterceptors,
+    AntennaDoctor antennaDoctor,
+    AntennaDoctorStageContext antennaDoctorContext
   ) {
     this.pipelineBean = pipelineBean;
     this.def = stageBean.getDefinition();
@@ -84,6 +94,10 @@ public class StageRuntime implements PushSourceContextDelegate {
     this.conf = stageBean.getConfiguration();
     String label = Optional.ofNullable(conf.getUiInfo().get("label")).orElse("").toString();
     this.services = services;
+    this.preInterceptors = preInterceptors;
+    this.postInterceptors = postInterceptors;
+    this.antennaDoctor = antennaDoctor;
+    this.antennaDoctorContext = antennaDoctorContext;
     info = new Stage.Info() {
       @Override
       public String getName() {
@@ -141,14 +155,29 @@ public class StageRuntime implements PushSourceContextDelegate {
     return stageBean.getStage();
   }
 
+  public List<InterceptorRuntime> getPreInterceptors() {
+    return preInterceptors;
+  }
+
+  public List<InterceptorRuntime> getPostInterceptors() {
+    return postInterceptors;
+  }
+
   public void setContext(StageContext context) {
     this.context = context;
   }
 
-  public void setErrorAndEventSink(ErrorSink errorSink, EventSink eventSink) {
+  public void setSinks(
+      ErrorSink errorSink,
+      EventSink eventSink,
+      ProcessedSink processedSink,
+      SourceResponseSink sourceResponseSink
+  ) {
     context.setReportErrorDelegate(reportErrorDelegate == null ? errorSink : reportErrorDelegate);
     context.setErrorSink(errorSink);
     context.setEventSink(eventSink);
+    context.setProcessedSink(processedSink);
+    context.setSourceResponseSink(sourceResponseSink);
   }
 
   @SuppressWarnings("unchecked")
@@ -164,6 +193,19 @@ public class StageRuntime implements PushSourceContextDelegate {
     }
 
     List<Issue> issues = new LinkedList<>();
+
+    // Initialize the interceptors that are created for this stage
+    for(InterceptorRuntime interceptor : Iterables.concat(preInterceptors, postInterceptors)) {
+      try {
+        interceptor.getContext().setAllowCreateStage(true);
+        issues.addAll(interceptor.init());
+
+        // Propagate issues from "sub-stages"
+        issues.addAll(interceptor.getContext().getIssues());
+      } finally {
+        interceptor.getContext().setAllowCreateStage(false);
+      }
+    }
 
     // Firstly init() all services, so that Stage's init() can already use the Services if needed
     for(ServiceRuntime serviceRuntime : services) {
@@ -181,11 +223,17 @@ public class StageRuntime implements PushSourceContextDelegate {
     return issues;
   }
 
-  String execute(Callable<String> callable, ErrorSink errorSink, EventSink eventSink) throws StageException {
+  String execute(
+      Callable<String> callable,
+      ErrorSink errorSink,
+      EventSink eventSink,
+      ProcessedSink processedSink,
+      SourceResponseSink sourceResponseSink
+  ) throws StageException {
     mainClassLoader = Thread.currentThread().getContextClassLoader();
     try {
       context.setPushSourceContextDelegate(this);
-      setErrorAndEventSink(errorSink, eventSink);
+      setSinks(errorSink, eventSink, processedSink, sourceResponseSink);
       Thread.currentThread().setContextClassLoader(getDefinition().getStageClassLoader());
 
       try {
@@ -195,6 +243,10 @@ public class StageRuntime implements PushSourceContextDelegate {
         return (def.getRecordsByRef() && !context.isPreview()) ? CreateByRef.call(callable) : callable.call();
       } catch (Exception ex) {
         if (ex instanceof StageException) {
+          if(antennaDoctor != null) {
+            StageException e = (StageException) ex;
+            e.setAntennaDoctorMessages(antennaDoctor.onStage(antennaDoctorContext, e.getErrorCode(), e.getParams()));
+          }
           throw (StageException) ex;
         } else if (ex instanceof RuntimeException) {
           throw (RuntimeException) ex;
@@ -204,7 +256,7 @@ public class StageRuntime implements PushSourceContextDelegate {
       }
 
     } finally {
-      setErrorAndEventSink(null, null);
+      setSinks(null, null, null, null);
       Thread.currentThread().setContextClassLoader(mainClassLoader);
     }
   }
@@ -223,52 +275,46 @@ public class StageRuntime implements PushSourceContextDelegate {
         }
       };
 
-      execute(callable, null, null);
+      execute(callable, null, null, null, null);
   }
 
   public String execute(
-    final String previousOffset,
-    final int batchSize,
-    final Batch batch,
-    final BatchMaker batchMaker,
-    ErrorSink errorSink,
-    EventSink eventSink
+      final String previousOffset,
+      final int batchSize,
+      final Batch batch,
+      final BatchMaker batchMaker,
+      ErrorSink errorSink,
+      EventSink eventSink,
+      ProcessedSink processedSink,
+      SourceResponseSink sourceResponseSink
   ) throws StageException {
-    Callable<String> callable = new Callable<String>() {
-      @Override
-      public String call() throws Exception {
-        String newOffset = null;
-        switch (getDefinition().getType()) {
-          case SOURCE: {
-            newOffset = ((Source) getStage()).produce(previousOffset, batchSize, batchMaker);
-            break;
-          }
-          case PROCESSOR: {
-            ((Processor) getStage()).process(batch, batchMaker);
-            break;
-
-          }
-          case EXECUTOR:
-          case TARGET: {
-            ((Target) getStage()).write(batch);
-            break;
-          }
-          default: {
-            throw new IllegalStateException(Utils.format("Unknown stage type: '{}'", getDefinition().getType()));
-          }
-        }
-        return newOffset;
+    Callable<String> callable = () -> {
+      String newOffset = null;
+      switch (getDefinition().getType()) {
+        case SOURCE:
+          newOffset = ((Source) getStage()).produce(previousOffset, batchSize, batchMaker);
+          break;
+        case PROCESSOR:
+          ((Processor) getStage()).process(batch, batchMaker);
+          break;
+        case EXECUTOR:
+        case TARGET:
+          ((Target) getStage()).write(batch);
+          break;
+        default:
+          throw new IllegalStateException(Utils.format("Unknown stage type: '{}'", getDefinition().getType()));
       }
+      return newOffset;
     };
 
-    return execute(callable, errorSink, eventSink);
+    return execute(callable, errorSink, eventSink, processedSink, sourceResponseSink);
   }
 
-  public void destroy(ErrorSink errorSink, EventSink eventSink) {
+  public void destroy(ErrorSink errorSink, EventSink eventSink, ProcessedSink processedSink) {
     mainClassLoader = Thread.currentThread().getContextClassLoader();
 
     try {
-      setErrorAndEventSink(errorSink, eventSink);
+      setSinks(errorSink, eventSink, processedSink, null);
 
       // Firstly destroy stage itself
       LambdaUtil.withClassLoader(
@@ -283,11 +329,19 @@ public class StageRuntime implements PushSourceContextDelegate {
       for (ServiceRuntime serviceRuntime : services) {
         serviceRuntime.destroy();
       }
+
+      for(InterceptorRuntime interceptor : Iterables.concat(preInterceptors, postInterceptors)) {
+        interceptor.destroy();
+
+        for(DetachedStageRuntime stageRuntime : interceptor.getContext().getStageRuntimes()) {
+          stageRuntime.runDestroy();
+        }
+      }
     } finally {
       // Do not eventSink and errorSink to null when in preview mode AND current thread
       // is different from the one executing stages because stages might send error to errorSink.
       if (!context.isPreview() || runnerThread == (Thread.currentThread().getId())) {
-        setErrorAndEventSink(null, null);
+        setSinks(null, null, null,null);
       }
 
       // We release the stage classloader back to the library  ro reuse (as some stages my have private classloaders)

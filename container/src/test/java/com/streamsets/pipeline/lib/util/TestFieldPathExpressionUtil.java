@@ -16,6 +16,7 @@
 
 package com.streamsets.pipeline.lib.util;
 
+import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
 import com.streamsets.datacollector.el.ELEvaluator;
 import com.streamsets.datacollector.el.ELVariables;
 import com.streamsets.datacollector.record.RecordImpl;
@@ -29,7 +30,6 @@ import com.streamsets.pipeline.lib.el.TimeNowEL;
 import com.streamsets.testing.fieldbuilder.MapFieldBuilder;
 import org.junit.Test;
 
-import java.util.Date;
 import java.util.List;
 
 import static org.hamcrest.Matchers.equalTo;
@@ -41,7 +41,8 @@ public class TestFieldPathExpressionUtil {
   @Test
   public void testFieldExpressions() throws ELEvalException {
 
-    ELEval eval = new ELEvaluator("testFieldExpressions", TimeNowEL.class, RecordEL.class, FieldEL.class);
+    ELEval eval = new ELEvaluator("testFieldExpressions",
+        ConcreteELDefinitionExtractor.get(), TimeNowEL.class, RecordEL.class, FieldEL.class);
     ELVars variables = new ELVariables();
 
     Record record1 = new RecordImpl("testFieldExpressions", "record1", null, null);
@@ -72,7 +73,7 @@ public class TestFieldPathExpressionUtil {
   @Test
   public void testMultipleNestedExpressions() throws ELEvalException {
 
-    ELEval eval = new ELEvaluator("testMultipleNestedExpressions", TimeNowEL.class, RecordEL.class, FieldEL.class);
+    ELEval eval = new ELEvaluator("testMultipleNestedExpressions", ConcreteELDefinitionExtractor.get(), TimeNowEL.class, RecordEL.class, FieldEL.class);
     ELVars variables = new ELVariables();
 
     Record record1 = new RecordImpl("testMultipleNestedExpressions", "record1", null, null);
@@ -132,7 +133,8 @@ public class TestFieldPathExpressionUtil {
         expression,
         eval,
         vars,
-        record
+        record,
+        record.getEscapedFieldPaths()
     );
 
     assertThat(matchingPaths, hasSize(expectedMatches.length));

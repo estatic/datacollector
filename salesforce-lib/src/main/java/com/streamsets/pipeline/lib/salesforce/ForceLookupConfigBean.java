@@ -21,8 +21,12 @@ import com.streamsets.pipeline.api.FieldSelectorModel;
 import com.streamsets.pipeline.api.ListBeanModel;
 import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.lib.el.RecordEL;
-import com.streamsets.pipeline.lib.el.StringEL;
+import com.streamsets.pipeline.lib.el.TimeNowEL;
+import com.streamsets.pipeline.stage.common.MissingValuesBehavior;
+import com.streamsets.pipeline.stage.common.MissingValuesBehaviorChooserValues;
+import com.streamsets.pipeline.stage.common.MultipleValuesBehavior;
 import com.streamsets.pipeline.stage.processor.kv.CacheConfig;
+import com.streamsets.pipeline.stage.processor.lookup.ForceLookupMultipleValuesBehaviorChooserValues;
 
 import java.util.List;
 
@@ -47,7 +51,7 @@ public class ForceLookupConfigBean extends ForceInputConfigBean {
       label = "SOQL Query",
       description =
           "SELECT <field>, ... FROM <object name> WHERE <field> <operator> <expression>",
-      elDefs = {StringEL.class, RecordEL.class},
+      elDefs = {RecordEL.class, TimeNowEL.class},
       evaluation = ConfigDef.Evaluation.EXPLICIT,
       dependsOn = "lookupMode",
       triggeredByValue = "QUERY",
@@ -77,7 +81,7 @@ public class ForceLookupConfigBean extends ForceInputConfigBean {
       defaultValue = "",
       dependsOn = "lookupMode",
       triggeredByValue = "RETRIEVE",
-      displayPosition = 80,
+      displayPosition = 75,
       group = "LOOKUP"
   )
   @FieldSelectorModel(singleValued = true)
@@ -94,7 +98,7 @@ public class ForceLookupConfigBean extends ForceInputConfigBean {
       defaultValue = "",
       dependsOn = "lookupMode",
       triggeredByValue = "RETRIEVE",
-      displayPosition = 90,
+      displayPosition = 80,
       group = "LOOKUP"
   )
   public String retrieveFields = "";
@@ -107,7 +111,7 @@ public class ForceLookupConfigBean extends ForceInputConfigBean {
       defaultValue = "",
       dependsOn = "lookupMode",
       triggeredByValue = "RETRIEVE",
-      displayPosition = 95,
+      displayPosition = 85,
       group = "LOOKUP"
   )
   public String sObjectType = "";
@@ -118,11 +122,35 @@ public class ForceLookupConfigBean extends ForceInputConfigBean {
       label = "Field Mappings",
       defaultValue = "",
       description = "Mappings from Salesforce field names to SDC field names",
-      displayPosition = 100,
+      displayPosition = 90,
       group = "LOOKUP"
   )
   @ListBeanModel
   public List<ForceSDCFieldMapping> fieldMappings;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.MODEL,
+      label = "Multiple Values Behavior",
+      description = "How to handle multiple values",
+      defaultValue = "FIRST_ONLY",
+      displayPosition = 95,
+      group = "LOOKUP"
+  )
+  @ValueChooserModel(ForceLookupMultipleValuesBehaviorChooserValues.class)
+  public MultipleValuesBehavior multipleValuesBehavior = MultipleValuesBehavior.DEFAULT;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.MODEL,
+      label = "Missing Values Behavior",
+      description = "How to handle missing values when no default value is defined.",
+      defaultValue = "PASS_RECORD_ON",
+      displayPosition = 97,
+      group = "LOOKUP"
+  )
+  @ValueChooserModel(MissingValuesBehaviorChooserValues.class)
+  public MissingValuesBehavior missingValuesBehavior = MissingValuesBehavior.DEFAULT;
 
   @ConfigDefBean(groups = "LOOKUP")
   public CacheConfig cacheConfig = new CacheConfig();

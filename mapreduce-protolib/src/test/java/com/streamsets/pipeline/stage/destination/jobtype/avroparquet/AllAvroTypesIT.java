@@ -25,7 +25,8 @@ import com.streamsets.pipeline.sdk.RecordCreator;
 import com.streamsets.pipeline.sdk.ExecutorRunner;
 import com.streamsets.pipeline.stage.destination.mapreduce.MapReduceDExecutor;
 import com.streamsets.pipeline.stage.destination.mapreduce.MapReduceExecutor;
-import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroparquet.AvroParquetConfig;
+import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroconvert.AvroConversionCommonConfig;
+import com.streamsets.pipeline.lib.converter.AvroParquetConfig;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -115,7 +116,7 @@ public class AllAvroTypesIT extends BaseAvroParquetConvertIT {
       {DECIMAL.toString(), ByteBuffer.wrap(new byte[]{(byte)0x0F}),            ImmutableList.of("required binary value (DECIMAL(2,1)")},
       {DATE.toString(),               35000,                                   ImmutableList.of("required int32 value (DATE);")},
       {TIME_MILLIS.toString(),        35000,                                   ImmutableList.of("required int32 value (TIME_MILLIS);")},
-      {TIMESTAMP_MILLIS.toString(),  35000L,                                   ImmutableList.of("required int64 value (TIMESTAMP_MILLIS);")},
+      {TIMESTAMP_MILLIS.toString(),  35000L,                                   ImmutableList.of("required int96 value;")},
     });
   }
 
@@ -144,11 +145,12 @@ public class AllAvroTypesIT extends BaseAvroParquetConvertIT {
 
     generateAvroFile(avroSchema, inputFile, data);
 
+    AvroConversionCommonConfig commonConfig = new AvroConversionCommonConfig();
     AvroParquetConfig conf = new AvroParquetConfig();
-    conf.inputFile = inputFile.getAbsolutePath();
-    conf.outputDirectory = getOutputDir();
+    commonConfig.inputFile = inputFile.getAbsolutePath();
+    commonConfig.outputDirectory = getOutputDir();
 
-    MapReduceExecutor executor = generateExecutor(conf, Collections.<String, String>emptyMap());
+    MapReduceExecutor executor = generateExecutor(commonConfig, conf, Collections.emptyMap());
 
     ExecutorRunner runner = new ExecutorRunner.Builder(MapReduceDExecutor.class, executor)
       .setOnRecordError(OnRecordError.TO_ERROR)
@@ -173,7 +175,11 @@ public class AllAvroTypesIT extends BaseAvroParquetConvertIT {
     }
 
     // Validate that content is the same as input
-    validateParquetFile(outputFile, data);
+    // Skip for TIMESTAMP_MILLIS as it is not yet supported by Avro to Parquet hadoop libraries (it is supported for parquet in both Hive and Impala when directly using parquet in hadoop libs)
+    // TODO: Remove if condition to run if body when timestamp fully supported between avro and parquet
+    if (!TIMESTAMP_MILLIS.toString().equals(type)) {
+      validateParquetFile(outputFile, data);
+    }
   }
 
 }

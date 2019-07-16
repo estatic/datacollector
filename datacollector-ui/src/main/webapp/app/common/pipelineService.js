@@ -13,30 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/**
- * Service for providing access to the Pipeline utility functions.
- */
-angular.module('dataCollectorApp.common')
-  .service('pipelineService', function(pipelineConstant, api, $q, $translate, $modal, $location, $route, _) {
 
-    var self = this,
-      translations = {},
-      defaultELEditorOptions = {
-        mode: {
-          name: 'javascript'
-        },
-        inputStyle: 'contenteditable',
-        showCursorWhenSelecting: true,
-        lineNumbers: false,
-        matchBrackets: true,
-        autoCloseBrackets: {
-          pairs: '(){}\'\'""'
-        },
-        cursorHeight: 1,
-        extraKeys: {
-          'Ctrl-Space': 'autocomplete'
-        }
-      };
+// Service for providing access to the Pipeline utility functions.
+angular.module('dataCollectorApp.common')
+  .service('pipelineService', function(pipelineConstant, api, $q, $translate, $modal, $location, $route, _, $window) {
+
+    var self = this;
+    var translations = {};
+    var defaultELEditorOptions = {
+      mode: {
+        name: 'javascript'
+      },
+      inputStyle: 'contenteditable',
+      showCursorWhenSelecting: true,
+      lineNumbers: false,
+      matchBrackets: true,
+      autoCloseBrackets: {
+        pairs: '(){}\'\'""'
+      },
+      cursorHeight: 1
+    };
+    var fragmentGroupStages = [
+      'com_streamsets_pipeline_stage_origin_fragment_FragmentSource',
+      'com_streamsets_pipeline_stage_processor_fragment_FragmentProcessor',
+      'com_streamsets_pipeline_stage_destination_fragment_FragmentTarget'
+    ];
+
+    var confFragmentId = 'conf.fragmentId';
+    var confFragmentInstanceId = 'conf.fragmentInstanceId';
 
     this.initializeDefer = undefined;
 
@@ -45,22 +49,61 @@ angular.module('dataCollectorApp.common')
         self.initializeDefer = $q.defer();
 
         $q.all([
-            api.pipelineAgent.getDefinitions()
-          ])
+          api.pipelineAgent.getDefinitions()
+        ])
           .then(function (results) {
-            var definitions = results[0].data,
-              rulesElMetadata = definitions.rulesElMetadata,
-              elFunctionDefinitions = [],
-              elConstantDefinitions = [];
+            var definitions = results[0].data;
+            var rulesElMetadata = definitions.rulesElMetadata;
+            var elFunctionDefinitions = [];
+            var elConstantDefinitions = [];
 
-            //Definitions
+            // Definitions
             self.pipelineConfigDefinition = definitions.pipeline[0];
+
+            // remove not used execution modes
+            angular.forEach(self.pipelineConfigDefinition.configDefinitions, function (configDefinition) {
+              if (configDefinition.name === 'executionMode') {
+                configDefinition.model.values = _.filter(configDefinition.model.values, function (value) {
+                  return value !== 'BATCH' && value !== 'STREAMING';
+                });
+
+                configDefinition.model.labels = _.filter(configDefinition.model.labels, function (value) {
+                  return value !== 'Batch' && value !== 'Streaming';
+                });
+              }
+            });
+
             self.pipelineRulesConfigDefinition = definitions.pipelineRules[0];
             self.stageDefinitions = definitions.stages;
             self.serviceDefinitions = definitions.services;
             self.elCatalog = definitions.elCatalog;
+            self.legacyStageLibs = definitions.legacyStageLibs;
+            self.eventDefinitions = definitions.eventDefinitions;
 
-            //General Rules
+            self.betaStages = {};
+            angular.forEach(self.stageDefinitions, function (stageDefinition) {
+              if (stageDefinition.beta) {
+                self.betaStages[stageDefinition.name] = true;
+              }
+
+              // process event definitions
+              if (stageDefinition.eventDefs && stageDefinition.eventDefs.length > 0) {
+                stageDefinition.events = [];
+                angular.forEach(stageDefinition.eventDefs, function (eventDefn) {
+                  if (definitions.eventDefinitions[eventDefn]) {
+                    stageDefinition.events.push(definitions.eventDefinitions[eventDefn]);
+                  }
+                });
+              }
+
+            });
+
+            self.serviceDefinitionsMap = {};
+            angular.forEach(self.serviceDefinitions, function (serviceDefinition) {
+              self.serviceDefinitionsMap[serviceDefinition.provides] = serviceDefinition;
+            });
+
+            // General Rules
             angular.forEach(rulesElMetadata.general.elFunctionDefinitions, function(idx) {
               elFunctionDefinitions.push(self.elCatalog.elFunctionDefinitions[parseInt(idx)]);
             });
@@ -75,7 +118,7 @@ angular.module('dataCollectorApp.common')
               regex: 'wordColonSlash'
             };
 
-            //Drift Rules
+            // Drift Rules
             elFunctionDefinitions = [];
             elConstantDefinitions = [];
 
@@ -93,7 +136,7 @@ angular.module('dataCollectorApp.common')
               regex: 'wordColonSlash'
             };
 
-            //Alert Text Rules
+            // Alert Text Rules
             elFunctionDefinitions = [];
             elConstantDefinitions = [];
 
@@ -111,7 +154,7 @@ angular.module('dataCollectorApp.common')
               regex: 'wordColonSlash'
             };
 
-            //Metric Rules
+            // Metric Rules
             self.metricRulesELMetadata = angular.copy(self.generalRulesElMetadata);
             self.metricRulesELMetadata.elFunctionDefinitions.push({
               name: "value",
@@ -141,7 +184,7 @@ angular.module('dataCollectorApp.common')
     };
 
     /**
-     * Returns true if SCH Statistics library installed otherwise false
+     * Returns true if Control Hub Statistics library installed otherwise false
      */
     this.isDPMStatisticsLibraryInstalled = function() {
       var statsLibraryDefn = _.find(self.stageDefinitions, function (stage) {
@@ -179,6 +222,13 @@ angular.module('dataCollectorApp.common')
     };
 
     /**
+     * Returns names of legacy stage libraries
+     */
+    this.getLegacyStageLibs = function() {
+      return self.legacyStageLibs;
+    };
+
+    /**
      * Returns Service Definitions
      *
      * @returns {*|serviceDefinitions}
@@ -190,17 +240,11 @@ angular.module('dataCollectorApp.common')
     /**
      * Returns Service Definition for given service
      *
-     * @returns {*|serviceDefinition}
      */
     this.getServiceDefinition = function(serviceName) {
-      var serviceDef = null;
-      angular.forEach(self.getServiceDefinitions(), function(serviceDefinition) {
-        if (serviceDefinition.provides == serviceName) {
-          serviceDef = serviceDefinition;
-        }
-      });
-      return serviceDef;
+      return self.serviceDefinitionsMap[serviceName];
     };
+
     /**
      * Returns General Rules EL Metadata
      *
@@ -255,12 +299,17 @@ angular.module('dataCollectorApp.common')
      * Add Pipeline Config Command Handler.
      *
      */
-    this.addPipelineConfigCommand = function() {
+    this.addPipelineConfigCommand = function(pipelineType) {
       var modalInstance = $modal.open({
         templateUrl: 'app/home/library/create/create.tpl.html',
         controller: 'CreateModalInstanceController',
         size: '',
-        backdrop: 'static'
+        backdrop: 'static',
+        resolve: {
+          pipelineType: function () {
+            return pipelineType;
+          }
+        }
       });
 
       modalInstance.result.then(function (configObject) {
@@ -302,7 +351,7 @@ angular.module('dataCollectorApp.common')
     };
 
     /**
-     * Import link command handler
+     * Import from archives link command handler
      */
     this.importPipelinesFromArchive = function($event) {
       var modalInstance = $modal.open({
@@ -319,6 +368,34 @@ angular.module('dataCollectorApp.common')
       modalInstance.result.then(function() {
         $route.reload();
       }, function () {
+      });
+    };
+
+    /**
+     * Import from HTTP URL command handler
+     */
+    this.importPipelinesFromHttpUrl = function(pipelineTitle, pipelineHttpUrl) {
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/importFromUrl/importFromUrlModal.tpl.html',
+        controller: 'ImportFromURLModalInstanceController',
+        size: '',
+        backdrop: 'static',
+        resolve: {
+          pipelineTitle: function () {
+            return pipelineTitle;
+          },
+          pipelineHttpUrl: function () {
+            return pipelineHttpUrl;
+          }
+        }
+      });
+
+      modalInstance.result.then(function(pipelineEnvelope) {
+        if (pipelineEnvelope && pipelineEnvelope.pipelineConfig) {
+          $location.path('/collector/pipeline/' + pipelineEnvelope.pipelineConfig.info.pipelineId);
+        } else {
+          $location.path('/');
+        }
       });
     };
 
@@ -347,24 +424,24 @@ angular.module('dataCollectorApp.common')
      * Delete Pipeline Configuration Command Handler
      */
     this.deletePipelineConfigCommand = function(pipelineInfo, pipelineStatusMap, $event) {
-      var defer = $q.defer(),
-        modalInstance = $modal.open({
-          templateUrl: 'app/home/library/delete/delete.tpl.html',
-          controller: 'DeleteModalInstanceController',
-          size: '',
-          backdrop: 'static',
-          resolve: {
-            pipelineInfo: function () {
-              return pipelineInfo;
-            }
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/delete/delete.tpl.html',
+        controller: 'DeleteModalInstanceController',
+        size: '',
+        backdrop: 'static',
+        resolve: {
+          pipelineInfo: function () {
+            return pipelineInfo;
           }
-        });
+        }
+      });
 
       if ($event) {
         $event.stopPropagation();
       }
 
-      modalInstance.result.then(function (configInfo) {
+      modalInstance.result.then(function () {
         defer.resolve();
       }, function () {
 
@@ -378,18 +455,18 @@ angular.module('dataCollectorApp.common')
      * Duplicate Pipeline Configuration Command Handler
      */
     this.duplicatePipelineConfigCommand = function(pipelineInfo, $event) {
-      var defer = $q.defer(),
-        modalInstance = $modal.open({
-          templateUrl: 'app/home/library/duplicate/duplicate.tpl.html',
-          controller: 'DuplicateModalInstanceController',
-          size: '',
-          backdrop: 'static',
-          resolve: {
-            pipelineInfo: function () {
-              return pipelineInfo;
-            }
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/duplicate/duplicate.tpl.html',
+        controller: 'DuplicateModalInstanceController',
+        size: '',
+        backdrop: 'static',
+        resolve: {
+          pipelineInfo: function () {
+            return pipelineInfo;
           }
-        });
+        }
+      });
 
       if ($event) {
         $event.stopPropagation();
@@ -404,23 +481,22 @@ angular.module('dataCollectorApp.common')
       return defer.promise;
     };
 
-
     /**
      * Publish Pipeline to Remote Command Handler
      */
     this.publishPipelineCommand = function(pipelineInfo, $event) {
-      var defer = $q.defer(),
-        modalInstance = $modal.open({
-          templateUrl: 'app/home/library/publish/publishModal.tpl.html',
-          controller: 'PublishModalInstanceController',
-          size: '',
-          backdrop: 'static',
-          resolve: {
-            pipelineInfo: function () {
-              return pipelineInfo;
-            }
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/publish/publishModal.tpl.html',
+        controller: 'PublishModalInstanceController',
+        size: '',
+        backdrop: 'static',
+        resolve: {
+          pipelineInfo: function () {
+            return pipelineInfo;
           }
-        });
+        }
+      });
 
       if ($event) {
         $event.stopPropagation();
@@ -439,18 +515,18 @@ angular.module('dataCollectorApp.common')
      * Download Remote Pipeline Command Handler
      */
     this.downloadRemotePipelineConfigCommand = function($event, existingDPMPipelineIds) {
-      var defer = $q.defer(),
-        modalInstance = $modal.open({
-          templateUrl: 'app/home/library/download_remote/downloadRemoteModal.tpl.html',
-          controller: 'DownloadRemoteModalInstanceController',
-          size: 'lg',
-          backdrop: 'static',
-          resolve: {
-            existingDPMPipelineIds: function() {
-              return existingDPMPipelineIds;
-            }
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/download_remote/downloadRemoteModal.tpl.html',
+        controller: 'DownloadRemoteModalInstanceController',
+        size: 'lg',
+        backdrop: 'static',
+        resolve: {
+          existingDPMPipelineIds: function () {
+            return existingDPMPipelineIds;
           }
-        });
+        }
+      });
 
       if ($event) {
         $event.stopPropagation();
@@ -466,6 +542,59 @@ angular.module('dataCollectorApp.common')
     };
 
     /**
+     * Download Edge Pipelines command handler
+     */
+    this.downloadEdgePipelinesCommand = function($event) {
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/download_edge_pipelines/downloadEdgePipelinesModal.tpl.html',
+        controller: 'DownloadEdgePipelinesModalInstanceController',
+        backdrop: 'static'
+      });
+
+      if ($event) {
+        $event.stopPropagation();
+      }
+
+      modalInstance.result.then(
+        function () {
+          defer.resolve();
+        }
+      );
+
+      return defer.promise;
+    };
+
+    /**
+     * Publish Edge Pipelines command handler
+     */
+    this.publishEdgePipelinesCommand = function($event, pipelineIds) {
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/publish_edge_pipelines/publishEdgePipelinesModal.tpl.html',
+        controller: 'PublishEdgePipelinesModalInstanceController',
+        backdrop: 'static',
+        resolve: {
+          pipelineIds: function () {
+            return pipelineIds;
+          }
+        }
+      });
+
+      if ($event) {
+        $event.stopPropagation();
+      }
+
+      modalInstance.result.then(
+        function () {
+          defer.resolve();
+        }
+      );
+
+      return defer.promise;
+    };
+
+    /**
      * Show Remote Pipeline Commit History
      * @param pipelineInfo
      * @param metadata
@@ -473,21 +602,21 @@ angular.module('dataCollectorApp.common')
      * @returns {*}
      */
     this.showCommitHistoryCommand = function(pipelineInfo, metadata, $event) {
-      var defer = $q.defer(),
-        modalInstance = $modal.open({
-          templateUrl: 'app/home/library/commit_history/commitHistoryModal.tpl.html',
-          controller: 'CommitHistoryModalInstanceController',
-          size: 'lg',
-          backdrop: 'static',
-          resolve: {
-            pipelineInfo: function () {
-              return pipelineInfo;
-            },
-            metadata: function() {
-              return metadata;
-            }
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/commit_history/commitHistoryModal.tpl.html',
+        controller: 'CommitHistoryModalInstanceController',
+        size: 'lg',
+        backdrop: 'static',
+        resolve: {
+          pipelineInfo: function () {
+            return pipelineInfo;
+          },
+          metadata: function () {
+            return metadata;
           }
-        });
+        }
+      });
 
       if ($event) {
         $event.stopPropagation();
@@ -509,21 +638,21 @@ angular.module('dataCollectorApp.common')
      * @returns {*}
      */
     this.revertChangesCommand = function(pipelineInfo, metadata) {
-      var defer = $q.defer(),
-        modalInstance = $modal.open({
-          templateUrl: 'app/home/library/revert_changes/revertChangesModal.tpl.html',
-          controller: 'RevertChangesModalInstanceController',
-          size: 'lg',
-          backdrop: 'static',
-          resolve: {
-            pipelineInfo: function () {
-              return pipelineInfo;
-            },
-            metadata: function() {
-              return metadata;
-            }
+      var defer = $q.defer();
+      var modalInstance = $modal.open({
+        templateUrl: 'app/home/library/revert_changes/revertChangesModal.tpl.html',
+        controller: 'RevertChangesModalInstanceController',
+        size: 'lg',
+        backdrop: 'static',
+        resolve: {
+          pipelineInfo: function () {
+            return pipelineInfo;
+          },
+          metadata: function () {
+            return metadata;
           }
-        });
+        }
+      });
 
       modalInstance.result.then(function (updatedPipelineConfig) {
         defer.resolve(updatedPipelineConfig);
@@ -628,7 +757,9 @@ angular.module('dataCollectorApp.common')
       if (options.insertBetweenEdge && (stage.outputStreams > 0 || stage.variableOutputStreams)) {
         //Insert stage instance in the middle of edge
         var edge = options.insertBetweenEdge;
-        var targetInstance = edge.target;
+        var targetInstance = _.find(pipelineConfig.stages, function (stageInstance) {
+          return stageInstance.instanceName === edge.target.instanceName;
+        });
         var laneIndex;
         var lane = edge.outputLane;
 
@@ -651,10 +782,11 @@ angular.module('dataCollectorApp.common')
         stageInstance.uiInfo.xPos = targetInstance.uiInfo.xPos - 20;
         stageInstance.uiInfo.yPos = targetInstance.uiInfo.yPos + 50;
         targetInstance.uiInfo.xPos += 200;
+        edge.target = targetInstance;
       }
 
       angular.forEach(stage.configDefinitions, function (configDefinition) {
-        stageInstance.configuration.push(self.setDefaultValueForConfig(configDefinition, stageInstance));
+        stageInstance.configuration.push(self.setDefaultValueForConfig(stage, configDefinition, stageInstance));
       });
 
       if (stage.rawSourceDefinition && stage.rawSourceDefinition.configDefinitions) {
@@ -664,12 +796,12 @@ angular.module('dataCollectorApp.common')
         };
 
         angular.forEach(stage.rawSourceDefinition.configDefinitions, function (configDefinition) {
-          stageInstance.uiInfo.rawSource.configuration.push(self.setDefaultValueForConfig(configDefinition, stageInstance));
+          stageInstance.uiInfo.rawSource.configuration.push(self.setDefaultValueForConfig(stage, configDefinition, stageInstance));
         });
       }
 
       if (configuration) {
-        //Special handling for lanePredicates
+        // Special handling for outputStreamsDrivenByConfig
         angular.forEach(configuration, function(config) {
           if (config.name === 'lanePredicates') {
             stageInstance.outputLanes = [];
@@ -698,7 +830,16 @@ angular.module('dataCollectorApp.common')
         angular.forEach(serviceDef.configDefinitions, function(configDefinition) {
           // We're passing null for stageInstance as that should be used only for calculating output lane
           // name, which is operation that does not make sense for service.
-          serviceInstance.configuration.push(self.setDefaultValueForConfig(configDefinition, null));
+          serviceInstance.configuration.push(self.setDefaultValueForConfig(stage, configDefinition, null));
+        });
+
+        // Propagate RUNTIME configuration injected by the stage
+        angular.forEach(serviceDependency.configuration, function(value, key) {
+          angular.forEach(serviceInstance.configuration, function(config) {
+            if(config.name === key) {
+              config.value = value;
+            }
+          });
         });
 
         // And finally push it to the stage definition
@@ -721,6 +862,8 @@ angular.module('dataCollectorApp.common')
 
       if (options.errorStage) {
         return 'Error Records - ' + label;
+      } else if (options.testOriginStage) {
+        return 'Test Origin - ' + label;
       } else if (options.statsAggregatorStage) {
         return 'Stats Aggregator - ' + label;
       } else if (options.startEventStage) {
@@ -745,10 +888,12 @@ angular.module('dataCollectorApp.common')
      * @returns {*}
      */
     this.getStageInstanceName = function(stage, pipelineConfig, options) {
-      var stageName = stage.label.replace(/ /g, '');
+      var stageName = stage.label.replace(/[^0-9A-Za-z_]/g, '');
 
       if (options.errorStage) {
         return stageName + '_ErrorStage';
+      } else if (options.testOriginStage) {
+        return stageName + '_TestOriginStage';
       } else if (options.statsAggregatorStage) {
         return stageName + '_StatsAggregatorStage';
       } else if (options.startEventStage) {
@@ -787,15 +932,16 @@ angular.module('dataCollectorApp.common')
     /**
      * Sets default value for config.
      *
+     * @param stage
      * @param configDefinition
      * @param stageInstance
      * @returns {{name: *, value: (defaultValue|*|string|Variable.defaultValue|undefined)}}
      */
-    this.setDefaultValueForConfig = function(configDefinition, stageInstance) {
+    this.setDefaultValueForConfig = function(stage, configDefinition, stageInstance) {
       var config = {
-          name: configDefinition.name,
-          value: (configDefinition.defaultValue !== undefined && configDefinition.defaultValue !== null) ? configDefinition.defaultValue : undefined
-        };
+        name: configDefinition.name,
+        value: (configDefinition.defaultValue !== undefined && configDefinition.defaultValue !== null) ? configDefinition.defaultValue : undefined
+      };
 
       if (configDefinition.type === 'MODEL') {
         if (configDefinition.model.modelType === 'FIELD_SELECTOR_MULTI_VALUE' && !config.value) {
@@ -808,9 +954,14 @@ angular.module('dataCollectorApp.common')
         } else if (configDefinition.model.modelType === 'LIST_BEAN') {
           var complexFieldObj = {};
           angular.forEach(configDefinition.model.configDefinitions, function (complexFiledConfigDefinition) {
-            var complexFieldConfig = self.setDefaultValueForConfig(complexFiledConfigDefinition, stageInstance);
-            complexFieldObj[complexFieldConfig.name] = (complexFieldConfig.value !== undefined && complexFieldConfig.value !== null) ? complexFieldConfig.value : undefined;
+            var complexFieldConfig = self.setDefaultValueForConfig(stage, complexFiledConfigDefinition, stageInstance);
+            complexFieldObj[complexFieldConfig.name] =
+              (complexFieldConfig.value !== undefined && complexFieldConfig.value !== null) ? complexFieldConfig.value : undefined;
           });
+
+          if (stage.outputStreamsDrivenByConfig === configDefinition.name) {
+            complexFieldObj.outputLane = stageInstance.outputLanes[0];
+          }
           config.value = [complexFieldObj];
         }
       } else if (configDefinition.type === 'BOOLEAN' && config.value === undefined) {
@@ -904,42 +1055,42 @@ angular.module('dataCollectorApp.common')
     var getConfigValueString = function(configDefinition, configValue) {
       var valStr = [];
       if (configDefinition.type === 'MODEL') {
-         switch(configDefinition.model.modelType) {
-            case 'VALUE_CHOOSER':
-              if (configDefinition.model.chooserMode === 'PROVIDED') {
-                var ind = _.indexOf(configDefinition.model.values, configValue);
-                return configDefinition.model.labels[ind];
-              }
-              break;
-            case 'PREDICATE':
-              valStr = [];
-              angular.forEach(configValue, function(lanePredicate, index) {
-                valStr.push({
-                  Stream: index + 1,
-                  Condition: lanePredicate.predicate
-                });
+        switch(configDefinition.model.modelType) {
+          case 'VALUE_CHOOSER':
+            if (configDefinition.model.chooserMode === 'PROVIDED') {
+              var ind = _.indexOf(configDefinition.model.values, configValue);
+              return configDefinition.model.labels[ind];
+            }
+            break;
+          case 'PREDICATE':
+            valStr = [];
+            angular.forEach(configValue, function(lanePredicate, index) {
+              valStr.push({
+                Stream: index + 1,
+                Condition: lanePredicate.predicate
               });
-              configValue = valStr;
-              break;
-            case 'LIST_BEAN':
-              valStr = [];
-              angular.forEach(configValue, function(groupValueObject) {
-                var groupValStr = {};
-                angular.forEach(configDefinition.model.configDefinitions, function(groupConfigDefinition) {
+            });
+            configValue = valStr;
+            break;
+          case 'LIST_BEAN':
+            valStr = [];
+            angular.forEach(configValue, function(groupValueObject) {
+              var groupValStr = {};
+              angular.forEach(configDefinition.model.configDefinitions, function(groupConfigDefinition) {
 
-                  if ((groupConfigDefinition.dependsOn && groupConfigDefinition.triggeredByValues) &&
-                    (groupValueObject[groupConfigDefinition.dependsOn] === undefined ||
-                      !_.contains(groupConfigDefinition.triggeredByValues, groupValueObject[groupConfigDefinition.dependsOn] + ''))) {
-                    return;
-                  }
+                if ((groupConfigDefinition.dependsOn && groupConfigDefinition.triggeredByValues) &&
+                  (groupValueObject[groupConfigDefinition.dependsOn] === undefined ||
+                    !_.contains(groupConfigDefinition.triggeredByValues, groupValueObject[groupConfigDefinition.dependsOn] + ''))) {
+                  return;
+                }
 
-                  groupValStr[groupConfigDefinition.label] = groupValueObject[groupConfigDefinition.name];
-                });
-                valStr.push(groupValStr);
+                groupValStr[groupConfigDefinition.label] = groupValueObject[groupConfigDefinition.name];
               });
-              configValue = valStr;
-              break;
-          }
+              valStr.push(groupValStr);
+            });
+            configValue = valStr;
+            break;
+        }
       }
 
       if (_.isObject(configValue)) {
@@ -1156,12 +1307,12 @@ angular.module('dataCollectorApp.common')
     /**
      * Auto Arrange the stages in the pipeline config
      *
-     * @param pipelineConfig
+     * @param stages
      */
-    this.autoArrange = function(pipelineConfig) {
+    this.autoArrange = function(stages) {
+      stages = this.sortStageInstances(stages);
       var xPos = 60;
       var yPos = 50;
-      var stages = pipelineConfig.stages;
       var laneYPos = {};
       var laneXPos = {};
 
@@ -1221,6 +1372,43 @@ angular.module('dataCollectorApp.common')
 
         xPos = x + 220;
       });
+    };
+
+    this.sortStageInstances = function(stages) {
+      if (!stages || stages.length === 0) {
+        return stages;
+      }
+      var sorted = [];
+      var removedMap = {};
+      var producedOutputs = [];
+      var ok = true;
+      var iteration = 0;
+      while (ok) {
+        var prior = sorted.length;
+        angular.forEach(stages, function(t) {
+          if (!removedMap[t.instanceName]) {
+            var alreadyProduced = _.filter(producedOutputs, function(p) {
+              return t.inputLanes.indexOf(p) !== -1;
+            });
+            if (alreadyProduced.length === t.inputLanes.length) {
+              producedOutputs.push.apply(producedOutputs, t.outputLanes);
+              producedOutputs.push.apply(producedOutputs, t.eventLanes);
+              removedMap[t.instanceName] = true;
+              sorted.push(t);
+            }
+          }
+        });
+        iteration++;
+        if (prior === sorted.length && iteration >= sorted.length) {
+          ok = false;
+          angular.forEach(stages, function(t) {
+            if (!removedMap[t.instanceName]) {
+              sorted.push(t);
+            }
+          });
+        }
+      }
+      return sorted;
     };
 
     $translate([
@@ -1286,7 +1474,7 @@ angular.module('dataCollectorApp.common')
      * Returns Metric element list
      */
     this.getMetricElementList = function() {
-      var elementList = {
+      return {
         GAUGE: [
           {
             value: 'CURRENT_BATCH_AGE',
@@ -1478,8 +1666,6 @@ angular.module('dataCollectorApp.common')
           }
         ]
       };
-
-      return elementList;
     };
 
 
@@ -1497,76 +1683,76 @@ angular.module('dataCollectorApp.common')
           }
         ],
         COUNTER: [
-            {
-              value: 'pipeline.memoryConsumed.counter',
-              label: 'Pipeline Memory Consumption Counter (MB)'
-            },
-            {
-              value: 'pipeline.batchCount.counter',
-              label: 'Pipeline Batch Counter'
-            },
-            {
-              value: 'pipeline.batchInputRecords.counter',
-              label: 'Pipeline Input Records Counter'
-            },
-            {
-              value: 'pipeline.batchOutputRecords.counter',
-              label: 'Pipeline Output Records Counter '
-            },
-            {
-              value: 'pipeline.batchErrorRecords.counter',
-              label: 'Pipeline Error Records Counter'
-            },
-            {
-              value: 'pipeline.batchErrorMessages.counter',
-              label: 'Pipeline Stage Errors Counter'
-            }
+          {
+            value: 'pipeline.memoryConsumed.counter',
+            label: 'Pipeline Memory Consumption Counter (MB)'
+          },
+          {
+            value: 'pipeline.batchCount.counter',
+            label: 'Pipeline Batch Counter'
+          },
+          {
+            value: 'pipeline.batchInputRecords.counter',
+            label: 'Pipeline Input Records Counter'
+          },
+          {
+            value: 'pipeline.batchOutputRecords.counter',
+            label: 'Pipeline Output Records Counter '
+          },
+          {
+            value: 'pipeline.batchErrorRecords.counter',
+            label: 'Pipeline Error Records Counter'
+          },
+          {
+            value: 'pipeline.batchErrorMessages.counter',
+            label: 'Pipeline Stage Errors Counter'
+          }
         ],
         HISTOGRAM: [
-            {
-              value: 'pipeline.inputRecordsPerBatch.histogramM5',
-              label: 'Pipeline Input Records Per Batch Histogram M5'
-            },
-            {
-              value: 'pipeline.outputRecordsPerBatch.histogramM5',
-              label: 'Pipeline Output Records Per Batch Histogram M5'
-            },
-            {
-              value: 'pipeline.errorRecordsPerBatch.histogramM5',
-              label: 'Pipeline Bad Records Per Batch Histogram M5'
-            },
-            {
-              value: 'pipeline.errorsPerBatch.histogramM5',
-              label: 'Pipeline Errors Per Batch Histogram M5'
-            }
-          ],
+          {
+            value: 'pipeline.inputRecordsPerBatch.histogramM5',
+            label: 'Pipeline Input Records Per Batch Histogram M5'
+          },
+          {
+            value: 'pipeline.outputRecordsPerBatch.histogramM5',
+            label: 'Pipeline Output Records Per Batch Histogram M5'
+          },
+          {
+            value: 'pipeline.errorRecordsPerBatch.histogramM5',
+            label: 'Pipeline Bad Records Per Batch Histogram M5'
+          },
+          {
+            value: 'pipeline.errorsPerBatch.histogramM5',
+            label: 'Pipeline Errors Per Batch Histogram M5'
+          }
+        ],
         METER: [
-            {
-              value: 'pipeline.batchCount.meter',
-              label: 'Pipeline Batch Count Meter'
-            },
-            {
-              value: 'pipeline.batchInputRecords.meter',
-              label: 'Pipeline Batch Input Records Meter'
-            },
-            {
-              value: 'pipeline.batchOutputRecords.meter',
-              label: 'Pipeline Batch Output Records Meter '
-            },
-            {
-              value: 'pipeline.batchErrorRecords.meter',
-              label: 'Pipeline Batch Error Records Meter'
-            },
-            {
-              value: 'pipeline.batchErrorMessages.meter',
-              label: 'Pipeline Batch Stage Errors Meter'
-            }
-          ],
+          {
+            value: 'pipeline.batchCount.meter',
+            label: 'Pipeline Batch Count Meter'
+          },
+          {
+            value: 'pipeline.batchInputRecords.meter',
+            label: 'Pipeline Batch Input Records Meter'
+          },
+          {
+            value: 'pipeline.batchOutputRecords.meter',
+            label: 'Pipeline Batch Output Records Meter '
+          },
+          {
+            value: 'pipeline.batchErrorRecords.meter',
+            label: 'Pipeline Batch Error Records Meter'
+          },
+          {
+            value: 'pipeline.batchErrorMessages.meter',
+            label: 'Pipeline Batch Stage Errors Meter'
+          }
+        ],
         TIMER: [{
-            value: 'pipeline.batchProcessing.timer',
-            label: 'Pipeline Batch Processing Timer'
-          }]
-        };
+          value: 'pipeline.batchProcessing.timer',
+          label: 'Pipeline Batch Processing Timer'
+        }]
+      };
 
 
 
@@ -1854,6 +2040,62 @@ angular.module('dataCollectorApp.common')
           returnType: "Type"
         }
       ];
+    };
+
+    // Fragments helpers
+    this.ProcessFragmentStages = function(pipelineConfig) {
+      var stageInstances = [];
+      angular.forEach(pipelineConfig.stages, function (stageInstance) {
+        if (fragmentGroupStages.indexOf(stageInstance.stageName) === -1) {
+          stageInstances.push(stageInstance);
+        } else {
+          var fragmentIdConfig = _.find(stageInstance.configuration, function (c) {
+            return c.name === confFragmentId;
+          });
+          var fragmentInstanceIdConfig = _.find(stageInstance.configuration, function (c) {
+            return c.name === confFragmentInstanceId;
+          });
+          if (fragmentIdConfig && fragmentInstanceIdConfig) {
+            angular.forEach(pipelineConfig.fragments, function (fragment) {
+              if (fragment.fragmentId === fragmentIdConfig.value &&
+                fragment.fragmentInstanceId === fragmentInstanceIdConfig.value) {
+                stageInstances.push.apply(stageInstances, fragment.stages);
+              }
+            });
+          }
+        }
+      });
+      self.autoArrange(stageInstances);
+      return stageInstances;
+    };
+
+    this.getFilteredStageDefinitions = function(stageDefinitions, type, executionMode, isMicroservicePipeline) {
+      var alreadyAdded = {};
+      return _.chain(stageDefinitions)
+        .filter(function (s) {
+          if (alreadyAdded[s.name + s.version]) {
+            return;
+          }
+          if (s.type === type && !s.errorStage && !s.statsAggregatorStage &&
+            s.hideStage.length === 0 &&
+            s.name.indexOf('_fragment_') === -1 &&
+            s.library !== 'streamsets-datacollector-stats-lib' &&
+            (!executionMode || s.executionModes.indexOf(executionMode) !== -1) &&
+            (!isMicroservicePipeline || s.type !== pipelineConstant.SOURCE_STAGE_TYPE ||
+              s.sendsResponse)
+          ) {
+            alreadyAdded[s.name + s.version] = true;
+            return true;
+          } else {
+            return false;
+          }
+        })
+        .sortBy('libraryLabel')
+        .value();
+    };
+
+    this.isBetaStage = function(stageName) {
+      return this.betaStages[stageName];
     };
 
   });

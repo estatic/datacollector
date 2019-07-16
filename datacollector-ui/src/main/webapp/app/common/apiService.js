@@ -19,12 +19,12 @@
 
 angular.module('dataCollectorApp.common')
   .factory('api', function($rootScope, $http, $q) {
-    var apiVersion = 'v1',
-      apiBase = 'rest/' + apiVersion,
-      api = {
-        apiVersion: apiVersion,
-        events: {}
-      };
+    var apiVersion = 'v1';
+    var apiBase = 'rest/' + apiVersion;
+    var api = {
+      apiVersion: apiVersion,
+      events: {}
+    };
 
     api.log = {
       /**
@@ -208,7 +208,7 @@ angular.module('dataCollectorApp.common')
       },
 
       /**
-       * Enable SCH
+       * Enable Control Hub
        * @param dpmInfo
        */
       enableDPM: function(dpmInfo) {
@@ -221,7 +221,7 @@ angular.module('dataCollectorApp.common')
       },
 
       /**
-       * Disable SCH
+       * Disable Control Hub
        */
       disableDPM: function() {
         var url = apiBase + '/system/disableDPM';
@@ -232,7 +232,7 @@ angular.module('dataCollectorApp.common')
       },
 
       /**
-       * Create SCH Groups & Users
+       * Create Control Hub Groups & Users
        * @param dpmInfo
        * @returns {*}
        */
@@ -377,16 +377,15 @@ angular.module('dataCollectorApp.common')
        *
        * @returns {*}
        */
-      installLibraries: function(repoUrl, libraryList) {
+      installLibraries: function(libraryUrlList, withStageLibVersion) {
         var url = apiBase + '/stageLibraries/install';
-        if (repoUrl) {
-          url += '?repoUrl=' + repoUrl;
-        }
-
         return $http({
           method: 'POST',
           url: url,
-          data: libraryList
+          data: libraryUrlList,
+          params: {
+            withStageLibVersion: !!withStageLibVersion
+          }
         });
       },
 
@@ -409,11 +408,14 @@ angular.module('dataCollectorApp.common')
        *
        * @returns {*}
        */
-      getStageLibrariesExtras: function() {
+      getStageLibrariesExtras: function(libraryId) {
         var url = apiBase + '/stageLibraries/extras/list';
         return $http({
           method: 'GET',
-          url: url
+          url: url,
+          params: {
+            libraryId: libraryId ? libraryId : ''
+          }
         });
       },
 
@@ -580,13 +582,19 @@ angular.module('dataCollectorApp.common')
        *
        * @param name
        * @param description
+       * @param pipelineType
        */
-      createNewPipelineConfig: function(name, description) {
-        var url = apiBase + '/pipeline/' + encodeURIComponent(name) + '?autoGeneratePipelineId=true&description=' + description;
-
+      createNewPipelineConfig: function(name, description, pipelineType, pipelineLabel) {
+        var url = apiBase + '/pipeline/' + encodeURIComponent(name);
         return $http({
           method: 'PUT',
-          url: url
+          url: url,
+          params: {
+            autoGeneratePipelineId: true,
+            description: description,
+            pipelineType: pipelineType,
+            pipelineLabel: pipelineLabel
+          }
         });
       },
 
@@ -672,7 +680,7 @@ angular.module('dataCollectorApp.common')
             //Save the pipeline Rules
             return api.pipelineAgent.savePipelineRules(name, duplicatePipelineRulesObject);
           })
-          .then(function(res) {
+          .then(function() {
             deferred.resolve(duplicatePipelineObject);
           },function(res) {
             deferred.reject(res);
@@ -686,13 +694,21 @@ angular.module('dataCollectorApp.common')
        *
        * @param name
        * @param includeLibraryDefinitions
+       * @param includePlainTextCredentials
        */
-      exportPipelineConfig: function(name, includeLibraryDefinitions) {
-        var url = apiBase + '/pipeline/' + name + '/export?attachment=true';
+      exportPipelineConfig: function(name, includeLibraryDefinitions, includePlainTextCredentials) {
+        var url = apiBase + '/pipeline/' + name + '/export?attachment=true&includePlainTextCredentials=' +
+          !!includePlainTextCredentials;
         if (includeLibraryDefinitions) {
           url += '&includeLibraryDefinitions=true';
         }
         window.open(url, '_blank', '');
+        if (!includePlainTextCredentials) {
+          $rootScope.common.infoList = [{
+            message: 'Exporting the pipeline stripped of all plain text credentials. ' +
+              'To include credentials in the export, use Export with Plain Text Credentials.'
+          }];
+        }
       },
 
       /**
@@ -700,12 +716,13 @@ angular.module('dataCollectorApp.common')
        *
        * @param pipelineIds
        * @param includeLibraryDefinitions
+       * @param includePlainTextCredentials
        */
-      exportSelectedPipelines: function(pipelineIds, includeLibraryDefinitions) {
+      exportSelectedPipelines: function(pipelineIds, includeLibraryDefinitions, includePlainTextCredentials) {
 
-        var url = apiBase + '/pipelines/export';
+        var url = apiBase + '/pipelines/export?includePlainTextCredentials=' + !!includePlainTextCredentials;
         if (includeLibraryDefinitions) {
-          url += '?includeLibraryDefinitions=true';
+          url += '&includeLibraryDefinitions=true';
         }
 
         var xhr = new XMLHttpRequest();
@@ -751,6 +768,12 @@ angular.module('dataCollectorApp.common')
         xhr.setRequestHeader('Content-type', 'application/json');
         xhr.setRequestHeader('X-Requested-By', 'Data Collector');
         xhr.send(JSON.stringify(pipelineIds));
+        if (!includePlainTextCredentials) {
+          $rootScope.common.infoList = [{
+            message: 'Exporting the pipeline stripped of all plain text credentials. ' +
+              'To include credentials in the export, use Export with Plain Text Credentials.'
+          }];
+        }
       },
 
       /**
@@ -759,6 +782,7 @@ angular.module('dataCollectorApp.common')
        * @param pipelineName
        * @param pipelineEnvelope
        * @param overwrite
+       * @param autoGeneratePipelineId
        */
       importPipelineConfig: function(pipelineName, pipelineEnvelope, overwrite, autoGeneratePipelineId) {
         var url = apiBase + '/pipeline/' + pipelineName + '/import?autoGeneratePipelineId=' + !!autoGeneratePipelineId;
@@ -783,6 +807,18 @@ angular.module('dataCollectorApp.common')
         });
       },
 
+      importPipelineFromUrl: function(pipelineTitle, pipelineHttpUrl) {
+        var url = apiBase + '/pipeline/' + pipelineTitle + '/importFromURL';
+        return $http({
+          method: 'POST',
+          url: url,
+          params: {
+            pipelineHttpUrl: pipelineHttpUrl,
+            autoGeneratePipelineId: true
+          }
+        });
+      },
+
       /**
        * Download Edge Executable.
        *
@@ -797,6 +833,38 @@ angular.module('dataCollectorApp.common')
       },
 
       /**
+       * Download Sample Edge pipelines
+       * @param edgeHttpUrl
+       */
+      downloadPipelinesFromEdge: function(edgeHttpUrl) {
+        var url = apiBase + '/pipelines/downloadFromEdge' ;
+        return $http({
+          method: 'POST',
+          url: url,
+          data: edgeHttpUrl
+        });
+      },
+
+      /**
+       * Publish Pipelines to Data Collector Edge
+       *
+       * @param pipelineIds
+       * @param edgeHttpUrl
+       * @returns {*}
+       */
+      publishPipelinesToEdge: function(pipelineIds, edgeHttpUrl) {
+        var url = apiBase + '/pipelines/publishToEdge' ;
+        return $http({
+          method: 'POST',
+          url: url,
+          data: {
+            pipelineIds: pipelineIds,
+            edgeHttpUrl: edgeHttpUrl
+          }
+        });
+      },
+
+      /**
        * Start Preview for given Pipeline name
        *
        * @param name
@@ -808,6 +876,8 @@ angular.module('dataCollectorApp.common')
        * @param stageOutputList
        * @param endStage
        * @param timeout
+       * @param edgeHttpUrl
+       * @param testOrigin
        * @returns {*}
        */
       createPreview: function(
@@ -819,28 +889,30 @@ angular.module('dataCollectorApp.common')
         skipLifecycleEvents,
         stageOutputList,
         endStage,
-        timeout
+        timeout,
+        edgeHttpUrl,
+        testOrigin
       ) {
-        var url;
-
         if (!batchSize) {
           batchSize = 10;
         }
-
         if (!timeout || timeout <=0) {
-          timeout = 10000;
+          timeout = 30000;
         }
-
-        url = apiBase + '/pipeline/' + name + '/preview?batchSize=' + batchSize + '&rev=' + rev +
-            '&skipTargets=' + skipTargets + '&timeout=' + timeout + '&skipLifecycleEvents=' + skipLifecycleEvents;
-
-        if (endStage) {
-          url += '&endStage=' + endStage;
-        }
-
+        var url = apiBase + '/pipeline/' + name + '/preview';
         return $http({
           method: 'POST',
           url: url,
+          params: {
+            batchSize: batchSize,
+            rev: rev,
+            skipTargets: skipTargets,
+            timeout: timeout,
+            skipLifecycleEvents: skipLifecycleEvents,
+            endStage: endStage,
+            edge: !!edgeHttpUrl,
+            testOrigin: !!testOrigin
+          },
           data: stageOutputList || []
         });
       },
@@ -849,43 +921,54 @@ angular.module('dataCollectorApp.common')
       /**
        * Fetches Preview Status
        *
+       * @param pipelineId
        * @param previewerId
-       * @param pipelineName
+       * @param edgeHttpUrl
        */
-      getPreviewStatus: function(previewerId, pipelineName) {
-        var url = apiBase + '/pipeline/pipelineName/preview/' + previewerId + '/status' ;
+      getPreviewStatus: function(pipelineId, previewerId, edgeHttpUrl) {
+        var url = apiBase + '/pipeline/' + pipelineId + '/preview/' + previewerId + '/status' ;
         return $http({
           method: 'GET',
-          url: url
+          url: url,
+          params: {
+            edge: !!edgeHttpUrl
+          }
         });
       },
-
 
       /**
        * Fetches Preview Data
        *
+       * @param pipelineId
        * @param previewerId
-       * @param pipelineName
+       * @param edgeHttpUrl
        */
-      getPreviewData: function(previewerId, pipelineName) {
-        var url = apiBase + '/pipeline/pipelineName/preview/' + previewerId;
+      getPreviewData: function(pipelineId, previewerId, edgeHttpUrl) {
+        var url = apiBase + '/pipeline/' + pipelineId + '/preview/' + previewerId;
         return $http({
           method: 'GET',
-          url: url
+          url: url,
+          params: {
+            edge: !!edgeHttpUrl
+          }
         });
       },
 
       /**
        * Stop Preview
        *
+       * @param pipelineId
        * @param previewerId
-       * @param pipelineName
+       * @param edgeHttpUrl
        */
-      cancelPreview: function(previewerId, pipelineName) {
-        var url = apiBase + '/pipeline/pipelineName/preview/' + previewerId;
+      cancelPreview: function(pipelineId, previewerId, edgeHttpUrl) {
+        var url = apiBase + '/pipeline/' + pipelineId + '/preview/' + previewerId;
         return $http({
           method: 'DELETE',
-          url: url
+          url: url,
+          params: {
+            edge: !!edgeHttpUrl
+          }
         });
       },
 
@@ -915,18 +998,22 @@ angular.module('dataCollectorApp.common')
         });
       },
 
-
       /**
        * Validate the Pipeline
        *
-       * @param name
+       * @param pipelineId
+       * @param edgeHttpUrl
        * @returns {*}
        */
-      validatePipeline: function(name) {
-        var url = apiBase + '/pipeline/' + name + '/validate?timeout=500000';
+      validatePipeline: function(pipelineId, edgeHttpUrl) {
+        var url = apiBase + '/pipeline/' + pipelineId + '/validate';
         return $http({
           method: 'GET',
-          url: url
+          url: url,
+          params: {
+            timeout: 500000,
+            edge: !!edgeHttpUrl
+          }
         });
       },
 
@@ -981,10 +1068,11 @@ angular.module('dataCollectorApp.common')
       /**
        * Stop multiple Pipelines
        *
-       * @param pipelineNames
+       * @param pipelineIds
+       * @param forceStop
        * @returns {*}
        */
-      stopPipelines: function(pipelineNames, forceStop) {
+      stopPipelines: function(pipelineIds, forceStop) {
         var url = apiBase + '/pipelines/stop';
         if (forceStop) {
           url = apiBase + '/pipelines/forceStop';
@@ -992,7 +1080,7 @@ angular.module('dataCollectorApp.common')
         return $http({
           method: 'POST',
           url: url,
-          data: pipelineNames
+          data: pipelineIds
         });
       },
 
@@ -1001,8 +1089,8 @@ angular.module('dataCollectorApp.common')
        *
        * @returns {*}
        */
-      getPipelineMetrics: function(pipelineName, rev) {
-        var url = apiBase + '/pipeline/' + pipelineName + '/metrics?rev=' + rev ;
+      getPipelineMetrics: function(pipelineId, rev) {
+        var url = apiBase + '/pipeline/' + pipelineId + '/metrics?rev=' + rev ;
         return $http({
           method: 'GET',
           url: url
@@ -1136,14 +1224,18 @@ angular.module('dataCollectorApp.common')
        * @param pipelineName
        * @param rev
        * @param stageInstanceName
+       * @param edge
        * @returns {*}
        */
-      getErrorRecords: function(pipelineName, rev, stageInstanceName) {
-        var url = apiBase + '/pipeline/' + pipelineName + '/errorRecords?rev=' + rev +
-          '&stageInstanceName=' + stageInstanceName;
+      getErrorRecords: function(pipelineName, rev, stageInstanceName, edge) {
+        var url = apiBase + '/pipeline/' + pipelineName + '/errorRecords';
         return $http({
           method: 'GET',
-          url: url
+          url: url,
+          params: {
+            stageInstanceName: stageInstanceName,
+            edge: !!edge
+          }
         });
       },
 
@@ -1154,14 +1246,18 @@ angular.module('dataCollectorApp.common')
        * @param pipelineName
        * @param rev
        * @param stageInstanceName
+       * @param edge
        * @returns {*}
        */
-      getErrorMessages: function(pipelineName, rev, stageInstanceName) {
-        var url = apiBase + '/pipeline/' + pipelineName + '/errorMessages?rev=' + rev +
-          '&stageInstanceName=' + stageInstanceName;
+      getErrorMessages: function(pipelineName, rev, stageInstanceName, edge) {
+        var url = apiBase + '/pipeline/' + pipelineName + '/errorMessages';
         return $http({
           method: 'GET',
-          url: url
+          url: url,
+          params: {
+            stageInstanceName: stageInstanceName,
+            edge: !!edge
+          }
         });
       },
 
@@ -1192,10 +1288,9 @@ angular.module('dataCollectorApp.common')
        * Get history of the pipeline
        *
        * @param name
-       * @param rev
        * @returns {*}
        */
-      getHistory: function(name, rev) {
+      getHistory: function(name) {
         var url = apiBase + '/pipeline/' + name + '/history';
         return $http({
           method: 'GET',
@@ -1207,10 +1302,9 @@ angular.module('dataCollectorApp.common')
        * Clear history of the pipeline
        *
        * @param name
-       * @param rev
        * @returns {*}
        */
-      clearHistory: function(name, rev) {
+      clearHistory: function(name) {
         var url = apiBase + '/pipeline/' + name + '/history';
         return $http({
           method: 'DELETE',
@@ -1628,6 +1722,30 @@ angular.module('dataCollectorApp.common')
     };
 
     api.system = {
+      /**
+       * Get stats and opt in/out status
+       *
+       * @returns {*}
+       */
+      getStats: function() {
+        return $http({
+          method: 'GET',
+          url: apiBase + '/system/stats'
+        });
+      },
+
+      /**
+       * Set opt in/out status for stats
+       *
+       * @returns {*}
+       */
+      setOptInStatus: function(isOptIn) {
+        return $http({
+          method: 'POST',
+          url: apiBase + '/system/stats?active=' + (!!isOptIn)
+        });
+      },
+
       /**
        * Get all support bundle generators
        *

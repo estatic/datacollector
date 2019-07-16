@@ -42,6 +42,7 @@ import com.streamsets.datacollector.restapi.bean.SDCMetricsJson;
 import com.streamsets.datacollector.store.PipelineStoreException;
 import com.streamsets.datacollector.util.AggregatorUtil;
 import com.streamsets.datacollector.util.Configuration;
+import com.streamsets.lib.security.http.SSOConstants;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.impl.Utils;
@@ -79,10 +80,7 @@ public class MetricsEventRunnable implements Runnable {
   private static final String PIPELINE_COMMIT_ID = "PIPELINE_COMMIT_ID";
   private static final String JOB_ID = "JOB_ID";
   private static final String UPDATE_WAIT_TIME_MS = "UPDATE_WAIT_TIME_MS";
-  private static final String SDC = "sdc";
-  private static final String X_REQUESTED_BY = "X-Requested-By";
-  private static final String X_SS_APP_AUTH_TOKEN = "X-SS-App-Auth-Token";
-  private static final String X_SS_APP_COMPONENT_ID = "X-SS-App-Component-Id";
+  public static final String TIME_SERIES_ANALYSIS = "TIME_SERIES_ANALYSIS";
 
   public static final String RUNNABLE_NAME = "MetricsEventRunnable";
   private static final Logger LOG = LoggerFactory.getLogger(MetricsEventRunnable.class);
@@ -99,6 +97,7 @@ public class MetricsEventRunnable implements Runnable {
   private final RuntimeInfo runtimeInfo;
   private BlockingQueue<Record> statsQueue;
   private PipelineConfiguration pipelineConfiguration;
+  private MetricRegistryJson metricRegistryJson;
 
   private boolean isDPMPipeline = false;
   private String remoteTimeSeriesUrl;
@@ -106,6 +105,8 @@ public class MetricsEventRunnable implements Runnable {
   private String jobId;
   private Integer waitTimeBetweenUpdates;
   private final int retryAttempts = 5;
+  private boolean timeSeriesAnalysis = true;
+  private boolean isPipelineStopped = false;
   private WebTarget webTarget;
   private Stopwatch stopwatch = null;
 
@@ -134,11 +135,12 @@ public class MetricsEventRunnable implements Runnable {
     this.runtimeInfo = runtimeInfo;
   }
 
-  public void onStopPipeline() {
+  public void onStopOrFinishPipeline() {
     this.threadHealthReporter = null;
     if (isDPMPipeline) {
       // Send final metrics to DPM on stop
       this.stopwatch = null;
+      this.isPipelineStopped = true;
       this.run();
     }
   }
@@ -150,6 +152,10 @@ public class MetricsEventRunnable implements Runnable {
   public void setPipelineConfiguration(PipelineConfiguration pipelineConfiguration) {
     this.pipelineConfiguration = pipelineConfiguration;
     this.initializeDPMMetricsVariables();
+  }
+
+  public void setMetricRegistryJson(MetricRegistryJson metricRegistryJson) {
+    this.metricRegistryJson = metricRegistryJson;
   }
 
   @Override
@@ -173,7 +179,10 @@ public class MetricsEventRunnable implements Runnable {
         if (state.getExecutionMode() == ExecutionMode.CLUSTER_BATCH
           || state.getExecutionMode() == ExecutionMode.CLUSTER_YARN_STREAMING
           || state.getExecutionMode() == ExecutionMode.CLUSTER_MESOS_STREAMING) {
-          MetricRegistryJson metricRegistryJson = getAggregatedMetrics();
+          MetricRegistryJson json = getAggregatedMetrics();
+          metricsJSONStr = objectMapper.writer().writeValueAsString(json);
+        } else if (state.getExecutionMode() == ExecutionMode.BATCH
+            || state.getExecutionMode() == ExecutionMode.STREAMING && metricRegistryJson != null) {
           metricsJSONStr = objectMapper.writer().writeValueAsString(metricRegistryJson);
         } else {
           metricsJSONStr = objectMapper.writer().writeValueAsString(metricRegistry);
@@ -181,19 +190,24 @@ public class MetricsEventRunnable implements Runnable {
         if (hasMetricEventListeners(state)) {
           eventListenerManager.broadcastMetrics(name, metricsJSONStr);
         }
-        if (isStatAggregationEnabled()) {
+        // don't queue stats record when pipeline is stopped as runner is not going to process any more batches
+        if (isStatAggregationEnabled() && !isPipelineStopped) {
           AggregatorUtil.enqueStatsRecord(
             AggregatorUtil.createMetricJsonRecord(
                 runtimeInfo.getId(),
                 runtimeInfo.getMasterSDCId(),
                 pipelineConfiguration.getMetadata(),
                 false, // isAggregated - no its not aggregated
+                timeSeriesAnalysis,
+                false,
                 metricsJSONStr
             ),
             statsQueue,
             configuration
           );
-        } else if (isDPMPipeline && isWriteStatsToDPMDirectlyEnabled()) {
+        } else if (isDPMPipeline && isWriteStatsToDPMDirectlyEnabled() &&
+            state.getExecutionMode() != ExecutionMode.SLAVE) {
+          // Write Stats to Control hub is not supported for slave nodes
           sendMetricsToDPM(pipelineConfiguration, metricsJSONStr);
         }
       }
@@ -311,6 +325,13 @@ public class MetricsEventRunnable implements Runnable {
                 waitTimeBetweenUpdates = 15000;
               }
               break;
+            case TIME_SERIES_ANALYSIS:
+              if (pipelineConfigBean.constants.get(key) != null) {
+                timeSeriesAnalysis = (Boolean) pipelineConfigBean.constants.get(key);
+              } else {
+                timeSeriesAnalysis = true;
+              }
+              break;
           }
         }
 
@@ -330,13 +351,17 @@ public class MetricsEventRunnable implements Runnable {
       PipelineConfiguration pipelineConfiguration,
       String metricsJSONStr
   ) throws IOException {
-    if (stopwatch == null || stopwatch.elapsed(TimeUnit.MILLISECONDS) > waitTimeBetweenUpdates) {
+    if (stopwatch == null || stopwatch.elapsed(TimeUnit.MILLISECONDS) > waitTimeBetweenUpdates || isPipelineStopped) {
       SDCMetricsJson sdcMetricsJson = new SDCMetricsJson();
       sdcMetricsJson.setTimestamp(System.currentTimeMillis());
       sdcMetricsJson.setAggregated(false);
       sdcMetricsJson.setSdcId(runtimeInfo.getId());
       sdcMetricsJson.setMasterSdcId(runtimeInfo.getMasterSDCId());
-      sdcMetricsJson.setMetrics(ObjectMapperFactory.get().readValue(metricsJSONStr, MetricRegistryJson.class));
+      if (metricRegistryJson != null) {
+        sdcMetricsJson.setMetrics(metricRegistryJson);
+      } else {
+        sdcMetricsJson.setMetrics(ObjectMapperFactory.get().readValue(metricsJSONStr, MetricRegistryJson.class));
+      }
       Map<String, String> metadata = new HashMap<>();
       if (pipelineConfiguration.getMetadata() != null && !pipelineConfiguration.getMetadata().isEmpty()) {
         for (Map.Entry<String, Object> e : pipelineConfiguration.getMetadata().entrySet()) {
@@ -347,9 +372,12 @@ public class MetricsEventRunnable implements Runnable {
       }
       metadata.put(DPM_PIPELINE_COMMIT_ID, pipelineCommitId);
       metadata.put(DPM_JOB_ID, jobId);
+      metadata.put(AggregatorUtil.TIME_SERIES_ANALYSIS, String.valueOf(timeSeriesAnalysis));
       sdcMetricsJson.setMetadata(metadata);
 
-      sendUpdate(ImmutableList.of(sdcMetricsJson));
+      if (sdcMetricsJson.getMetrics() != null) {
+        sendUpdate(ImmutableList.of(sdcMetricsJson));
+      }
 
       if (stopwatch == null) {
         stopwatch = Stopwatch.createStarted();
@@ -375,9 +403,9 @@ public class MetricsEventRunnable implements Runnable {
       Response response = null;
       try {
         response = webTarget.request()
-            .header(X_REQUESTED_BY, SDC)
-            .header(X_SS_APP_AUTH_TOKEN, runtimeInfo.getAppAuthToken().replaceAll("(\\r|\\n)", ""))
-            .header(X_SS_APP_COMPONENT_ID, runtimeInfo.getId())
+            .header(SSOConstants.X_REST_CALL, SSOConstants.SDC_COMPONENT_NAME)
+            .header(SSOConstants.X_APP_AUTH_TOKEN, runtimeInfo.getAppAuthToken().replaceAll("(\\r|\\n)", ""))
+            .header(SSOConstants.X_APP_COMPONENT_ID, runtimeInfo.getId())
             .post(
                 Entity.json(
                     sdcMetricsJsonList

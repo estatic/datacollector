@@ -36,8 +36,11 @@ public enum Errors implements ErrorCode {
   TCP_30("Invalid expression \"{}\" for record processed ack message: {}"),
   TCP_31("Invalid expression \"{}\" for batch completed ack message: {}"),
   TCP_35("Error evaluating {} expression: {}"),
+  TCP_36("Record sent to next stage but got an exception when evaluating '{}' expression to send client response: {}"),
   TCP_40("Empty result (i.e. length of bytes was zero) after interpreting separator"),
   TCP_41("Separator string expression was not specified"),
+  TCP_300("Avro IPC requires exactly one port"),
+  TCP_301("Exception caught parsing data within Flume Avro IPC pipeline: {}"),
   ;
 
   private final String msg;

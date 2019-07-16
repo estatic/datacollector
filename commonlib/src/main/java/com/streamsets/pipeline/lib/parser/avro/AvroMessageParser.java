@@ -15,8 +15,8 @@
  */
 package com.streamsets.pipeline.lib.parser.avro;
 
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.config.OriginAvroSchemaSource;
 import com.streamsets.pipeline.lib.parser.AbstractDataParser;
 import com.streamsets.pipeline.lib.parser.DataParserException;
@@ -44,11 +44,11 @@ public class AvroMessageParser extends AbstractDataParser {
   private BinaryDecoder decoder;
   private GenericData.Record avroRecord;
   private boolean eof;
-  private final Stage.Context context;
+  private final ProtoConfigurableEntity.Context context;
   private final String messageId;
 
   public AvroMessageParser(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       final Schema schema,
       final byte[] message,
       final String messageId,

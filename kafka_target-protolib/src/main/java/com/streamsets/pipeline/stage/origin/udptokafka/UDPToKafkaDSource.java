@@ -23,7 +23,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSourceOffsetCommitter;
+import com.streamsets.pipeline.api.base.configurablestage.DSourceOffsetCommitter;
 import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
 
 @StageDef(
@@ -33,7 +33,7 @@ import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
   description = "Receives UDP packages and writes them to Kafka",
   icon="udptokafka.png",
     upgrader = UDPToKafkaUpgrader.class,
-  onlineHelpRefUrl = "index.html#Origins/UDPtoKafka.html#task_tvh_bhz_pw"
+  onlineHelpRefUrl ="index.html?contextID=task_tvh_bhz_pw"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

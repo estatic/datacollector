@@ -23,7 +23,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSourceOffsetCommitter;
+import com.streamsets.pipeline.api.base.configurablestage.DSourceOffsetCommitter;
 import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
 
 @StageDef(
@@ -33,7 +33,7 @@ import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
   description = "Receives records via SDC RPC from a Data Collector pipeline that uses an SDC RPC destination and " +
     "writes them to Kafka",
   icon="sdcipctokafka.png",
-  onlineHelpRefUrl = "index.html#Origins/SDCRPCtoKafka.html#task_il5_gtl_pw",
+  onlineHelpRefUrl ="index.html?contextID=task_il5_gtl_pw",
   upgrader = SdcIpcToKafkaUpgrader.class
 )
 @ConfigGroups(Groups.class)
@@ -82,6 +82,7 @@ import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
         "configs.tlsConfigBean.trustStoreAlgorithm"
     }
 )
+@Deprecated
 public class SdcIpcToKafkaDSource extends DSourceOffsetCommitter {
 
   @ConfigDefBean

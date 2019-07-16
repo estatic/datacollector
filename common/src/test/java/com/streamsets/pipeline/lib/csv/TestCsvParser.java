@@ -22,6 +22,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
@@ -114,6 +115,24 @@ public class TestCsvParser {
   }
 
   @Test
+  public void testHeadersWithNullColumns() throws Exception {
+    CsvParser parser = new CsvParser(new StringReader("a,,,d\naa,bb,cc,dd\n"),
+            CSVFormat.DEFAULT.withHeader((String[])null).withSkipHeaderRecord(true), 15);
+    try {
+      Assert.assertEquals(6, parser.getReaderPosition());
+
+      String[] record = parser.read();
+      Assert.assertEquals(18, parser.getReaderPosition());
+      Assert.assertNotNull(record);
+      Assert.assertArrayEquals(new String[]{"a","empty-1","empty-2","d"}, parser.getHeaders());
+      Assert.assertArrayEquals(new String[]{"aa", "bb", "cc","dd"}, record);
+
+    } finally {
+      parser.close();
+    }
+  }
+
+  @Test
   public void testMaxObjectLen() throws Exception {
     CsvParser parser = new CsvParser(new StringReader("a,b,c\naa,bb,cc\ne,f,g\n"),
                                      CSVFormat.DEFAULT.withHeader((String[])null).withSkipHeaderRecord(false), 6);
@@ -170,5 +189,16 @@ public class TestCsvParser {
     } finally {
       parser.close();
     }
+  }
+
+  @Test(expected = IOException.class)
+  public void testUnwrapIllegalStateException() throws Exception {
+    new CsvParser(
+      new CountingReader(new StringReader("0,\"020\"1,\"BS:5252525  ORDER:99999\"4")),
+      CSVFormat.DEFAULT.withHeader((String[])null).withSkipHeaderRecord(true),
+      -1,
+      0,
+      0
+    );
   }
 }

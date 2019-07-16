@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-maprdb-protolib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector MapR DB Protolib</description>
   <name>StreamSets Data Collector MapR DB Protolib</name>
   <packaging>jar</packaging>
@@ -92,7 +92,7 @@
 
     <dependency>
       <groupId>com.streamsets</groupId>
-      <artifactId>streamsets-datacollector-hbase-protolib</artifactId>
+      <artifactId>streamsets-datacollector-sdc-hbase-0_98</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
       <exclusions>
@@ -105,6 +105,12 @@
           <artifactId>hbase-client</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-hbase-protolib</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
     </dependency>
 
     <dependency>
@@ -173,13 +179,6 @@
         <version>2.8.2</version>
         <configuration>
           <skip>true</skip>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-            <argLine>-Xmx1g</argLine>
         </configuration>
       </plugin>
     </plugins>

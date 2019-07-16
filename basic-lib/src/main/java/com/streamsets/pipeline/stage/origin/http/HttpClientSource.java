@@ -15,6 +15,7 @@
  */
 package com.streamsets.pipeline.stage.origin.http;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
@@ -42,12 +43,12 @@ import com.streamsets.pipeline.lib.util.ThreadUtil;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
 import com.streamsets.pipeline.stage.util.http.HttpStageUtil;
+import org.apache.commons.lang.StringUtils;
 import org.glassfish.jersey.client.oauth1.AccessToken;
 import org.glassfish.jersey.client.oauth1.OAuth1ClientSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.ProcessingException;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
@@ -285,11 +286,12 @@ public class HttpClientSource extends BaseSource {
 
     setPageOffset(lastSourceOffset);
 
-    resolvedUrl = resourceEval.eval(resourceVars, conf.resourceUrl, String.class);
-    WebTarget target = client.target(resolvedUrl);
+    setResolvedUrl(resolveInitialUrl(lastSourceOffset));
+    WebTarget target = client.target(getResolvedUrl());
 
     // If the request (headers or body) contain a known sensitive EL and we're not using https then fail the request.
     if (requestContainsSensitiveInfo() && !target.getUri().getScheme().toLowerCase().startsWith("https")) {
+      LOG.error(Errors.HTTP_07.getMessage());
       throw new StageException(Errors.HTTP_07);
     }
 
@@ -333,6 +335,16 @@ public class HttpClientSource extends BaseSource {
     return newSourceOffset.orElse(lastSourceOffset);
   }
 
+  @VisibleForTesting
+  String resolveInitialUrl(String storedOffset) throws ELEvalException {
+    if (LINK_PAGINATION.contains(conf.pagination.mode) && StringUtils.isNotBlank(storedOffset)) {
+      final HttpSourceOffset offset = HttpSourceOffset.fromString(storedOffset);
+      return offset.getUrl();
+    } else {
+      return resourceEval.eval(resourceVars, conf.resourceUrl, String.class);
+    }
+  }
+
   /**
    * Returns the URL of the next page to fetch when paging is enabled. Otherwise
    * returns the previously configured URL.
@@ -341,17 +353,19 @@ public class HttpClientSource extends BaseSource {
    * @return next URL to fetch
    * @throws ELEvalException if the resource expression cannot be evaluated
    */
-  private String resolveNextPageUrl(String sourceOffset) throws ELEvalException {
+  @VisibleForTesting
+  String resolveNextPageUrl(String sourceOffset) throws ELEvalException {
     String url;
     if (LINK_PAGINATION.contains(conf.pagination.mode) && next != null) {
       url = next.getUri().toString();
+      setResolvedUrl(url);
     } else if (conf.pagination.mode == PaginationMode.BY_OFFSET || conf.pagination.mode == PaginationMode.BY_PAGE) {
       if (sourceOffset != null) {
         setPageOffset(sourceOffset);
       }
       url = resourceEval.eval(resourceVars, conf.resourceUrl, String.class);
     } else {
-      url = resolvedUrl;
+      url = getResolvedUrl();
     }
     return url;
   }
@@ -369,7 +383,7 @@ public class HttpClientSource extends BaseSource {
     }
 
     int startAt = conf.pagination.startAt;
-    if (sourceOffset != null) {
+    if (StringUtils.isNotEmpty(sourceOffset)) {
       startAt = HttpSourceOffset.fromString(sourceOffset).getStartAt();
     }
     resourceVars.addVariable(START_AT, startAt);
@@ -411,9 +425,9 @@ public class HttpClientSource extends BaseSource {
           final String contentType = HttpStageUtil.getContentTypeWithDefault(
               resolvedHeaders, conf.defaultRequestContentType);
           hasher.putString(requestBody, Charset.forName(conf.dataFormatConfig.charset));
-          response = invocationBuilder.method(conf.httpMethod.getLabel(), Entity.entity(requestBody, contentType));
+          setResponse(invocationBuilder.method(conf.httpMethod.getLabel(), Entity.entity(requestBody, contentType)));
         } else {
-          response = invocationBuilder.method(conf.httpMethod.getLabel());
+          setResponse(invocationBuilder.method(conf.httpMethod.getLabel()));
         }
         LOG.debug("Retrieved response in {} ms", System.currentTimeMillis() - startTime);
 
@@ -422,6 +436,7 @@ public class HttpClientSource extends BaseSource {
         final boolean statusOk = status >= 200 && status < 300;
         if (conf.client.useOAuth2 && status == 403) { // Token may have expired
           if (gotNewToken) {
+            LOG.error(HTTP_21.getMessage());
             throw new StageException(HTTP_21);
           }
           gotNewToken = HttpStageUtil.getNewOAuth2Token(conf.client.oauth2, client);
@@ -432,7 +447,15 @@ public class HttpClientSource extends BaseSource {
           keepRequesting = applyResponseAction(
               actionConf,
               statusChanged,
-              input -> new StageException(Errors.HTTP_14, status, response.readEntity(String.class))
+              input -> {
+                final StageException stageException = new StageException(
+                    Errors.HTTP_14,
+                    status,
+                    response.readEntity(String.class)
+                );
+                LOG.error(stageException.getMessage());
+                return stageException;
+              }
           );
 
         } else {
@@ -456,7 +479,11 @@ public class HttpClientSource extends BaseSource {
 
             final boolean firstTimeout = !lastRequestTimedOut;
 
-            applyResponseAction(actionConf, firstTimeout, input -> new StageException(Errors.HTTP_18));
+            applyResponseAction(actionConf, firstTimeout, input -> {
+                  LOG.error(Errors.HTTP_18.getMessage());
+                  return new StageException(Errors.HTTP_18);
+                }
+            );
 
           }
 
@@ -478,7 +505,9 @@ public class HttpClientSource extends BaseSource {
             ),
           e);
           Throwable reportEx = cause != null ? cause : e;
-          throw new StageException(Errors.HTTP_32, reportEx.toString(), reportEx);
+          final StageException stageException = new StageException(Errors.HTTP_32, reportEx.toString(), reportEx);
+          LOG.error(stageException.getMessage());
+          throw stageException;
         }
       }
       keepRequesting &= !getContext().isStopped();
@@ -499,7 +528,9 @@ public class HttpClientSource extends BaseSource {
       retryCount++;
     }
     if (actionConf.getMaxNumRetries() > 0 && retryCount > actionConf.getMaxNumRetries()) {
-      throw new StageException(Errors.HTTP_19, actionConf.getMaxNumRetries());
+      final StageException stageException = new StageException(Errors.HTTP_19, actionConf.getMaxNumRetries());
+      LOG.error(stageException.getMessage());
+      throw stageException;
     }
 
     boolean uninterrupted = true;
@@ -538,7 +569,7 @@ public class HttpClientSource extends BaseSource {
     shouldMakeRequest |= (haveMorePages && conf.pagination.mode != PaginationMode.LINK_HEADER);
     shouldMakeRequest |= now > lastRequestCompletedTime + conf.pollingInterval &&
         conf.httpMode == HttpClientMode.POLLING;
-    shouldMakeRequest |= now > lastRequestCompletedTime && conf.httpMode == HttpClientMode.STREAMING;
+    shouldMakeRequest |= now > lastRequestCompletedTime && conf.httpMode == HttpClientMode.STREAMING && conf.httpMethod != HttpMethod.HEAD;
 
     return shouldMakeRequest;
   }
@@ -553,9 +584,10 @@ public class HttpClientSource extends BaseSource {
    * @return the next source offset to commit
    * @throws StageException if an unhandled error is encountered
    */
-  private String parseResponse(long start, int maxRecords, BatchMaker batchMaker) throws StageException {
+  @VisibleForTesting
+  String parseResponse(long start, int maxRecords, BatchMaker batchMaker) throws StageException {
     HttpSourceOffset sourceOffset = new HttpSourceOffset(
-        resolvedUrl,
+        getResolvedUrl(),
         currentParameterHash,
         System.currentTimeMillis(),
         getCurrentPage()
@@ -563,7 +595,7 @@ public class HttpClientSource extends BaseSource {
     InputStream in = null;
     if (parser == null) {
       // Only get a new parser if we are done with the old one.
-      in = response.readEntity(InputStream.class);
+      in = getResponse().readEntity(InputStream.class);
       try {
         parser = parserFactory.getParser(sourceOffset.toString(), in, "0");
       } catch (DataParserException e) {
@@ -571,6 +603,7 @@ public class HttpClientSource extends BaseSource {
           LOG.warn("No data returned in HTTP response body.", e);
           return sourceOffset.toString();
         }
+        LOG.warn("Error parsing response", e);
         throw e;
       }
     }
@@ -592,7 +625,10 @@ public class HttpClientSource extends BaseSource {
           RecordEL.setRecordInContext(stopVars, record);
           haveMorePages = !stopEval.eval(stopVars, conf.pagination.stopCondition, Boolean.class);
           if (haveMorePages) {
-            next = Link.fromUri(record.get(conf.pagination.nextPageFieldPath).getValueAsString()).build();
+            final String nextPageURLPrefix = StringUtils.isNotBlank(conf.pagination.nextPageURLPrefix) ? conf.pagination.nextPageURLPrefix : "";
+            final String nextPageFieldValue = record.get(conf.pagination.nextPageFieldPath).getValueAsString();
+            final String nextPageURL = nextPageFieldValue.startsWith(nextPageURLPrefix) ? nextPageFieldValue : nextPageURLPrefix.concat(nextPageFieldValue);
+            next = Link.fromUri(nextPageURL).build();
           } else {
             next = null;
           }
@@ -610,6 +646,7 @@ public class HttpClientSource extends BaseSource {
       } while (recordCount < maxRecords && !waitTimeExpired(start));
 
     } catch (IOException e) {
+      LOG.error(Errors.HTTP_00.getMessage(), e.toString(), e);
       errorRecordHandler.onError(Errors.HTTP_00, e.toString(), e);
 
     } finally {
@@ -621,12 +658,53 @@ public class HttpClientSource extends BaseSource {
           incrementSourceOffset(sourceOffset, subRecordCount);
         }
       } catch(IOException e) {
+        LOG.warn(Errors.HTTP_28.getMessage(), e.toString(), e);
         errorRecordHandler.onError(Errors.HTTP_28, e.toString(), e);
       }
     }
 
     return sourceOffset.toString();
   }
+
+  @VisibleForTesting
+  Response getResponse() {
+    return response;
+  }
+
+  @VisibleForTesting
+  void setResponse(Response response) {
+    this.response = response;
+  }
+
+  /**
+   * Used only for HEAD requests.  Sets up a record for output based on headers only
+   * with an empty body.
+   *
+   * @param batchMaker batch to add records to.
+   * @return the next source offset to commit
+   * @throws StageException if an unhandled error is encountered
+   */
+
+  String parseHeadersOnly(BatchMaker batchMaker) throws StageException {
+    HttpSourceOffset sourceOffset = new HttpSourceOffset(
+            getResolvedUrl(),
+            currentParameterHash,
+            System.currentTimeMillis(),
+            getCurrentPage()
+    );
+
+    Record record = getContext().createRecord(sourceOffset + "::0");
+    addResponseHeaders(record.getHeader());
+    record.set(Field.create(new HashMap()));
+
+    batchMaker.addRecord(record);
+    recordCount++;
+    incrementSourceOffset(sourceOffset, 1);
+    lastRequestCompletedTime = System.currentTimeMillis();
+    return sourceOffset.toString();
+
+  }
+
 
   /**
    * Increments the current source offset's startAt portion by the specified amount.
@@ -659,16 +737,18 @@ public class HttpClientSource extends BaseSource {
       try {
         in.close();
       } catch(IOException e) {
+        LOG.warn("Error closing input stream", ex);
         ex = e;
       }
     }
 
-    response.close();
-    response = null;
+    getResponse().close();
+    setResponse(null);
 
     try {
       parser.close();
     } catch(IOException e) {
+      LOG.warn("Error closing parser", ex);
       ex = e;
     }
     parser = null;
@@ -683,7 +763,8 @@ public class HttpClientSource extends BaseSource {
    *
    * @return page number or offset
    */
-  private int getCurrentPage() {
+  @VisibleForTesting
+  int getCurrentPage() {
     // Body params take precedence, but usually only one or the other should be used.
     if (bodyVars.hasVariable(START_AT)) {
       return (int) bodyVars.getVariable(START_AT);
@@ -707,12 +788,16 @@ public class HttpClientSource extends BaseSource {
     int numSubRecords = 0;
 
     if (!record.has(conf.pagination.resultFieldPath)) {
-      throw new StageException(Errors.HTTP_12, conf.pagination.resultFieldPath);
+      final StageException stageException = new StageException(Errors.HTTP_12, conf.pagination.resultFieldPath);
+      LOG.error(stageException.getMessage());
+      throw stageException;
     }
     Field resultField = record.get(conf.pagination.resultFieldPath);
 
     if (resultField.getType() != Field.Type.LIST) {
-      throw new StageException(Errors.HTTP_08, resultField.getType());
+      final StageException stageException = new StageException(Errors.HTTP_08, resultField.getType());
+      LOG.error(stageException.getMessage());
+      throw stageException;
     }
 
     List<Field> results = resultField.getValueAsList();
@@ -740,11 +825,12 @@ public class HttpClientSource extends BaseSource {
    * @param header an SDC record header to populate
    */
   private void addResponseHeaders(Record.Header header) {
-    if (response.getStringHeaders() == null) {
+    final MultivaluedMap<String, String> headers = getResponse().getStringHeaders();
+    if (headers == null) {
       return;
     }
 
-    for (Map.Entry<String, List<String>> entry : response.getStringHeaders().entrySet()) {
+    for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
       if (!entry.getValue().isEmpty()) {
         String firstValue = entry.getValue().get(0);
         header.setAttribute(entry.getKey(), firstValue);
@@ -802,40 +888,56 @@ public class HttpClientSource extends BaseSource {
       StageException {
     Optional<String> newSourceOffset = Optional.empty();
 
-    if (response == null) {
+    if (getResponse() == null) {
       return newSourceOffset;
     }
 
     // Response was not in the OK range, so treat as an error
-    int status = response.getStatus();
+    int status = getResponse().getStatus();
     if (status < 200 || status >= 300) {
       lastRequestCompletedTime = System.currentTimeMillis();
-      String reason = response.getStatusInfo().getReasonPhrase();
-      String respString = response.readEntity(String.class);
-      response.close();
-      response = null;
+      String reason = getResponse().getStatusInfo().getReasonPhrase();
+      String respString = getResponse().readEntity(String.class);
+      getResponse().close();
+      setResponse(null);
 
-      errorRecordHandler.onError(Errors.HTTP_01, status, reason + " : " + respString);
+
+      final String errorMsg = reason + " : " + respString;
+      LOG.warn(Errors.HTTP_01.getMessage(), status, errorMsg);
+      errorRecordHandler.onError(Errors.HTTP_01, status, errorMsg);
 
       return newSourceOffset;
     }
 
     if (conf.pagination.mode == PaginationMode.LINK_HEADER) {
-      next = response.getLink("next");
+      next = getResponse().getLink("next");
       if (next == null) {
         haveMorePages = false;
       }
     }
 
 
-    if (response.hasEntity()) {
+    if (getResponse().hasEntity()) {
       newSourceOffset = Optional.of(parseResponse(start, maxRecords, batchMaker));
-    }
+    } else if (conf.httpMethod.getLabel() == "HEAD") {
+      // Handle HEAD only requests, which have no body, by creating a blank record for output with headers.
+      newSourceOffset = Optional.of(parseHeadersOnly(batchMaker));
 
+    }
     return newSourceOffset;
   }
 
   protected String nonTerminating(String sourceOffset) {
     return sourceOffset == null ? "" : sourceOffset;
+  }
+
+  @VisibleForTesting
+  String getResolvedUrl() {
+    return resolvedUrl;
+  }
+
+  @VisibleForTesting
+  void setResolvedUrl(String resolvedUrl) {
+    this.resolvedUrl = resolvedUrl;
   }
 }

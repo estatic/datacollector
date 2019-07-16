@@ -20,7 +20,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="description" content="StreamSets Data Collector">
-  <title ng-bind="common.title">StreamSets | Data Collector</title>
+  <title ng-bind="common.title"></title>
 
   <script type="text/javascript">
     function escapeHtml(str) {
@@ -237,14 +237,14 @@
             <li ng-if="isAuthorized([userRoles.admin]) && !common.remoteServerInfo.registrationStatus">
               <a href="javascript:;" ng-click="common.onEnableDPMClick()">
                 <i class="fa fa-file-text"></i>
-                <span translate="global.menu.admin.enableDPM">Enable SCH</span>
+                <span translate="global.menu.admin.enableDPM">Enable Control Hub</span>
               </a>
             </li>
 
             <li ng-if="isAuthorized([userRoles.admin]) && common.remoteServerInfo.registrationStatus">
               <a href="javascript:;" ng-click="common.onDisableDPMClick()">
                 <i class="fa fa-file-text"></i>
-                <span translate="global.menu.admin.disableDPM">Disable SCH</span>
+                <span translate="global.menu.admin.disableDPM">Disable Control Hub</span>
               </a>
             </li>
 
@@ -280,6 +280,13 @@
               <a href="javascript:;" ng-click="common.updatePermissions()">
                 <i class="fa fa-share-alt"></i>
                 <span translate="home.library.transferPermissions">Transfer Permissions</span>
+              </a>
+            </li>
+
+            <li ng-if="isAdmin">
+              <a href="javascript:;" ng-click="common.onStatOptInClick()">
+                <i class="fa fa-gear"></i>
+                <span translate="home.statsOptIn.headerLabel">Usage Statistics</span>
               </a>
             </li>
           </ul>

@@ -23,10 +23,12 @@ import com.streamsets.datacollector.el.ElFunctionDefinition;
 import com.streamsets.datacollector.runner.StageDefinitionBuilder;
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ExecutionMode;
+import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.impl.LocaleInContext;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,7 +54,7 @@ public class TestStageDefinitionLocalization {
                                      0, 0, "mode", 1,
       Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, null));
     ModelDefinition model = new ModelDefinition(ModelType.VALUE_CHOOSER, OptionsChooserValues.class.getName(),
-                                                ImmutableList.of("OPTION"), ImmutableList.of("Option"), null,  null);
+                                                ImmutableList.of("OPTION"), ImmutableList.of("Option"), null,  null, null);
     configs.add(new ConfigDefinition("c2", ConfigDef.Type.MODEL, "Config2Label", "Config2Description", "default",
                                      true, "GROUP", "c2", model, null, null, 0,
                                      Collections.<ElFunctionDefinition>emptyList(),
@@ -65,6 +67,7 @@ public class TestStageDefinitionLocalization {
         (List)ImmutableList.of(ImmutableMap.of("label", "Group", "name", "GROUP"))
     );
     StageDefinition def = new StageDefinitionBuilder(TestStageDefinitionLocalization.class.getClassLoader(), TProcessor.class, "stage")
+      .withStageDef(Mockito.mock(StageDef.class))
       .withConfig(configs)
       .withErrorStage(true)
       .withRawSourceDefintion(rawSource)

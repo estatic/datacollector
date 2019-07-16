@@ -15,8 +15,8 @@
  */
 package com.streamsets.pipeline.lib.parser.udp;
 
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
 import io.netty.buffer.ByteBuf;
 
@@ -24,9 +24,9 @@ import java.net.InetSocketAddress;
 import java.util.List;
 
 public abstract class AbstractParser {
-  protected final Stage.Context context;
+  protected final ProtoConfigurableEntity.Context context;
 
-  public AbstractParser(Stage.Context context) {
+  public AbstractParser(ProtoConfigurableEntity.Context context) {
     this.context = context;
   }
 

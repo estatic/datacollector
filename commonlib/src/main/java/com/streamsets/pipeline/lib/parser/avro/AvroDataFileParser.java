@@ -15,8 +15,8 @@
  */
 package com.streamsets.pipeline.lib.parser.avro;
 
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.lib.parser.AbstractDataParser;
 import com.streamsets.pipeline.lib.parser.DataParserException;
@@ -49,9 +49,9 @@ public class AvroDataFileParser extends AbstractDataParser {
   private long recordCount;
   private final DataFileReader<GenericRecord> dataFileReader;
   private boolean eof;
-  private Stage.Context context;
+  private ProtoConfigurableEntity.Context context;
 
-  public AvroDataFileParser(Stage.Context context, Schema schema, File file, String readerOffset, int maxObjectLength)
+  public AvroDataFileParser(ProtoConfigurableEntity.Context context, Schema schema, File file, String readerOffset, int maxObjectLength)
     throws IOException {
     this.context = context;
     this.file = file;

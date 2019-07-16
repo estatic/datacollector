@@ -16,8 +16,11 @@
 package com.streamsets.datacollector.restapi.configuration;
 
 import com.streamsets.datacollector.activation.Activation;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.bundles.SupportBundleManager;
+import com.streamsets.datacollector.event.handler.EventHandlerTask;
 import com.streamsets.datacollector.execution.Manager;
+import com.streamsets.datacollector.http.RolesAnnotationFilter;
 import com.streamsets.datacollector.main.BuildInfo;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.main.UserGroupManager;
@@ -25,6 +28,7 @@ import com.streamsets.datacollector.restapi.RestAPI;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
 import com.streamsets.datacollector.store.AclStoreTask;
 import com.streamsets.datacollector.store.PipelineStoreTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import io.swagger.jaxrs.config.BeanConfig;
 import io.swagger.jaxrs.listing.ApiListingResource;
@@ -34,7 +38,6 @@ import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.media.multipart.MultiPartFeature;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.filter.CsrfProtectionFilter;
-import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 
 import java.net.URI;
 import java.security.Principal;
@@ -53,14 +56,17 @@ public class RestAPIResourceConfig extends ResourceConfig {
         bindFactory(ConfigurationInjector.class).to(Configuration.class);
         bindFactory(RuntimeInfoInjector.class).to(RuntimeInfo.class);
         bindFactory(BuildInfoInjector.class).to(BuildInfo.class);
+        bindFactory(StatsCollectorInjector.class).to(StatsCollector.class);
         bindFactory(StandAndClusterManagerInjector.class).to(Manager.class);
         bindFactory(SupportBundleInjector.class).to(SupportBundleManager.class);
+        bindFactory(EventHandlerTaskInjector.class).to(EventHandlerTask.class);
+        bindFactory(BlobStoreTaskInjector.class).to(BlobStoreTask.class);
         bindFactory(UserGroupManagerInjector.class).to(UserGroupManager.class);
         bindFactory(ActivationInjector.class).to(Activation.class);
       }
     });
 
-    register(RolesAllowedDynamicFeature.class);
+    register(RolesAnnotationFilter.class);
     register(CsrfProtectionFilter.class);
     register(MultiPartFeature.class);
 

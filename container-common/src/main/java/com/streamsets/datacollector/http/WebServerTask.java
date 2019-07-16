@@ -26,16 +26,23 @@ import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.restapi.WebServerAgentCondition;
 import com.streamsets.datacollector.task.AbstractTask;
 import com.streamsets.datacollector.util.Configuration;
+import com.streamsets.lib.security.RegistrationResponseJson;
 import com.streamsets.lib.security.http.DisconnectedSSOManager;
 import com.streamsets.lib.security.http.DisconnectedSSOService;
 import com.streamsets.lib.security.http.FailoverSSOService;
 import com.streamsets.lib.security.http.ProxySSOService;
+import com.streamsets.lib.security.http.RegistrationResponseDelegate;
 import com.streamsets.lib.security.http.RemoteSSOService;
 import com.streamsets.lib.security.http.SSOAuthenticator;
 import com.streamsets.lib.security.http.SSOConstants;
 import com.streamsets.lib.security.http.SSOService;
 import com.streamsets.lib.security.http.SSOUtils;
 import com.streamsets.pipeline.api.impl.Utils;
+import com.streamsets.lib.security.http.LimitedMethodServer;
+import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
+import org.eclipse.jetty.http.HttpVersion;
+import org.eclipse.jetty.http2.HTTP2Cipher;
+import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
 import org.eclipse.jetty.jaas.JAASLoginService;
 import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.rewrite.handler.RewriteRegexRule;
@@ -111,7 +118,8 @@ import java.util.Set;
  * protected means authentication IS required.
  *
  */
-public abstract class WebServerTask extends AbstractTask {
+public abstract class WebServerTask extends AbstractTask implements RegistrationResponseDelegate {
+
   public static final String HTTP_BIND_HOST = "http.bindHost";
   private static final String HTTP_BIND_HOST_DEFAULT = "0.0.0.0";
 
@@ -122,6 +130,7 @@ public abstract class WebServerTask extends AbstractTask {
   private static final int HTTP_PORT_DEFAULT = 0;
 
   public static final String HTTPS_PORT_KEY = "https.port";
+  public static final String HTTP2_ENABLE_KEY = "http2.enable";
   private static final int HTTPS_PORT_DEFAULT = -1;
   public static final String HTTPS_KEYSTORE_PATH_KEY = "https.keystore.path";
   private static final String HTTPS_KEYSTORE_PATH_DEFAULT = "keystore.jks";
@@ -305,6 +314,22 @@ public abstract class WebServerTask extends AbstractTask {
     uiRewriteRule.setRegex("^/collector/.*");
     uiRewriteRule.setReplacement("/");
     handler.addRule(uiRewriteRule);
+
+    uiRewriteRule = new RewriteRegexRule();
+    uiRewriteRule.setRegex("^/sch/.*");
+    uiRewriteRule.setReplacement("/");
+    handler.addRule(uiRewriteRule);
+
+    uiRewriteRule = new RewriteRegexRule();
+    uiRewriteRule.setRegex("^/onBoarding/.*");
+    uiRewriteRule.setReplacement("/");
+    handler.addRule(uiRewriteRule);
+
+    uiRewriteRule = new RewriteRegexRule();
+    uiRewriteRule.setRegex("^/adminApp/.*");
+    uiRewriteRule.setReplacement("/");
+    handler.addRule(uiRewriteRule);
+
     handler.setHandler(appHandler);
 
     HandlerCollection handlerCollection = new HandlerCollection();
@@ -390,7 +415,7 @@ public abstract class WebServerTask extends AbstractTask {
     ConstraintSecurityHandler securityHandler;
     String auth = conf.get(AUTHENTICATION_KEY, AUTHENTICATION_DEFAULT);
     boolean isDPMEnabled = runtimeInfo.isDPMEnabled();
-    if (isDPMEnabled) {
+    if (isDPMEnabled && !runtimeInfo.isRemoteSsoDisabled()) {
       securityHandler = configureSSO(appConf, appHandler, appContext);
     } else {
       switch (auth) {
@@ -446,9 +471,25 @@ public abstract class WebServerTask extends AbstractTask {
     }
   }
 
-  RemoteSSOService createRemoteSSOService(Configuration appConf) {
+  @Override
+  public void processRegistrationResponse(RegistrationResponseJson response) {
+    LOG.info("Received registration command from Control Hub");
+
+    // Propagate new configuration
+    try {
+      if(!response.getConfiguration().isEmpty()) {
+        RuntimeInfo.storeControlHubConfigs(runtimeInfo, response.getConfiguration());
+        conf.set(response.getConfiguration());
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e.toString(), e);
+    }
+  }
+
+  protected RemoteSSOService createRemoteSSOService(Configuration appConf) {
     RemoteSSOService remoteSsoService = new RemoteSSOService();
     remoteSsoService.setConfiguration(appConf);
+    remoteSsoService.setRegistrationResponseDelegate(this);
     return remoteSsoService;
   }
 
@@ -571,6 +612,7 @@ public abstract class WebServerTask extends AbstractTask {
     return conf.get(HTTPS_PORT_KEY, HTTPS_PORT_DEFAULT) != -1 && conf.get(HTTP_PORT_KEY, HTTP_PORT_DEFAULT) != -1;
   }
 
+  @SuppressWarnings("squid:S2095")
   private Server createServer() {
     port = isSSLEnabled() ?
       conf.get(HTTPS_PORT_KEY, HTTPS_PORT_DEFAULT) :
@@ -581,7 +623,7 @@ public abstract class WebServerTask extends AbstractTask {
     QueuedThreadPool qtp = new QueuedThreadPool(conf.get(HTTP_MAX_THREADS, HTTP_MAX_THREADS_DEFAULT));
     qtp.setName(serverName);
     qtp.setDaemon(true);
-    Server server = new Server(qtp);
+    Server server = new LimitedMethodServer(qtp);
 
     httpConf = configureForwardRequestCustomizer(httpConf);
 
@@ -592,13 +634,27 @@ public abstract class WebServerTask extends AbstractTask {
       connector.setPort(addr.getPort());
       server.setConnectors(new Connector[]{connector});
     } else {
-      //Create a connector for HTTPS
-      httpConf.addCustomizer(new SecureRequestCustomizer());
+      // Create a configuration for HTTPS
+      HttpConfiguration httpsConf = new HttpConfiguration(httpConf);
+      httpsConf.addCustomizer(new SecureRequestCustomizer());
 
       SslContextFactory sslContextFactory = createSslContextFactory();
-      ServerConnector httpsConnector = new ServerConnector(server,
-                                                           new SslConnectionFactory(sslContextFactory, "http/1.1"),
-                                                           new HttpConnectionFactory(httpConf));
+      SslConnectionFactory ssl;
+      ServerConnector httpsConnector;
+
+      if (conf.get(HTTP2_ENABLE_KEY, false)) {
+        // HTTP/2 Connection Factory
+        HTTP2ServerConnectionFactory h2 = new HTTP2ServerConnectionFactory(httpsConf);
+        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
+        alpn.setDefaultProtocol("h2");
+
+        ssl = new SslConnectionFactory(sslContextFactory, alpn.getProtocol());
+        httpsConnector = new ServerConnector(server, ssl, alpn, h2, new HttpConnectionFactory(httpsConf));
+      } else {
+        ssl = new SslConnectionFactory(sslContextFactory, HttpVersion.HTTP_1_1.asString());
+        httpsConnector = new ServerConnector(server, ssl, new HttpConnectionFactory(httpsConf));
+      }
+
       httpsConnector.setPort(port);
       httpsConnector.setHost(hostname);
       server.setConnectors(new Connector[]{httpsConnector});
@@ -616,6 +672,11 @@ public abstract class WebServerTask extends AbstractTask {
     sslContextFactory.setKeyStorePath(keyStore.getPath());
     sslContextFactory.setKeyStorePassword(password);
     sslContextFactory.setKeyManagerPassword(password);
+    if (conf.get(HTTP2_ENABLE_KEY, false)) {
+      sslContextFactory.setProvider("Conscrypt");
+      sslContextFactory.setCipherComparator(HTTP2Cipher.COMPARATOR);
+      sslContextFactory.setUseCipherSuitesOrder(true);
+    }
     File trustStoreFile = getHttpsTruststore(conf, runtimeInfo.getConfigDir());
     if (trustStoreFile != null) {
       if (trustStoreFile.exists()) {
@@ -672,6 +733,7 @@ public abstract class WebServerTask extends AbstractTask {
     }
   }
 
+  @SuppressWarnings("squid:S2095")
   private Server createRedirectorServer() {
     int unsecurePort = conf.get(HTTP_PORT_KEY, HTTP_PORT_DEFAULT);
     String hostname = conf.get(HTTP_BIND_HOST, HTTP_BIND_HOST_DEFAULT);
@@ -679,7 +741,7 @@ public abstract class WebServerTask extends AbstractTask {
     QueuedThreadPool qtp = new QueuedThreadPool(25);
     qtp.setName(serverName + "Redirector");
     qtp.setDaemon(true);
-    Server server = new Server(qtp);
+    Server server = new LimitedMethodServer(qtp);
     InetSocketAddress addr = new InetSocketAddress(hostname, unsecurePort);
     ServerConnector connector = new ServerConnector(server);
     connector.setHost(addr.getHostName());
@@ -791,7 +853,9 @@ public abstract class WebServerTask extends AbstractTask {
   @Override
   protected void stopTask() {
     try {
-      server.stop();
+      if(server != null) {
+        server.stop();
+      }
     } catch (Exception ex) {
       LOG.error("Error while stopping Jetty, {}", ex.toString(), ex);
     } finally {

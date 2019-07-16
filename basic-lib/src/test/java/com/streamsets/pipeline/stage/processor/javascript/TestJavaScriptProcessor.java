@@ -26,6 +26,7 @@ import com.streamsets.pipeline.sdk.RecordCreator;
 import com.streamsets.pipeline.sdk.StageRunner;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingMode;
 import com.streamsets.pipeline.stage.processor.scripting.ScriptingProcessorTestUtil;
+import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordType;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -341,7 +342,7 @@ public class TestJavaScriptProcessor {
             "  output.write(records[i]);\n" +
             "}"
     );
-    ScriptingProcessorTestUtil.verifyPreserveTypeForNullValue(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyPreserveTypeForNullValue(JavaScriptDProcessor.class, processor);
   }
 
   @Test
@@ -356,7 +357,7 @@ public class TestJavaScriptProcessor {
             "  output.write(records[i]);\n" +
             "}"
     );
-    ScriptingProcessorTestUtil.verifyNestedMap(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyNestedMap(JavaScriptDProcessor.class, processor);
   }
 
   @Test
@@ -370,7 +371,7 @@ public class TestJavaScriptProcessor {
             "  output.write(records[i]);" +
             "}"
     );
-    ScriptingProcessorTestUtil.verifyChangedTypeFromScripting(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyChangedTypeFromScripting(JavaScriptDProcessor.class, processor);
   }
 
   @Test
@@ -427,7 +428,7 @@ public class TestJavaScriptProcessor {
         "}"
     );
 
-    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(JavaScriptProcessor.class, processor, record);
+    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(JavaScriptDProcessor.class, processor, record);
   }
 
   @Test
@@ -463,7 +464,7 @@ public class TestJavaScriptProcessor {
             "  output.write(records[i]);\n" +
             "}"
     );
-    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(JavaScriptProcessor.class, processor,record);
+    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(JavaScriptDProcessor.class, processor,record);
   }
 
   @Test
@@ -499,7 +500,7 @@ public class TestJavaScriptProcessor {
             "}"
     );
 
-    ScriptingProcessorTestUtil.verifyNullField(JavaScriptProcessor.class, processor,record);
+    ScriptingProcessorTestUtil.verifyNullField(JavaScriptDProcessor.class, processor,record);
   }
 
   @Test
@@ -522,7 +523,7 @@ public class TestJavaScriptProcessor {
         script
     );
 
-    ScriptingProcessorTestUtil.verifyCreateRecord(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyCreateRecord(JavaScriptDProcessor.class, processor);
   }
 
   @Test
@@ -531,6 +532,7 @@ public class TestJavaScriptProcessor {
     String value = "value1";
     String script = "for (var i = 0; i < records.length; i++) {\n" +
         "  records[i].attributes['" + headerKey + "'] = '" + value + "'\n" +
+        "  records[i].attributes.remove('remove')\n" +
         "  output.write(records[i])\n" +
         "}";
 
@@ -540,7 +542,22 @@ public class TestJavaScriptProcessor {
     );
 
     Record record = RecordCreator.create();
-    ScriptingProcessorTestUtil.verifyRecordHeaderAttribute(JavaScriptProcessor.class, processor, record);
+    ScriptingProcessorTestUtil.verifyRecordHeaderAttribute(JavaScriptDProcessor.class, processor, record);
+  }
+
+  @Test
+  public void testAccessSdcRecord() throws Exception {
+    String script = "for (var i = 0; i < records.length; i++) {\n" +
+        "  records[i].attributes['attr'] = records[i].sdcRecord.get('/value').getAttribute('attr')\n" +
+        "  output.write(records[i])\n" +
+        "}";
+
+    Processor processor = new JavaScriptProcessor(
+        ProcessingMode.RECORD,
+        script
+    );
+
+    ScriptingProcessorTestUtil.verifyAccessToSdcRecord(JavaScriptDProcessor.class, processor);
   }
 
   @Test
@@ -557,9 +574,11 @@ public class TestJavaScriptProcessor {
         ProcessingMode.BATCH,
         script,
         initScript,
-        destroyScript
+        destroyScript,
+        ScriptRecordType.NATIVE_OBJECTS,
+        new HashMap<>()
     );
-    ScriptingProcessorTestUtil.verifyInitDestroy(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyInitDestroy(JavaScriptDProcessor.class, processor);
   }
 
   @Test
@@ -569,7 +588,17 @@ public class TestJavaScriptProcessor {
         "  output.write(records[i]);\n" +
         "}";
     Processor processor = new JavaScriptProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyConstants(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyConstants(JavaScriptDProcessor.class, processor);
+  }
+
+  @Test
+  public void testIsPreview() throws Exception {
+    String script = "for(var i = 0; i < records.length; i++) {\n" +
+        "  records[i].value['isPreview'] = sdcFunctions.isPreview();\n" +
+        "  output.write(records[i]);\n" +
+        "}";
+    Processor processor = new JavaScriptProcessor(ProcessingMode.BATCH, script);
+    ScriptingProcessorTestUtil.verifyIsPreview(JavaScriptDProcessor.class, processor);
   }
 
   private static final String WRITE_ERROR_SCRIPT = "for(var i = 0; i < records.length; i++) { error.write(records[i], 'oops'); }";
@@ -580,7 +609,7 @@ public class TestJavaScriptProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordStopPipeline(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordStopPipeline(JavaScriptDProcessor.class, processor);
   }
 
   @Test
@@ -589,7 +618,7 @@ public class TestJavaScriptProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordDiscard(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordDiscard(JavaScriptDProcessor.class, processor);
   }
 
 
@@ -599,6 +628,45 @@ public class TestJavaScriptProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordErrorSink(JavaScriptProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordErrorSink(JavaScriptDProcessor.class, processor);
+  }
+
+  @Test
+  public void testSdcRecord() throws Exception {
+    String script = "var Field = Java.type('com.streamsets.pipeline.api.Field');\n" +
+      "for (var i = 0; i < records.length; i++) {\n" +
+      "  records[i].sdcRecord.set('/new', Field.create(Field.Type.STRING, 'new-value'));\n" +
+      "  records[i].sdcRecord.get('/old').setAttribute('attr', 'attr-value');\n" +
+      "  output.write(records[i])\n" +
+      "}";
+
+    Processor processor = new JavaScriptProcessor(
+        ProcessingMode.RECORD,
+        script,
+        "",
+        "",
+        ScriptRecordType.SDC_RECORDS,
+        new HashMap<>()
+    );
+    ScriptingProcessorTestUtil.verifySdcRecord(JavaScriptDProcessor.class, processor);
+  }
+
+  @Test
+  public void testUserParams() throws Exception {
+    String script = "for(var i = 0; i < records.length; i++) {\n" +
+        "  records[i].value['user-param-key'] = sdcUserParams['user-param-key'];\n" +
+        "  output.write(records[i]);\n" +
+        "}";
+    Map<String, String> userParams = new HashMap<>();
+    userParams.put("user-param-key", "user-param-value");
+    JavaScriptProcessor processor = new JavaScriptProcessor(
+        ProcessingMode.RECORD,
+        script,
+        "",
+        "",
+        ScriptRecordType.NATIVE_OBJECTS,
+        userParams
+     );
+    ScriptingProcessorTestUtil.verifyUserParams(JavaScriptDProcessor.class, processor);
   }
 }

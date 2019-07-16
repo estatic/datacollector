@@ -19,16 +19,19 @@ import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 @StageDef(
-    version=1,
-    label="Aggregator",
+    version=2,
+    label="Windowing Aggregator",
     description = "Aggregates data that arrives within a window of time",
     icon="aggregation.png",
     producesEvents = true,
-    onlineHelpRefUrl = "index.html#Processors/Aggregator.html#task_bd3_vvm_5bb"
+    onlineHelpRefUrl ="index.html?contextID=task_bd3_vvm_5bb",
+    flags = StageBehaviorFlags.PASSTHROUGH,
+    upgrader = AggregationProcessorUpgrader.class
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

@@ -15,6 +15,7 @@
  */
 package com.streamsets.datacollector.runner.preview;
 
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.execution.runner.common.PipelineStopReason;
 import com.streamsets.datacollector.json.ObjectMapperFactory;
@@ -29,6 +30,7 @@ import com.streamsets.datacollector.runner.Pipeline;
 import com.streamsets.datacollector.runner.PipelineRunner;
 import com.streamsets.datacollector.runner.SourceOffsetTracker;
 import com.streamsets.datacollector.runner.StageOutput;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.util.ContainerError;
 import com.streamsets.pipeline.api.Batch;
@@ -46,11 +48,22 @@ import org.junit.Test;
 import org.mockito.Mockito;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class TestPreviewRun {
   private Configuration configuration;
   private RuntimeInfo runtimeInfo;
+
+  private static class ReturnNumberSource extends BaseSource {
+    @Override
+    public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
+      Record record = getContext().createRecord("x");
+      record.set(Field.create(1));
+      batchMaker.addRecord(record);
+      return "1";
+    }
+  }
 
   @Before
   public void setUp() {
@@ -61,15 +74,7 @@ public class TestPreviewRun {
 
   @Test
   public void testPreviewRun() throws Exception {
-    MockStages.setSourceCapture(new BaseSource() {
-      @Override
-      public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
-        Record record = getContext().createRecord("x");
-        record.set(Field.create(1));
-        batchMaker.addRecord(record);
-        return "1";
-      }
-    });
+    MockStages.setSourceCapture(new ReturnNumberSource());
     MockStages.setProcessorCapture(new SingleLaneRecordProcessor() {
       @Override
       protected void process(Record record, SingleLaneBatchMaker batchMaker) throws StageException {
@@ -83,10 +88,11 @@ public class TestPreviewRun {
       }
     });
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
-    PipelineRunner runner = new PreviewPipelineRunner( "name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    PipelineRunner runner = new PreviewPipelineRunner( "name", "0", runtimeInfo, tracker, -1,
+        1, true, true, false);
     Pipeline pipeline = new MockPipelineBuilder()
-      .withPipelineConf(MockStages.createPipelineConfigurationSourceProcessorTarget())
-      .build(runner);
+        .withPipelineConf(MockStages.createPipelineConfigurationSourceProcessorTarget())
+        .build(runner);
     pipeline.init(false);
     pipeline.run();
     pipeline.destroy(false, PipelineStopReason.UNUSED);
@@ -102,16 +108,36 @@ public class TestPreviewRun {
   }
 
   @Test
-  public void testPreviewPipelineBuilder() throws Exception {
-    MockStages.setSourceCapture(new BaseSource() {
+  public void testPreviewIgnoreEmptyBatches() throws Exception {
+    MockStages.setSourceCapture(new ReturnNumberSource() {
+      int count = 0;
+
       @Override
       public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
-        Record record = getContext().createRecord("x");
-        record.set(Field.create(1));
-        batchMaker.addRecord(record);
-        return "1";
+        // Skip first few batches
+        if(count++ < 10) {
+          return "skipped";
+        }
+
+        // Otherwise return real batch
+        return super.produce(lastSourceOffset, maxBatchSize, batchMaker);
       }
     });
+    SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
+    PipelineRunner runner = new PreviewPipelineRunner( "name", "0", runtimeInfo, tracker, -1, 1, true, true, false);
+    Pipeline pipeline = new MockPipelineBuilder()
+      .withPipelineConf(MockStages.createPipelineConfigurationSourceTarget())
+      .build(runner);
+    pipeline.init(false);
+    pipeline.run();
+    pipeline.destroy(false, PipelineStopReason.UNUSED);
+    List<StageOutput> output = runner.getBatchesOutput().get(0);
+    Assert.assertEquals(1, output.get(0).getOutput().get("a").get(0).get().getValue());
+  }
+
+  @Test
+  public void testPreviewPipelineBuilder() throws Exception {
+    MockStages.setSourceCapture(new ReturnNumberSource());
     MockStages.setProcessorCapture(new SingleLaneRecordProcessor() {
       @Override
       protected void process(Record record, SingleLaneBatchMaker batchMaker) throws StageException {
@@ -120,18 +146,23 @@ public class TestPreviewRun {
       }
     });
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
-    PreviewPipelineRunner runner = new PreviewPipelineRunner( "name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    PreviewPipelineRunner runner = new PreviewPipelineRunner( "name", "0", runtimeInfo, tracker,
+        -1, 1, true, true, false);
     PipelineConfiguration pipelineConfiguration = MockStages.createPipelineConfigurationSourceProcessorTarget();
     pipelineConfiguration.getStages().remove(2);
 
     PreviewPipeline pipeline = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name",
-      "0",
-      pipelineConfiguration,
-      null,
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name",
+        "0",
+        pipelineConfiguration,
+        null,
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
     PreviewPipelineOutput previewOutput = pipeline.run();
     List<StageOutput> output = previewOutput.getBatchesOutput().get(0);
@@ -143,15 +174,7 @@ public class TestPreviewRun {
 
   @Test
   public void testPreviewPipelineBuilderWithLastStage() throws Exception {
-    MockStages.setSourceCapture(new BaseSource() {
-      @Override
-      public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
-        Record record = getContext().createRecord("x");
-        record.set(Field.create(1));
-        batchMaker.addRecord(record);
-        return "1";
-      }
-    });
+    MockStages.setSourceCapture(new ReturnNumberSource());
     MockStages.setProcessorCapture(new SingleLaneRecordProcessor() {
       @Override
       protected void process(Record record, SingleLaneBatchMaker batchMaker) throws StageException {
@@ -161,17 +184,22 @@ public class TestPreviewRun {
     });
 
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
-    PreviewPipelineRunner runner = new PreviewPipelineRunner( "name", "0",runtimeInfo, tracker, -1, 1, true, true);
+    PreviewPipelineRunner runner = new PreviewPipelineRunner( "name", "0",runtimeInfo, tracker, -1,
+        1, true, true, false);
     PipelineConfiguration pipelineConfiguration = MockStages.createPipelineConfigurationSourceProcessorTarget();
 
     PreviewPipeline pipeline = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name",
-      "0",
-      pipelineConfiguration,
-      "p",
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name",
+        "0",
+        pipelineConfiguration,
+        "p",
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
 
     PreviewPipelineOutput previewOutput = pipeline.run();
@@ -181,16 +209,21 @@ public class TestPreviewRun {
 
 
     //Complex graph
-    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1,
+        true, true, false);
     pipelineConfiguration = MockStages.createPipelineConfigurationComplexSourceProcessorTarget();
     pipeline = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name",
-      "0",
-      pipelineConfiguration,
-      "p1",
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name",
+        "0",
+        pipelineConfiguration,
+        "p1",
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
     previewOutput = pipeline.run();
     output = previewOutput.getBatchesOutput().get(0);
@@ -198,16 +231,21 @@ public class TestPreviewRun {
     Assert.assertEquals(1, output.get(0).getOutput().get("s").get(0).get().getValue());
 
 
-    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1,
+        true, true, false);
     pipelineConfiguration = MockStages.createPipelineConfigurationComplexSourceProcessorTarget();
     pipeline = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name",
-      "0",
-      pipelineConfiguration,
-      "p5",
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name",
+        "0",
+        pipelineConfiguration,
+        "p5",
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
     previewOutput = pipeline.run();
     output = previewOutput.getBatchesOutput().get(0);
@@ -215,31 +253,41 @@ public class TestPreviewRun {
     Assert.assertEquals(1, output.get(0).getOutput().get("s").get(0).get().getValue());
 
 
-    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1,
+        true, true, false);
     pipelineConfiguration = MockStages.createPipelineConfigurationComplexSourceProcessorTarget();
     pipeline = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name1",
-      "0",
-      pipelineConfiguration,
-      "p6",
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name1",
+        "0",
+        pipelineConfiguration,
+        "p6",
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
     previewOutput = pipeline.run();
     output = previewOutput.getBatchesOutput().get(0);
     Assert.assertEquals(3, output.size());
 
-    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1,
+        true, true, false);
     pipelineConfiguration = MockStages.createPipelineConfigurationComplexSourceProcessorTarget();
     pipeline = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name1",
-      "0",
-      pipelineConfiguration,
-      "t",
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name1",
+        "0",
+        pipelineConfiguration,
+        "t",
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
     previewOutput = pipeline.run();
     output = previewOutput.getBatchesOutput().get(0);
@@ -250,7 +298,7 @@ public class TestPreviewRun {
 
   @Test
   public void testIsPreview() throws Exception {
-    MockStages.setSourceCapture(new BaseSource() {
+    MockStages.setSourceCapture(new ReturnNumberSource() {
 
       @Override
       protected List<ConfigIssue> init() {
@@ -258,26 +306,26 @@ public class TestPreviewRun {
         Assert.assertTrue(getContext().isPreview());
         return issues;
       }
-
-      @Override
-      public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
-        return "X";
-      }
     });
 
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
-    PreviewPipelineRunner runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    PreviewPipelineRunner runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1,
+        1, true, true, false);
     PipelineConfiguration pipelineConfiguration = MockStages.createPipelineConfigurationSourceProcessorTarget();
     pipelineConfiguration.getStages().remove(2);
 
     PreviewPipeline pipeline = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name",
-      "0",
-      pipelineConfiguration,
-      null,
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name",
+        "0",
+        pipelineConfiguration,
+        null,
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
     PreviewPipelineOutput previewOutput = pipeline.run();
   }
@@ -285,15 +333,10 @@ public class TestPreviewRun {
   @Test
   public void testPreviewRunFailValidationConfigs() throws Exception {
 
-    MockStages.setSourceCapture(new BaseSource() {
+    MockStages.setSourceCapture(new ReturnNumberSource() {
       @Override
       public List<ConfigIssue> init(Info info, Source.Context context) {
         return Arrays.asList(context.createConfigIssue(null, null, ContainerError.CONTAINER_0000));
-      }
-
-      @Override
-      public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
-        return "1";
       }
     });
     MockStages.setProcessorCapture(new SingleLaneRecordProcessor() {
@@ -309,15 +352,20 @@ public class TestPreviewRun {
       }
     });
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
-    PipelineRunner runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    PipelineRunner runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1,
+        1, true, true, false);
     PreviewPipeline pp = new PreviewPipelineBuilder(
-      MockStages.createStageLibrary(),
-      configuration,
-      "name",
-      "0",
-      MockStages.createPipelineConfigurationSourceProcessorTarget(),
-      null,
-      Mockito.mock(LineagePublisherTask.class)
+        MockStages.createStageLibrary(),
+        configuration,
+        "name",
+        "0",
+        MockStages.createPipelineConfigurationSourceProcessorTarget(),
+        null,
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class),
+        false,
+        Collections.emptyList()
     ).build(MockStages.userContext(), runner);
     Assert.assertFalse(pp.validateConfigs().isEmpty());
   }
@@ -325,15 +373,7 @@ public class TestPreviewRun {
 
   @Test
   public void testPreviewRunOverride() throws Exception {
-    MockStages.setSourceCapture(new BaseSource() {
-      @Override
-      public String produce(String lastSourceOffset, int maxBatchSize, BatchMaker batchMaker) throws StageException {
-        Record record = getContext().createRecord("x");
-        record.set(Field.create(1));
-        batchMaker.addRecord(record);
-        return "1";
-      }
-    });
+    MockStages.setSourceCapture(new ReturnNumberSource());
     MockStages.setProcessorCapture(new SingleLaneRecordProcessor() {
       @Override
       protected void process(Record record, SingleLaneBatchMaker batchMaker) throws StageException {
@@ -349,11 +389,12 @@ public class TestPreviewRun {
     });
     PipelineConfiguration pipelineConf = MockStages.createPipelineConfigurationSourceProcessorTarget();
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
-    PipelineRunner runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1, 1, true, true);
+    PipelineRunner runner = new PreviewPipelineRunner("name", "0", runtimeInfo, tracker, -1,
+        1, true, true, false);
     Pipeline pipeline = new MockPipelineBuilder()
-      .withConfiguration(configuration)
-      .withPipelineConf(pipelineConf)
-      .build(runner);
+        .withConfiguration(configuration)
+        .withPipelineConf(pipelineConf)
+        .build(runner);
     pipeline.init(false);
     pipeline.run();
     pipeline.destroy(false, PipelineStopReason.UNUSED);
@@ -369,11 +410,12 @@ public class TestPreviewRun {
     //modifying the source output
     sourceOutput.getOutput().get(pipelineConf.getStages().get(0).getOutputLanes().get(0)).set(0, modRecord);
 
-    runner = new PreviewPipelineRunner("name", "0",runtimeInfo, tracker, -1, 1, true, true);
+    runner = new PreviewPipelineRunner("name", "0",runtimeInfo, tracker, -1, 1,
+        true, true, false);
     pipeline = new MockPipelineBuilder()
-      .withConfiguration(configuration)
-      .withPipelineConf(pipelineConf)
-      .build(runner);
+        .withConfiguration(configuration)
+        .withPipelineConf(pipelineConf)
+        .build(runner);
 
     pipeline.init(false);
     pipeline.run(Arrays.asList(sourceOutput));

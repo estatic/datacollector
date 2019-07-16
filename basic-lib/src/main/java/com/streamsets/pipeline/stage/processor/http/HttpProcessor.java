@@ -26,9 +26,9 @@ import com.streamsets.pipeline.api.el.ELEval;
 import com.streamsets.pipeline.api.el.ELVars;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.lib.el.RecordEL;
-import com.streamsets.pipeline.lib.http.HttpClientCommon;
 import com.streamsets.pipeline.lib.http.Errors;
 import com.streamsets.pipeline.lib.http.Groups;
+import com.streamsets.pipeline.lib.http.HttpClientCommon;
 import com.streamsets.pipeline.lib.http.HttpMethod;
 import com.streamsets.pipeline.lib.parser.DataParser;
 import com.streamsets.pipeline.lib.parser.DataParserException;
@@ -46,6 +46,7 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -142,6 +143,9 @@ public class HttpProcessor extends SingleLaneProcessor {
   @Override
   public void destroy() {
     httpClientCommon.destroy();
+    if(parserFactory!=null) {
+      parserFactory.destroy();
+    }
     super.destroy();
   }
 
@@ -157,6 +161,8 @@ public class HttpProcessor extends SingleLaneProcessor {
       Record record = records.next();
       String resolvedUrl = httpClientCommon.getResolvedUrl(conf.resourceUrl, record);
       WebTarget target = httpClientCommon.getClient().target(resolvedUrl);
+
+      LOG.debug("Resolved HTTP Client URL: '{}'",resolvedUrl);
 
       // If the request (headers or body) contain a known sensitive EL and we're not using https then fail the request.
       if (httpClientCommon.requestContainsSensitiveInfo(conf.headers, conf.requestBody) &&
@@ -222,9 +228,13 @@ public class HttpProcessor extends SingleLaneProcessor {
       responses.put(entry.getKey(), responseFuture);
     }
     for (Map.Entry<Record, Future<Response>> entry : responses.entrySet()) {
-      Record output = processResponse(entry.getKey(), entry.getValue(), conf.maxRequestCompletionSecs, true);
-      if (output != null) {
-        batchMaker.addRecord(output);
+      try {
+        Record output = processResponse(entry.getKey(), entry.getValue(), conf.maxRequestCompletionSecs, true);
+        if (output != null) {
+          batchMaker.addRecord(output);
+        }
+      } catch (OnRecordErrorException e) {
+        errorRecordHandler.onError(e);
       }
     }
   }
@@ -247,18 +257,19 @@ public class HttpProcessor extends SingleLaneProcessor {
       boolean failOn403
   ) throws StageException {
 
-    Response response;
+    Response response = null;
     try {
       response = responseFuture.get(maxRequestCompletionSecs, TimeUnit.SECONDS);
-      String responseBody = "";
+      InputStream responseBody = null;
       if (response.hasEntity()) {
-        responseBody = response.readEntity(String.class);
+        responseBody = response.readEntity(InputStream.class);
       }
-      response.close();
+      int responseStatus = response.getStatus();
       if (conf.client.useOAuth2 && response.getStatus() == 403 && !failOn403) {
         HttpStageUtil.getNewOAuth2Token(conf.client.oauth2, httpClientCommon.getClient());
         return null;
-      } else if (response.getStatus() < 200 || response.getStatus() >= 300) {
+      } else if (responseStatus < 200 || responseStatus >= 300) {
+        resolvedRecords.remove(record);
         throw new OnRecordErrorException(
             record,
             Errors.HTTP_01,
@@ -271,6 +282,8 @@ public class HttpProcessor extends SingleLaneProcessor {
       if (parsedResponse != null) {
         record.set(conf.outputField, parsedResponse.get());
         addResponseHeaders(record, response);
+      } else if (responseBody == null && responseStatus != 204) {
+        throw new OnRecordErrorException(record, Errors.HTTP_34);
       }
       return record;
     } catch (InterruptedException | ExecutionException e) {
@@ -279,6 +292,10 @@ public class HttpProcessor extends SingleLaneProcessor {
     } catch (TimeoutException e) {
       LOG.error("HTTP request future timed out", e.toString(), e);
       throw new OnRecordErrorException(record, Errors.HTTP_03, e.toString());
+    } finally {
+      if (response != null) {
+        response.close();
+      }
     }
   }
 
@@ -290,17 +307,24 @@ public class HttpProcessor extends SingleLaneProcessor {
    * @return an SDC record resulting from the response text
    * @throws StageException if the response could not be parsed
    */
-  private Record parseResponse(String response) throws StageException {
+  private Record parseResponse(InputStream response) throws StageException {
     Record record = null;
-    try (DataParser parser = parserFactory.getParser("", response)) {
-      // A response may only contain a single record, so we only parse it once.
-      record = parser.parse();
-      if (conf.dataFormat == DataFormat.TEXT) {
-        // Output is placed in a field "/text" so we remove it here.
-        record.set(record.get("/text"));
+    if (conf.httpMethod == HttpMethod.HEAD) {
+      // Head will have no body so can't be parsed.   Return an empty record.
+      record = getContext().createRecord("");
+      record.set(Field.create(new HashMap()));
+
+    } else if (response != null) {
+      try (DataParser parser = parserFactory.getParser("", response, "0")) {
+        // A response may only contain a single record, so we only parse it once.
+        record = parser.parse();
+        if (conf.dataFormat == DataFormat.TEXT) {
+          // Output is placed in a field "/text" so we remove it here.
+          record.set(record.get("/text"));
+        }
+      } catch (IOException | DataParserException e) {
+        errorRecordHandler.onError(Errors.HTTP_00, e.toString(), e);
       }
-    } catch (IOException | DataParserException e) {
-      errorRecordHandler.onError(Errors.HTTP_00, e.toString(), e);
     }
     return record;
   }

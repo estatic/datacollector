@@ -16,6 +16,8 @@
 package com.streamsets.datacollector.main;
 
 import com.google.common.collect.ImmutableList;
+import com.streamsets.datacollector.antennadoctor.AntennaDoctor;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.bundles.SupportBundleManager;
 import com.streamsets.datacollector.credential.CredentialStoresTask;
 import com.streamsets.datacollector.event.handler.EventHandlerTask;
@@ -26,6 +28,7 @@ import com.streamsets.datacollector.lineage.LineagePublisherTask;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
 import com.streamsets.datacollector.store.PipelineStoreTask;
 import com.streamsets.datacollector.task.CompositeTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 
 import javax.inject.Inject;
 
@@ -34,10 +37,12 @@ public class PipelineTask extends CompositeTask {
   private final Manager manager;
   private final PipelineStoreTask pipelineStoreTask;
   private final StageLibraryTask stageLibraryTask;
+  private final BlobStoreTask blobStoreTask;
   private final WebServerTask webServerTask;
   private final LineagePublisherTask lineagePublisherTask;
   private final SupportBundleManager supportBundleManager;
   private final CredentialStoresTask credentialStoresTask;
+  private final AntennaDoctor antennaDoctor;
 
   @Inject
   public PipelineTask(
@@ -48,7 +53,10 @@ public class PipelineTask extends CompositeTask {
     EventHandlerTask eventHandlerTask,
     LineagePublisherTask lineagePublisherTask,
     SupportBundleManager supportBundleManager,
-    CredentialStoresTask credentialStoresTask
+    BlobStoreTask blobStoreTask,
+    CredentialStoresTask credentialStoresTask,
+    StatsCollector statsCollectorTask,
+    AntennaDoctor antennaDoctor
   ) {
     super(
       "pipelineNode",
@@ -56,20 +64,25 @@ public class PipelineTask extends CompositeTask {
             library,
             lineagePublisherTask,
             credentialStoresTask,
+            blobStoreTask,
             store,
             webServerTask,
             manager,
             eventHandlerTask,
-            supportBundleManager
+            supportBundleManager,
+            statsCollectorTask,
+            antennaDoctor
         ),
       true);
     this.webServerTask = webServerTask;
     this.stageLibraryTask = library;
     this.pipelineStoreTask = store;
+    this.blobStoreTask = blobStoreTask;
     this.manager = manager;
     this.lineagePublisherTask = lineagePublisherTask;
     this.supportBundleManager = supportBundleManager;
     this.credentialStoresTask = credentialStoresTask;
+    this.antennaDoctor = antennaDoctor;
   }
 
   public Manager getManager() {
@@ -90,9 +103,14 @@ public class PipelineTask extends CompositeTask {
   public SupportBundleManager getSupportBundleManager() {
     return supportBundleManager;
   }
-
+  public BlobStoreTask getBlobStoreTask() {
+    return blobStoreTask;
+  }
   public CredentialStoresTask getCredentialStoresTask() {
     return credentialStoresTask;
+  }
+  public AntennaDoctor getAntennaDoctor() {
+    return antennaDoctor;
   }
 
 }

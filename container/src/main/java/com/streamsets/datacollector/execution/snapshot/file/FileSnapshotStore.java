@@ -62,10 +62,14 @@ public class FileSnapshotStore implements SnapshotStore {
   }
 
   @Override
-  public SnapshotInfo create(String user, String name, String rev, String id, String label) throws PipelineException {
+  public SnapshotInfo create(String user, String name, String rev, String id, String label, boolean failureSnapshot) throws PipelineException {
     synchronized (lockCache.getLock(name)) {
+      SnapshotInfo existingInfo = getInfo(name, rev, id);
+      if (existingInfo != null) {
+        throw new PipelineException(ContainerError.CONTAINER_0606, id, name);
+      }
       PipelineDirectoryUtil.createPipelineSnapshotDir(runtimeInfo, name, rev, id);
-      SnapshotInfo snapshotInfo = new SnapshotInfoImpl(user, id, label, name, rev, System.currentTimeMillis(), true, 0);
+      SnapshotInfo snapshotInfo = new SnapshotInfoImpl(user, id, label, name, rev, System.currentTimeMillis(), true, 0, failureSnapshot);
       persistSnapshotInfo(snapshotInfo);
       return snapshotInfo;
     }
@@ -94,7 +98,8 @@ public class FileSnapshotStore implements SnapshotStore {
             rev,
             System.currentTimeMillis(),
             false,
-            batchNumber
+            batchNumber,
+            existingInfo.isFailureSnapshot()
         );
       persistSnapshotInfo(updatedSnapshotInfo);
       return updatedSnapshotInfo;
@@ -117,7 +122,8 @@ public class FileSnapshotStore implements SnapshotStore {
               existingInfo.getRev(),
               existingInfo.getTimeStamp(),
               existingInfo.isInProgress(),
-              existingInfo.getBatchNumber()
+              existingInfo.getBatchNumber(),
+              existingInfo.isFailureSnapshot()
           );
       persistSnapshotInfo(updatedSnapshotInfo);
       return updatedSnapshotInfo;

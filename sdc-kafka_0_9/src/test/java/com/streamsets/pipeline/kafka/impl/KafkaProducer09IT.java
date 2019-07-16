@@ -21,9 +21,7 @@ import com.streamsets.pipeline.kafka.api.PartitionStrategy;
 import com.streamsets.pipeline.kafka.api.ProducerFactorySettings;
 import com.streamsets.pipeline.kafka.api.SdcKafkaProducer;
 import com.streamsets.pipeline.kafka.api.SdcKafkaProducerFactory;
-import com.streamsets.pipeline.kafka.common.SdcKafkaTestUtil;
 import com.streamsets.pipeline.lib.kafka.KafkaConstants;
-import com.streamsets.pipeline.kafka.common.SdcKafkaTestUtilFactory;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
 import com.streamsets.testing.NetworkUtils;
 import kafka.admin.AdminUtils;
@@ -66,7 +64,6 @@ public class KafkaProducer09IT {
   private static KafkaServer kafkaServer = null;
   private static String[] topics = new String[4];
   private int topicIndex = 0;
-  private static final SdcKafkaTestUtil sdcKafkaTestUtil = SdcKafkaTestUtilFactory.getInstance().create();
 
   @BeforeClass
   public static void setUpClass() throws Exception {
@@ -124,7 +121,7 @@ public class KafkaProducer09IT {
     SdcKafkaProducer sdcKafkaProducer = createSdcKafkaProducer(port, kafkaProducerConfigs);
     sdcKafkaProducer.init();
     sdcKafkaProducer.enqueueMessage(topic, message.getBytes(), "0");
-    sdcKafkaProducer.write();
+    sdcKafkaProducer.write(null);
 
     verify(topic, 1, "localhost:" + port, message);
   }
@@ -145,7 +142,7 @@ public class KafkaProducer09IT {
     String topic = getNextTopic();
     sdcKafkaProducer.enqueueMessage(topic, message.getBytes(), "0");
     try {
-      sdcKafkaProducer.write();
+      sdcKafkaProducer.write(null);
       fail("Expected exception but didn't get any");
     } catch (StageException se) {
       assertEquals(KafkaErrors.KAFKA_69, se.getErrorCode());
@@ -168,7 +165,7 @@ public class KafkaProducer09IT {
     sdcKafkaProducer.init();
     String topic = getNextTopic();
     sdcKafkaProducer.enqueueMessage(topic, message.getBytes(), "0");
-    sdcKafkaProducer.write();
+    sdcKafkaProducer.write(null);
 
     kafkaServer.shutdown();
 
@@ -176,7 +173,7 @@ public class KafkaProducer09IT {
     sdcKafkaProducer.enqueueMessage(topic, "Hello".getBytes(), "0");
 
     try {
-      sdcKafkaProducer.write();
+      sdcKafkaProducer.write(null);
       Assert.fail("Expected KafkaConnectionException");
     } catch (StageException e) {
       Assert.assertEquals(KafkaErrors.KAFKA_50, e.getErrorCode());
@@ -218,7 +215,8 @@ public class KafkaProducer09IT {
       kafkaConfigs,
       PartitionStrategy.DEFAULT,
       "localhost:" + port,
-      DataFormat.JSON
+      DataFormat.JSON,
+      false
     );
     SdcKafkaProducerFactory sdcKafkaProducerFactory = SdcKafkaProducerFactory.create(settings);
     return sdcKafkaProducerFactory.create();

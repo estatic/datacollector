@@ -20,15 +20,17 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.FieldSelectorModel;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 @StageDef(
     version = 1,
     label = "Base64 Field Encoder",
     icon = "base64encoder.png",
     description = "Encodes a Byte Array field into a Base64 encoded Byte Array",
-    onlineHelpRefUrl = "index.html#Processors/Base64Encoder.html#task_ekg_ppy_kv"
+    flags = StageBehaviorFlags.PURE_FUNCTION,
+    onlineHelpRefUrl ="index.html?contextID=task_ekg_ppy_kv"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

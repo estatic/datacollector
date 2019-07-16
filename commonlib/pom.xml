@@ -23,26 +23,25 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <artifactId>streamsets-datacollector-commonlib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector CommonLib</description>
   <name>StreamSets Data Collector CommonLib</name>
   <packaging>jar</packaging>
 
   <properties>
-    <avro.version>1.7.7</avro.version>
-    <commons-compress.version>1.10</commons-compress.version>
     <commons-codec.version>1.9</commons-codec.version>
-    <commons-csv.version>1.5</commons-csv.version>
+    <commons-csv.version>1.7</commons-csv.version>
     <commons-io.version>2.4</commons-io.version>
     <xz.version>1.5</xz.version>
     <snappy.version>0.4</snappy.version>
     <joda.version>2.8</joda.version>
     <commons-pool2.version>2.4.2</commons-pool2.version>
     <xerces.version>2.11.0</xerces.version>
+    <poi.version>3.17</poi.version>
   </properties>
 
   <dependencies>
@@ -50,6 +49,16 @@
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-api</artifactId>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-stagesupport</artifactId>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-guavasupport</artifactId>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>com.streamsets</groupId>
@@ -124,7 +133,6 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
-      <version>${commons-compress.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -169,7 +177,6 @@
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-pool2</artifactId>
@@ -183,11 +190,41 @@
       <version>${xerces.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi</artifactId>
+      <version>${poi.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>${poi.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.nifi</groupId>
+      <artifactId>nifi-flowfile-packager</artifactId>
+      <version>1.9.2</version>
+    </dependency>
+
     <!-- Test Dependencies -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>${jackson.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-stagesupport</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-guavasupport</artifactId>
+      <type>test-jar</type>
       <scope>test</scope>
     </dependency>
     <dependency>

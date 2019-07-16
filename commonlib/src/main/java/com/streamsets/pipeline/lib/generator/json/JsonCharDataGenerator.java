@@ -16,8 +16,8 @@
 package com.streamsets.pipeline.lib.generator.json;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.ext.ContextExtensions;
 import com.streamsets.pipeline.api.ext.JsonRecordWriter;
 import com.streamsets.pipeline.api.ext.json.Mode;
@@ -32,7 +32,7 @@ public class JsonCharDataGenerator implements DataGenerator {
   private final JsonRecordWriter recordWriter;
   private final Mode mode;
 
-  public JsonCharDataGenerator(Stage.Context context, Writer writer, Mode mode) throws IOException {
+  public JsonCharDataGenerator(ProtoConfigurableEntity.Context context, Writer writer, Mode mode) throws IOException {
     this.mode = mode;
     ContextExtensions ext = ((ContextExtensions) context);
     recordWriter = ext.createJsonRecordWriter(writer, mode);

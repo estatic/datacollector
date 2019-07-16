@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-sdk</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector SDK</description>
   <name>StreamSets Data Collector SDK</name>
   <packaging>jar</packaging>
@@ -38,6 +38,11 @@
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-api</artifactId>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-upgrader</artifactId>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>log4j</groupId>
@@ -62,6 +67,11 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-guavasupport</artifactId>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -255,6 +265,10 @@
                   <shadedPattern>_ss_com.codahale.metrics.json</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>com.codahale.metrics.jmx</pattern>
+                  <shadedPattern>_ss_com.codahale.metrics.jmx</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>com.streamsets</pattern>
                   <shadedPattern>_ss_com.streamsets</shadedPattern>
                   <excludes>
@@ -268,10 +282,24 @@
                     <exclude>com.streamsets.pipeline.api.lineage.*</exclude>
                     <exclude>com.streamsets.pipeline.api.impl.*</exclude>
                     <exclude>com.streamsets.pipeline.api.impl.annotationsprocessor.*</exclude>
+                    <exclude>com.streamsets.pipeline.api.service.*</exclude>
+                    <exclude>com.streamsets.pipeline.api.service.dataformats.*</exclude>
                     <exclude>com.streamsets.pipeline.sdk.*</exclude>
+                    <exclude>com.streamsets.pipeline.sdk.service.*</exclude>
                   </excludes>
                 </relocation>
               </relocations>
+              <filters>
+                <!-- Must exclude signatures from signed jars when shading or they will fail verification -->
+                <filter>
+                  <artifact>org.conscrypt:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.DontIncludeResourceTransformer">
                   <resource>META-INF/services/com.fasterxml.jackson.core.ObjectCodec</resource>

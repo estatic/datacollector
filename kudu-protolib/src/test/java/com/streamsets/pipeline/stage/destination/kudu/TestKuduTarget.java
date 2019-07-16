@@ -97,7 +97,7 @@ public class TestKuduTarget {
     final Schema schema = new Schema(columns);
 
     // Mock KuduTable class
-    KuduTable table = PowerMockito.spy(PowerMockito.mock(KuduTable.class));
+    KuduTable table = PowerMockito.mock(KuduTable.class);
     PowerMockito.stub(
         PowerMockito.method(KuduClient.class, "openTable"))
         .toReturn(table);
@@ -106,7 +106,7 @@ public class TestKuduTarget {
     PowerMockito.when(table.getSchema()).thenReturn(schema);
 
     // Mock Operation object behavior
-    Insert insert = PowerMockito.spy(PowerMockito.mock(Insert.class));
+    Insert insert = PowerMockito.mock(Insert.class);
     PowerMockito.when(table.newInsert()).thenReturn(insert);
     PowerMockito.when(insert.getRow()).thenReturn(PowerMockito.mock(PartialRow.class));
 
@@ -124,12 +124,20 @@ public class TestKuduTarget {
 
   @Test
   public void testConnectionFailure() throws Exception{
-    // Mock connection refused
-    PowerMockito.stub(
-        PowerMockito.method(KuduClient.class, "getTablesList"))
-        .toThrow(PowerMockito.mock(KuduException.class));
+    final KuduClient client = PowerMockito.mock(KuduClient.class);
+    PowerMockito.when(client.getTablesList()).thenThrow(PowerMockito.mock(KuduException.class));
 
-    TargetRunner targetRunner = setTargetRunner(tableName, KuduOperationType.INSERT, UnsupportedOperationAction.DISCARD);
+    final KuduTarget target = PowerMockito.spy(new KuduTarget(new KuduConfigBeanBuilder()
+        .setMaster(KUDU_MASTER)
+        .setTableName(tableName)
+        .setDefaultOperation(KuduOperationType.INSERT)
+        .setUnsupportedAction(UnsupportedOperationAction.DISCARD)
+        .build()
+    ));
+
+    PowerMockito.when(target.buildKuduClient()).thenReturn(client);
+
+    final TargetRunner targetRunner = getTargetRunner(target);
 
     try {
       List<Stage.ConfigIssue> issues = targetRunner.runValidateConfigs();
@@ -146,7 +154,7 @@ public class TestKuduTarget {
    */
   @Test
   public void testTableExistsNoEL() throws Exception{
-    TargetRunner targetRunner = setTargetRunner(tableName, KuduOperationType.INSERT, UnsupportedOperationAction.DISCARD);
+    TargetRunner targetRunner = getTargetRunner(tableName, KuduOperationType.INSERT, UnsupportedOperationAction.DISCARD);
 
     try {
       List<Stage.ConfigIssue> issues = targetRunner.runValidateConfigs();
@@ -166,7 +174,7 @@ public class TestKuduTarget {
     // Mock table doesn't exist in Kudu.
     PowerMockito.stub(PowerMockito.method(KuduClient.class, "tableExists")).toReturn(false);
 
-    TargetRunner targetRunner = setTargetRunner(tableName, KuduOperationType.INSERT, UnsupportedOperationAction.DISCARD);
+    TargetRunner targetRunner = getTargetRunner(tableName, KuduOperationType.INSERT, UnsupportedOperationAction.DISCARD);
 
     try {
       List<Stage.ConfigIssue> issues = targetRunner.runValidateConfigs();
@@ -183,7 +191,7 @@ public class TestKuduTarget {
    */
   @Test
   public void testTableExistWithEL() throws Exception{
-    TargetRunner targetRunner = setTargetRunner(
+    TargetRunner targetRunner = getTargetRunner(
         "${record:attribute('tableName')}",
         KuduOperationType.INSERT,
         UnsupportedOperationAction.DISCARD
@@ -208,12 +216,38 @@ public class TestKuduTarget {
   }
 
   /**
+   * Ensure that if given field is null and column doesn't support that, the record will
+   * end up in error stream rather then terminating whole pipeline execution.
+   */
+  @Test
+  public void testNullColumnWillEndInError() throws Exception{
+    TargetRunner targetRunner = getTargetRunner(tableName, KuduOperationType.INSERT, UnsupportedOperationAction.SEND_TO_ERROR);
+    targetRunner.runInit();
+
+    Record record =  RecordCreator.create();
+    LinkedHashMap<String, Field> field = new LinkedHashMap<>();
+    field.put("key", Field.create(1));
+    field.put("value", Field.create(Field.Type.STRING, null));
+    field.put("name", Field.create(Field.Type.STRING, null));
+    record.set(Field.createListMap(field));
+
+    try {
+      targetRunner.runWrite(ImmutableList.of(record));
+
+      List<Record> errors = targetRunner.getErrorRecords();
+      Assert.assertEquals(1, errors.size());
+    } finally {
+      targetRunner.runDestroy();
+    }
+  }
+
+  /**
    * Checks that a LineageEvent is returned.
    * @throws Exception
    */
   @Test
   public void testLineageEvent() throws Exception{
-    TargetRunner targetRunner = setTargetRunner(
+    TargetRunner targetRunner = getTargetRunner(
         "${record:attribute('tableName')}",
         KuduOperationType.INSERT,
         UnsupportedOperationAction.DISCARD
@@ -254,7 +288,7 @@ public class TestKuduTarget {
     // Mock KuduClient.openTable() to throw KuduException
     PowerMockito.stub(PowerMockito.method(KuduClient.class, "openTable")).toThrow(PowerMockito.mock(KuduException.class));
 
-    TargetRunner targetRunner = setTargetRunner(
+    TargetRunner targetRunner = getTargetRunner(
         "${record:attribute('tableName')}",
         KuduOperationType.INSERT,
         UnsupportedOperationAction.DISCARD
@@ -286,7 +320,7 @@ public class TestKuduTarget {
    */
   @Test
   public void testInvalidOperationInHeaderDiscard() throws Exception {
-    TargetRunner targetRunner = setTargetRunner(
+    TargetRunner targetRunner = getTargetRunner(
         tableName,
         KuduOperationType.INSERT,
         UnsupportedOperationAction.DISCARD
@@ -313,7 +347,7 @@ public class TestKuduTarget {
   @Test
   public void testInvalidOperationInHeaderSendError() throws Exception {
 
-    TargetRunner targetRunner = setTargetRunner(
+    TargetRunner targetRunner = getTargetRunner(
         tableName,
         KuduOperationType.INSERT,
         UnsupportedOperationAction.SEND_TO_ERROR
@@ -340,7 +374,7 @@ public class TestKuduTarget {
   @Test
   public void testInvalidOperationInHeaderUseDefault() throws Exception {
 
-    TargetRunner targetRunner = setTargetRunner(
+    TargetRunner targetRunner = getTargetRunner(
         tableName,
         KuduOperationType.INSERT,
         UnsupportedOperationAction.USE_DEFAULT
@@ -368,7 +402,7 @@ public class TestKuduTarget {
   @Test
   public void testUnsupportedOperationInRecordHeader() throws Exception {
 
-    TargetRunner targetRunner = setTargetRunner(
+    TargetRunner targetRunner = getTargetRunner(
         tableName,
         KuduOperationType.INSERT,
         UnsupportedOperationAction.DISCARD
@@ -396,7 +430,7 @@ public class TestKuduTarget {
   }
 
 
-  private TargetRunner setTargetRunner(String tableName,
+  private TargetRunner getTargetRunner(String tableName,
                                        KuduOperationType defaultOperation,
                                        UnsupportedOperationAction action)
   {
@@ -407,6 +441,10 @@ public class TestKuduTarget {
         .setUnsupportedAction(action)
         .build());
 
+    return getTargetRunner(target);
+  }
+
+  private TargetRunner getTargetRunner(KuduTarget target) {
     return new TargetRunner.Builder(KuduDTarget.class, target)
         .setOnRecordError(OnRecordError.TO_ERROR)
         .build();

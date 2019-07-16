@@ -22,7 +22,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSourceOffsetCommitter;
+import com.streamsets.pipeline.api.base.configurablestage.DSourceOffsetCommitter;
 import com.streamsets.pipeline.lib.rabbitmq.config.Groups;
 
 @StageDef(
@@ -33,7 +33,8 @@ import com.streamsets.pipeline.lib.rabbitmq.config.Groups;
     execution = ExecutionMode.STANDALONE,
     recordsByRef = true,
     upgrader = RabbitSourceUpgrader.class,
-    onlineHelpRefUrl = "index.html#Origins/RabbitMQ.html#task_hrz_mq1_h5"
+    upgraderDef = "upgrader/RabbitDSource.yaml",
+    onlineHelpRefUrl ="index.html?contextID=task_hrz_mq1_h5"
 )
 @ConfigGroups(value = Groups.class)
 @HideConfigs(value = {"conf.dataFormatConfig.compression"})

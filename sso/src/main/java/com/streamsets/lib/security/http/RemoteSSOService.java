@@ -16,8 +16,8 @@
 package com.streamsets.lib.security.http;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 import com.streamsets.datacollector.util.Configuration;
+import com.streamsets.lib.security.RegistrationResponseJson;
 import com.streamsets.pipeline.api.impl.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +32,17 @@ public class RemoteSSOService extends AbstractSSOService {
   private static final Logger LOG = LoggerFactory.getLogger(RemoteSSOService.class);
 
   public static final String DPM_BASE_URL_CONFIG = "dpm.base.url";
+  public static final String DPM_APP_SECURITY_URL_CONFIG = "dpm.app.security.url";
   public static final String DPM_BASE_URL_DEFAULT = "http://localhost:18631";
 
   public static final String SECURITY_SERVICE_APP_AUTH_TOKEN_CONFIG = CONFIG_PREFIX + "appAuthToken";
   public static final String SECURITY_SERVICE_COMPONENT_ID_CONFIG = CONFIG_PREFIX + "componentId";
   public static final String SECURITY_SERVICE_CONNECTION_TIMEOUT_CONFIG = CONFIG_PREFIX + "connectionTimeout.millis";
+  public static final String SECURITY_SERVICE_REMOTE_SSO_DISABLED_CONFIG = CONFIG_PREFIX + "remoteSso.disabled";
+  public static final boolean SECURITY_SERVICE_REMOTE_SSO_DISABLED_DEFAULT = false;
   public static final String DPM_DEPLOYMENT_ID = "dpm.remote.deployment.id";
+  public static final boolean DPM_USER_ALIAS_NAME_ENABLED_DEFAULT = false;
+  public static final String DPM_USER_ALIAS_NAME_ENABLED = CONFIG_PREFIX + "alias.name.enabled";
 
   public static final int DEFAULT_SECURITY_SERVICE_CONNECTION_TIMEOUT = 10000;
   public static final String DPM_ENABLED = CONFIG_PREFIX + "enabled";
@@ -57,8 +62,13 @@ public class RemoteSSOService extends AbstractSSOService {
   @Override
   public void setConfiguration(Configuration conf) {
     super.setConfiguration(conf);
-    String dpmBaseUrl = getValidURL(conf.get(DPM_BASE_URL_CONFIG, DPM_BASE_URL_DEFAULT));
-    String baseUrl = dpmBaseUrl + "security";
+    String securityAppUrl = conf.get(DPM_APP_SECURITY_URL_CONFIG, null);
+    if (securityAppUrl == null || securityAppUrl.isEmpty()) {
+      securityAppUrl = conf.get(DPM_BASE_URL_CONFIG, DPM_BASE_URL_DEFAULT);
+      LOG.debug("Security App URL was NULL and has been set to dpm.base.url: {}", securityAppUrl);
+    }
+    securityAppUrl = getValidURL(securityAppUrl);
+    String baseUrl = securityAppUrl + "security";
 
     Utils.checkArgument(
         baseUrl.toLowerCase().startsWith("http:") || baseUrl.toLowerCase().startsWith("https:"),
@@ -67,8 +77,9 @@ public class RemoteSSOService extends AbstractSSOService {
     if (baseUrl.toLowerCase().startsWith("http://")) {
       LOG.warn("Security service base URL is not secure '{}'", baseUrl);
     }
-    setLoginPageUrl(baseUrl + "/login");
-    setLogoutUrl(baseUrl + "/_logout");
+    final String externalUrl = getValidURL(conf.get(DPM_BASE_URL_CONFIG, DPM_BASE_URL_DEFAULT)) + "security";
+    setLoginPageUrl(externalUrl + "/login");
+    setLogoutUrl(externalUrl + "/_logout");
 
     componentId = conf.get(SECURITY_SERVICE_COMPONENT_ID_CONFIG, null);
     appToken = conf.get(SECURITY_SERVICE_APP_AUTH_TOKEN_CONFIG, null);
@@ -124,7 +135,7 @@ public class RemoteSSOService extends AbstractSSOService {
     connTimeout = (timeout == null) ? connTimeout: Integer.parseInt(timeout);
   }
 
-  boolean checkServiceActive() {
+  protected boolean checkServiceActive() {
     boolean active;
     try {
       URL url = new URL(getLoginPageUrl());
@@ -188,12 +199,14 @@ public class RemoteSSOService extends AbstractSSOService {
           RestClient.Response response = restClient.post(registrationData);
           if (response.getStatus() == HttpURLConnection.HTTP_OK) {
             updateConnectionTimeout(response);
+            processRegistrationResponse(response);
             LOG.info("Registered with DPM");
             registered = true;
             break;
           } else if (response.getStatus() == HttpURLConnection.HTTP_UNAVAILABLE) {
             LOG.warn("DPM Registration unavailable");
-          }  else if (response.getStatus() == HttpURLConnection.HTTP_FORBIDDEN) {
+          } else if (response.getStatus() == HttpURLConnection.HTTP_FORBIDDEN ||
+              response.getStatus() == HttpURLConnection.HTTP_BAD_REQUEST) {
             throw new RuntimeException(Utils.format(
                 "Failed registration for component ID '{}': {}",
                 componentId,
@@ -213,6 +226,18 @@ public class RemoteSSOService extends AbstractSSOService {
       } else {
         LOG.warn("DPM registration failed after '{}' attempts", attempts);
       }
+    }
+  }
+
+  private void processRegistrationResponse(RestClient.Response response) throws IOException {
+    if(!response.haveData()) {
+      LOG.debug("Received empty registration response from Control Hub");
+      return;
+    }
+
+    if(registrationResponseDelegate != null) {
+      RegistrationResponseJson registrationResponse = response.getData(RegistrationResponseJson.class);
+      registrationResponseDelegate.processRegistrationResponse(registrationResponse);
     }
   }
 

@@ -15,49 +15,78 @@
  */
 package com.streamsets.datacollector.runner;
 
-import com.google.common.base.Preconditions;
-import com.streamsets.datacollector.validation.Issue;
-import com.streamsets.pipeline.api.ErrorCode;
+import com.codahale.metrics.MetricRegistry;
+import com.streamsets.datacollector.email.EmailSender;
+import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.pipeline.api.service.Service;
 
-public class ServiceContext implements Service.Context {
+import java.util.Map;
 
-  private final String stageName;
-  private final String serviceName;
+public class ServiceContext extends ProtoContext implements Service.Context {
 
+  // Production Run
   public ServiceContext(
+      Configuration configuration,
+      Map<String, Object> constants,
+      EmailSender emailSender,
+      MetricRegistry metrics,
+      String pipelineId,
+      String rev,
+      int runnerId,
       String stageName,
-      String serviceName
+      ServiceRuntime serviceRuntime,
+      String serviceName,
+      String resourceDir
   ) {
-    this.stageName = stageName;
-    this.serviceName = serviceName;
+    super(
+      configuration,
+      getConfigToElDefMap(serviceRuntime.getServiceBean().getDefinition().getConfigDefinitions()),
+      constants,
+      emailSender,
+      metrics,
+      pipelineId,
+      rev,
+      runnerId,
+      stageName,
+      null,
+      serviceName,
+      resourceDir,
+      null,
+      null,
+      null
+    );
   }
 
-  private static class ConfigIssueImpl extends Issue implements Service.ConfigIssue {
-    public ConfigIssueImpl(
-        String stageName,
-        String serviceName,
-        String configGroup,
-        String configName,
-        ErrorCode errorCode,
-        Object... args
-    ) {
-      super(stageName, serviceName, configGroup, configName, errorCode, args);
-    }
-  }
-
-  private static final Object[] NULL_ONE_ARG = {null};
-
-  @Override
-  public Service.ConfigIssue createConfigIssue(
-    String configGroup,
-    String configName,
-    ErrorCode errorCode,
-    Object... args
+  // SDK
+  public ServiceContext(
+      Configuration configuration,
+      Map<String, Class<?>[]> configToElDefMap,
+      Map<String, Object> constants,
+      EmailSender emailSender,
+      MetricRegistry metrics,
+      String pipelineId,
+      String rev,
+      int runnerId,
+      String stageName,
+      String serviceName,
+      String resourceDir
   ) {
-    Preconditions.checkNotNull(errorCode, "errorCode cannot be null");
-    args = (args != null) ? args.clone() : NULL_ONE_ARG;
-    return new ConfigIssueImpl(stageName, serviceName, configGroup, configName, errorCode, args);
+    super(
+      configuration,
+      configToElDefMap,
+      constants,
+      emailSender,
+      metrics,
+      pipelineId,
+      rev,
+      runnerId,
+      stageName,
+      null,
+      serviceName,
+      resourceDir,
+      null,
+      null,
+      null
+    );
   }
-
 }

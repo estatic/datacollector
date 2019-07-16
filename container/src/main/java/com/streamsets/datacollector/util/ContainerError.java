@@ -28,7 +28,6 @@ public enum ContainerError implements ErrorCode {
 
   // StageContext
   CONTAINER_0001("{}"),
-  CONTAINER_0002("{}"),
 
   CONTAINER_0010("Stage configuration validation error: {}"),
   CONTAINER_0011("Pipeline memory consumption {} MB exceeded allowed memory {} MB. Largest consumer is {} at {} MB. " +
@@ -71,7 +70,7 @@ public enum ContainerError implements ErrorCode {
   CONTAINER_0155("Instance '{}' required fields configuration must be a list instead of a '{}'"),
   CONTAINER_0156("Invalid instance '{}'"),
   CONTAINER_0157("Cannot do a preview stage run on an origin, instance '{}'"),
-  CONTAINER_0158("Cannot run the pipeline: {}"),
+  CONTAINER_0158("Cannot run the pipeline due to validation issues ({} issues)"),
   CONTAINER_0159("Cannot perform raw source preview because pipeline '{}' is empty"),
   CONTAINER_0160("Cannot perform raw source preview until the following required parameters are configured: '{}'"),
   CONTAINER_0161("Stage '{}', instance '{}', variable '{}', configuration injection error: Value List has non-string elements"),
@@ -80,6 +79,7 @@ public enum ContainerError implements ErrorCode {
   CONTAINER_0164("Stage '{}', instance '{}', variable '{}', configuration injection error: Value Map as List has non-string elements"),
   CONTAINER_0165("Stage configuration validation issues: {}"),
   CONTAINER_0166("Cannot start pipeline '{}' as there are not enough threads available. The runner.thread.pool.size property in the Data Collector configuration file, $SDC_CONF/sdc.properties, determines the number of threads in the pool that are available to run pipelines."),
+  CONTAINER_0167("Cannot preview pipeline with test origin '{}' as it doesn't support events."),
 
   //PipelineStore
   CONTAINER_0200("Pipeline '{}' does not exist"),
@@ -97,6 +97,7 @@ public enum ContainerError implements ErrorCode {
   CONTAINER_0212("Cannot save state of pipeline '{}::{}' in execution mode: '{}' as there is already an existing"
     + "pipeline '{}::{}'"),
   CONTAINER_0213("Could not retrieve pipelines from Pipeline Store. See stacktrace for additional details: '{}'"),
+  CONTAINER_0214("Can't store new pipeline state: {}"),
 
   //Previewr
   CONTAINER_0250("Cannot create previewer: '{}'"),
@@ -122,6 +123,7 @@ public enum ContainerError implements ErrorCode {
   CONTAINER_0603("Error persisting snapshot '{}' for pipeline with name '{}' and revision '{}' : '{}'"),
   CONTAINER_0604("Error retrieving snapshot info '{}' for pipeline with name '{}' and revision '{}' : '{}'"),
   CONTAINER_0605("Snapshot must be created before saving"),
+  CONTAINER_0606("Snapshot {} for pipeline {} already exists"),
 
   CONTAINER_0700("Error stage initialization error: {}"),
   CONTAINER_0701("Stage '{}' initialization error: {}"),
@@ -136,7 +138,7 @@ public enum ContainerError implements ErrorCode {
   CONTAINER_0792("Pipeline lifecycle event stage generated error record: {}"),
 
   //Runner
-  CONTAINER_0800("Pipeline '{}' validation error : {}"),
+  CONTAINER_0800("Can't start pipeline due {} validation error(s). First one: {}"),
   CONTAINER_0801("Thread unexpectedly interrupted"),
   CONTAINER_0802("Detected run away pipeline runners (only {} out of {} runners have finished)"),
   CONTAINER_0803("Trying to acquire pipeline runner after the pool was destroyed."),
@@ -144,7 +146,9 @@ public enum ContainerError implements ErrorCode {
   //PipelineConfigurationUpgrader
   CONTAINER_0900("Error while upgrading stage configuration from version '{}' to version '{}': {}"),
   CONTAINER_0901("Could not find stage definition for '{}:{}'"),
-  CONTAINER_0902("Stage definition '{}:{}' version '{}' is older than the version specified in the configuration '{}' for stage '{}'"),
+  CONTAINER_0902("Definition requires at least version {} which is higher then available library supports ({})"),
+  CONTAINER_0903("Could not find service definition for '{}'"),
+  CONTAINER_0904("Service Upgrader can't register another service."),
 
   //Email Notifier
   CONTAINER_01000("Error loading email template, reason : {}"),
@@ -158,9 +162,6 @@ public enum ContainerError implements ErrorCode {
   CONTAINER_01200("{} '{}' doesn't have permissions {} on pipeline {}"),
   CONTAINER_01201("Only owner of the pipeline {} or admin is allowed to updated the ACL information"),
 
-  // misc
-  CONTAINER_01300("Environment variable 'STREAMSETS_LIBRARIES_EXTRA_DIR' is not set"),
-  CONTAINER_01301("Invalid library name '{}'"),
 
   //LineageEvent problems:
   CONTAINER_01401("Cannot create framework-level event '{}' in a stage"),
@@ -171,8 +172,13 @@ public enum ContainerError implements ErrorCode {
   CONTAINER_01500("Stage '{}' configuration '{}', EL must resolve to String or to a CredentialValue resolved to '{}'"),
 
 
-  CONTAINER_01600("Download executable not supported for pipeline execution mode: '{}'"),
+  CONTAINER_01600("Not supported for pipeline execution mode: '{}'"),
   CONTAINER_01601("Start operation is not supported for pipeline '{}' with execution mode: '{}'"),
+  CONTAINER_01602("Data Collector cannot connect to Data Collector Edge URL '{}'. Verify that Data Collector Edge is " +
+      "running and that the URL is correctly configured in the pipeline general properties."),
+  CONTAINER_01603("Starting Edge pipeline failed, status code '{}': {}"),
+  CONTAINER_01604("Reset Offset for Edge pipeline failed, status code '{}': {}"),
+  CONTAINER_01605("Publishing Edge pipeline failed, status code '{}': {}"),
   ;
 
   private final String msg;

@@ -19,12 +19,13 @@ import com.streamsets.pipeline.api.ErrorStage;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.config.DataFormat;
 
 @StageDef(
-    version = 2,
+    version = 4,
     label = "Write to MQTT",
     description = "Writes error records to MQTT broker",
     icon = "mqtt.png",
@@ -33,9 +34,11 @@ import com.streamsets.pipeline.config.DataFormat;
         ExecutionMode.CLUSTER_BATCH,
         ExecutionMode.CLUSTER_YARN_STREAMING,
         ExecutionMode.CLUSTER_MESOS_STREAMING,
-        ExecutionMode.EDGE
+        ExecutionMode.EDGE,
+        ExecutionMode.EMR_BATCH
+
     },
-    onlineHelpRefUrl = "index.html#Pipeline_Configuration/ErrorHandling.html#concept_kgc_l4y_5r",
+    onlineHelpRefUrl ="index.html?contextID=concept_kgc_l4y_5r",
     upgrader = MqttClientTargetUpgrader.class
 )
 @HideConfigs(
@@ -49,6 +52,7 @@ import com.streamsets.pipeline.config.DataFormat;
         "publisherConf.dataFormat"
     })
 @ErrorStage
+@HideStage(HideStage.Type.ERROR_STAGE)
 @GenerateResourceBundle
 public class ToErrorMqttClientDTarget extends MqttClientDTarget {
   @Override

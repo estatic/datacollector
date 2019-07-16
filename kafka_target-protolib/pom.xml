@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-kafka_target-protolib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector Kafka Target ProtoLib</description>
   <name>StreamSets Data Collector Kafka Target ProtoLib</name>
   <packaging>jar</packaging>
@@ -37,7 +37,7 @@
     <kafka.version>0.8.1.1</kafka.version>
     <tec.version>0.3</tec.version>
     <snappy.version>0.4</snappy.version>
-    <jetty.version>9.4.2.v20170220</jetty.version>
+    <jetty.version>9.4.12.v20180830</jetty.version>
     <commons-io.version>2.4</commons-io.version>
     <commons-pool2.version>2.4.2</commons-pool2.version>
     <h2.version>1.4.187</h2.version>
@@ -120,6 +120,12 @@
     <!-- Test Dependencies -->
     <dependency>
       <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-stagesupport</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-kafka-common</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
@@ -130,18 +136,6 @@
       <artifactId>kafka_2.10</artifactId>
       <version>${kafka.version}</version>
       <classifier>test</classifier>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.kafka</groupId>
-      <artifactId>kafka_2.10</artifactId>
-      <version>${kafka.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.google.protobuf</groupId>
-      <artifactId>protobuf-java</artifactId>
-      <version>${protobuf.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -229,6 +223,18 @@
         <configuration>
           <skip>true</skip>
         </configuration>
+      </plugin>
+      <!-- produce test jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>test-jar</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

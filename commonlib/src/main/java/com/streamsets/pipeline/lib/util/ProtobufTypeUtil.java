@@ -21,8 +21,8 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.UnknownFieldSet;
 import com.streamsets.pipeline.api.Field;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.lib.generator.DataGeneratorException;
 import com.streamsets.pipeline.lib.parser.DataParserException;
@@ -86,7 +86,7 @@ public class ProtobufTypeUtil {
    * @throws StageException
    */
   public static Descriptors.Descriptor getDescriptor(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       String protoDescriptorFile,
       String messageType,
       Map<String, Set<Descriptors.FieldDescriptor>> messageTypeToExtensionMap,
@@ -292,7 +292,7 @@ public class ProtobufTypeUtil {
       Map<String, Set<Descriptors.FieldDescriptor>> messageTypeToExtensionMap,
       Object message
   ) throws DataParserException {
-    Map<String, Field> sdcRecordMapFieldValue = new HashMap<>();
+    LinkedHashMap<String, Field> sdcRecordMapFieldValue = new LinkedHashMap<>();
 
     // get all the expected fields from the proto file
     Map<String, Descriptors.FieldDescriptor> protobufFields = new LinkedHashMap<>();
@@ -342,7 +342,7 @@ public class ProtobufTypeUtil {
       record.getHeader().setAttribute(PROTOBUF_UNKNOWN_FIELDS_PREFIX + path, new String(bytes, StandardCharsets.UTF_8));
     }
 
-    return Field.create(sdcRecordMapFieldValue);
+    return Field.createListMap(sdcRecordMapFieldValue);
   }
 
   /**
@@ -368,11 +368,17 @@ public class ProtobufTypeUtil {
     if (message == null) {
       // If the message does not contain required fields then builder.build() throws UninitializedMessageException
       Object defaultValue = null;
+      Descriptors.FieldDescriptor.JavaType javaType = fieldDescriptor.getJavaType();
       // get default values only for optional fields and non-message types
       if (fieldDescriptor.isOptional() && fieldDescriptor.getJavaType() != Descriptors.FieldDescriptor.JavaType.MESSAGE) {
         defaultValue = fieldDescriptor.getDefaultValue();
+        //Default value for byte string should be converted to byte array
+        if (javaType == Descriptors.FieldDescriptor.JavaType.BYTE_STRING
+            && defaultValue instanceof ByteString) {
+          defaultValue = ((ByteString)defaultValue).toByteArray();
+        }
       }
-      newField = Field.create(getFieldType(fieldDescriptor.getJavaType()), defaultValue);
+      newField = Field.create(getFieldType(javaType), defaultValue);
     } else if (fieldDescriptor.isMapField()) {
       // Map entry (protobuf 3 map)
       Map<String, Field> sdcMapFieldValues = new HashMap<>();

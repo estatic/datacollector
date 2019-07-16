@@ -19,9 +19,10 @@
 
 angular
   .module('dataCollectorApp.home')
-
-  .controller('HeaderController', function ($scope, $rootScope, $timeout, _, api, $translate, $location, authService,
-                                           pipelineService, pipelineConstant, $modal, $q, $route) {
+  .controller('HeaderController', function (
+    $scope, $rootScope, $timeout, _, api, $translate, $location, authService, pipelineService, pipelineConstant,
+    $modal, $q, $route
+  ) {
 
     var pipelineValidationInProgress;
     var pipelineValidationSuccess;
@@ -86,11 +87,11 @@ angular
           message: pipelineValidationInProgress
         });
 
-        api.pipelineAgent.validatePipeline($scope.activeConfigInfo.pipelineId).
+        api.pipelineAgent.validatePipeline($scope.activeConfigInfo.pipelineId, $scope.edgeHttpUrl).
           then(
           function (res) {
             var defer = $q.defer();
-            checkForValidateConfigStatus(res.data.previewerId, defer);
+            checkForValidateConfigStatus($scope.activeConfigInfo.pipelineId, res.data.previewerId, defer);
 
             defer.promise.then(function(previewData) {
               if (pipelineBeingValidated.pipelineId !== $rootScope.$storage.activeConfigInfo.pipelineId) {
@@ -301,10 +302,10 @@ angular
       resetOffset: function() {
         $scope.trackEvent(pipelineConstant.BUTTON_CATEGORY, pipelineConstant.CLICK_ACTION, 'Reset Offset', 1);
 
-        var originStageInstance = $scope.pipelineConfig.stages[0],
-            originStageDef = _.find($scope.stageLibraries, function(stageDef) {
-              return stageDef.name === originStageInstance.stageName;
-            });
+        var originStageInstance = $scope.stageInstances[0];
+        var originStageDef = _.find($scope.stageLibraries, function (stageDef) {
+          return stageDef.name === originStageInstance.stageName;
+        });
 
         $modal.open({
           templateUrl: 'app/home/resetOffset/resetOffset.tpl.html',
@@ -319,6 +320,51 @@ angular
               return originStageDef;
             }
           }
+        });
+      },
+
+      /**
+       * Reset Offset & start pipeline
+       */
+      resetOffsetAndStart: function() {
+        $scope.trackEvent(pipelineConstant.BUTTON_CATEGORY, pipelineConstant.CLICK_ACTION, 'Reset Offset & Start', 1);
+
+        var originStageInstance = $scope.stageInstances[0];
+        var originStageDef = _.find($scope.stageLibraries, function (stageDef) {
+          return stageDef.name === originStageInstance.stageName;
+        });
+
+        var modalInstance = $modal.open({
+          templateUrl: 'app/home/resetOffsetAndStart/resetOffsetAndStart.tpl.html',
+          controller: 'ResetOffsetAndStartModalInstanceController',
+          size: '',
+          backdrop: 'static',
+          resolve: {
+            pipelineInfo: function () {
+              return $scope.activeConfigInfo;
+            },
+            originStageDef: function() {
+              return originStageDef;
+            }
+          }
+        });
+
+        modalInstance.result.then(function(res) {
+          $rootScope.common.errors = [];
+          $scope.clearTabSelectionCache();
+          $scope.selectPipelineConfig();
+
+          var currentStatus = $rootScope.common.pipelineStatusMap[$scope.activeConfigInfo.pipelineId];
+          if (!currentStatus || (res.data && currentStatus.timeStamp < res.data.timeStamp)) {
+            $rootScope.common.pipelineStatusMap[$scope.activeConfigInfo.pipelineId] = res.data;
+          }
+
+          $timeout(function() {
+            $scope.refreshGraph();
+          });
+          $scope.startMonitoring();
+        }, function () {
+
         });
       },
 
@@ -345,7 +391,7 @@ angular
        */
       autoArrange: function() {
         $scope.trackEvent(pipelineConstant.BUTTON_CATEGORY, pipelineConstant.CLICK_ACTION, 'Auto Arrange', 1);
-        pipelineService.autoArrange($scope.pipelineConfig);
+        pipelineService.autoArrange($scope.stageInstances);
         $scope.refreshGraph();
       },
 
@@ -394,9 +440,9 @@ angular
       /**
        * Export link command handler
        */
-      exportPipelineConfig: function(pipelineInfo, includeDefinitions, $event) {
+      exportPipelineConfig: function(pipelineInfo, includeDefinitions, includePlainTextCredentials, $event) {
         $scope.trackEvent(pipelineConstant.BUTTON_CATEGORY, pipelineConstant.CLICK_ACTION, 'Export Pipeline', 1);
-        api.pipelineAgent.exportPipelineConfig(pipelineInfo.pipelineId, includeDefinitions);
+        api.pipelineAgent.exportPipelineConfig(pipelineInfo.pipelineId, includeDefinitions, includePlainTextCredentials);
       },
 
       publishPipeline: function (pipelineInfo, $event) {
@@ -410,7 +456,7 @@ angular
 
               $timeout(function() {
                 $rootScope.common.successList.push({
-                  message: 'Successfully Published Pipeline to SCH Pipeline Repository: ' +
+                  message: 'Successfully Published Pipeline to Control Hub Pipeline Repository: ' +
                   authService.getRemoteBaseUrl() + ' New Pipeline Commit Version - ' + metadata['dpm.pipeline.version']
                 });
               });
@@ -469,8 +515,35 @@ angular
       /**
        * Returns true if pipeline is Edge pipeline
        */
-      isEdgePipeline: function() {
-        return $scope.executionMode === 'EDGE'
+      isEdgePipeline: function () {
+        return $scope.executionMode === 'EDGE';
+      },
+
+      publishToEdge: function () {
+        $scope.trackEvent(pipelineConstant.BUTTON_CATEGORY, pipelineConstant.CLICK_ACTION, 'Publish Pipeline to Edge', 1);
+        api.pipelineAgent.publishPipelinesToEdge([$scope.activeConfigInfo.pipelineId])
+          .then(
+            function (res) {
+              $rootScope.common.successList.push({
+                message: 'Successfully published pipeline to Data Collector Edge'
+              });
+            },
+            function (res) {
+              $rootScope.common.errors = [res.data];
+            }
+          );
+      },
+
+      viewPipelineLog: function () {
+        if ($scope.executionMode === 'EDGE') {
+          $rootScope.common.infoList = [{
+            message: 'View edge pipeline logs in SDC_EDGE_HOME/log/edge.log file'
+          }];
+        } else {
+          $location.path(
+            '/collector/logs/' + $scope.pipelineConfig.info.title + '/' + $scope.pipelineConfig.info.pipelineId
+          );
+        }
       }
     });
 
@@ -482,7 +555,7 @@ angular
      * Check for Validate Config Status for every 1 seconds, once done open the snapshot view.
      *
      */
-    var checkForValidateConfigStatus = function(previewerId, defer) {
+    var checkForValidateConfigStatus = function(pipelineId, previewerId, defer) {
       validateConfigStatusTimer = $timeout(
         function() {
         },
@@ -491,13 +564,13 @@ angular
 
       validateConfigStatusTimer.then(
         function() {
-          api.pipelineAgent.getPreviewStatus(previewerId)
+          api.pipelineAgent.getPreviewStatus(pipelineId, previewerId, $scope.edgeHttpUrl)
             .then(function(res) {
               var data = res.data;
               if (data && _.contains(['INVALID', 'VALIDATION_ERROR', 'START_ERROR', 'RUN_ERROR', 'CONNECT_ERROR', 'STOP_ERROR', 'VALID'], data.status)) {
-                fetchValidateConfigData(previewerId, defer);
+                fetchValidateConfigData(pipelineId, previewerId, defer);
               } else {
-                checkForValidateConfigStatus(previewerId, defer);
+                checkForValidateConfigStatus(pipelineId, previewerId, defer);
               }
             })
             .catch(function(res) {
@@ -511,8 +584,8 @@ angular
       );
     };
 
-    var fetchValidateConfigData = function(previewerId, defer) {
-      api.pipelineAgent.getPreviewData(previewerId)
+    var fetchValidateConfigData = function(pipelineId, previewerId, defer) {
+      api.pipelineAgent.getPreviewData(pipelineId, previewerId, $scope.edgeHttpUrl)
         .then(function(res) {
           defer.resolve(res.data);
         })
@@ -521,8 +594,6 @@ angular
           $scope.common.errors = [res.data];
         });
     };
-
-
 
     $scope.$on('$destroy', function() {
       if (validateConfigStatusTimer) {

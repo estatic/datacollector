@@ -20,6 +20,7 @@ public class DelimitedDataConstants {
   public static final String DELIMITER_CONFIG = "delimiterChar";
   public static final String ESCAPE_CONFIG = "escapeChar";
   public static final String QUOTE_CONFIG = "quoteChar";
+  public static final String QUOTE_MODE = "quoteMode";
   public static final String SKIP_START_LINES = "skipStartLines";
   public static final String COMMENT_ALLOWED_CONFIG = "commentAllowed";
   public static final String COMMENT_MARKER_CONFIG = "commentMarker";
@@ -28,8 +29,14 @@ public class DelimitedDataConstants {
   public static final String NULL_CONSTANT = "nullConstant";
   public static final String ALLOW_EXTRA_COLUMNS = "allowExtraColumns";
   public static final String EXTRA_COLUMN_PREFIX = "extraColumnPrefix";
+  public static final String MULTI_CHARACTER_FIELD_DELIMITER_CONFIG = "multiCharacterFieldDelimiter";
+  public static final String MULTI_CHARACTER_LINE_DELIMITER_CONFIG = "multiCharacterLineDelimiter";
 
   public static final String DEFAULT_EXTRA_COLUMN_PREFIX = "_extra_";
+
+  public static final String DEFAULT_MULTI_CHARACTER_FIELD_DELIMITER = "||";
+  public static final String DEFAULT_MULTI_CHARACTER_LINE_DELIMITER = "\n";
+  public static final String DEFAULT_MULTI_CHARACTER_LINE_DELIMITER_EL = "${str:unescapeJava('\\\\n')}";
 
   private DelimitedDataConstants() {}
 }

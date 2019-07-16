@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-stage-lib-parent</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../stage-lib-parent</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-stats-lib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector Stats Lib</description>
   <name>StreamSets Data Collector Stats Lib</name>
   <packaging>jar</packaging>
@@ -41,7 +41,6 @@
     <h2.version>1.4.187</h2.version>
     <joda.version>2.8</joda.version>
     <xerces.version>2.11.0</xerces.version>
-    <jetty.version>9.4.2.v20170220</jetty.version>
   </properties>
 
   <dependencies>
@@ -115,6 +114,12 @@
       <artifactId>streamsets-datacollector-container-common</artifactId>
       <scope>compile</scope>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.mail</groupId>
+          <artifactId>mail</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.glassfish.jersey.core</groupId>

@@ -16,7 +16,10 @@
 package com.streamsets.datacollector.execution.runner.common;
 
 import com.codahale.metrics.MetricRegistry;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.lineage.LineagePublisherTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
+import com.streamsets.datacollector.util.PipelineDirectoryUtil;
 import com.streamsets.pipeline.api.BatchMaker;
 import com.streamsets.pipeline.api.ErrorListener;
 import com.streamsets.pipeline.api.Field;
@@ -24,7 +27,6 @@ import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.BaseSource;
 import com.streamsets.pipeline.api.base.SingleLaneRecordProcessor;
-import com.streamsets.datacollector.config.MemoryLimitConfiguration;
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.execution.snapshot.file.FileSnapshotStore;
 import com.streamsets.datacollector.main.RuntimeInfo;
@@ -38,6 +40,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -76,9 +80,8 @@ public class TestFailedProdRun {
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
     BlockingQueue<Object> productionObserveRequests = new ArrayBlockingQueue<>(100, true /*FIFO*/);
     Configuration conf = new Configuration();
-    ProductionPipelineRunner runner = new ProductionPipelineRunner(PIPELINE_NAME, REVISION, conf, runtimeInfo,
-      new MetricRegistry(), Mockito.mock(FileSnapshotStore.class), null);
-    runner.setMemoryLimitConfiguration(new MemoryLimitConfiguration());
+    ProductionPipelineRunner runner = new ProductionPipelineRunner(PIPELINE_NAME, REVISION, null, conf, runtimeInfo,
+      new MetricRegistry(), Mockito.mock(FileSnapshotStore.class), null, null);
     runner.setObserveRequests(productionObserveRequests);
     runner.setOffsetTracker(tracker);
     PipelineConfiguration pipelineConfiguration = MockStages.createPipelineConfigurationSourceProcessorTarget();
@@ -91,7 +94,9 @@ public class TestFailedProdRun {
       MockStages.createStageLibrary(),
       runner,
       null,
-      Mockito.mock(LineagePublisherTask.class)
+      Mockito.mock(BlobStoreTask.class),
+      Mockito.mock(LineagePublisherTask.class),
+      Mockito.mock(StatsCollector.class)
     ).build(
       MockStages.userContext(),
       pipelineConfiguration,
@@ -127,7 +132,7 @@ public class TestFailedProdRun {
   }
 
   @Test
-  public void testPipelineError() throws PipelineRuntimeException, StageException {
+  public void testPipelineError() throws PipelineRuntimeException, StageException, IOException {
     String msg = "ERROR YALL";
     ErrorListeningSource.thrownError = new SomeException(msg);
     RuntimeInfo runtimeInfo = Mockito.mock(RuntimeInfo.class);
@@ -137,12 +142,12 @@ public class TestFailedProdRun {
     SourceOffsetTracker tracker = Mockito.mock(SourceOffsetTracker.class);
     BlockingQueue<Object> productionObserveRequests = new ArrayBlockingQueue<>(100, true /*FIFO*/);
     Configuration conf = new Configuration();
-    ProductionPipelineRunner runner = new ProductionPipelineRunner(PIPELINE_NAME, REVISION, conf, runtimeInfo, new MetricRegistry(), Mockito.mock(FileSnapshotStore.class),
-      null);
-    runner.setMemoryLimitConfiguration(new MemoryLimitConfiguration());
+    ProductionPipelineRunner runner = new ProductionPipelineRunner(PIPELINE_NAME, REVISION, null, conf, runtimeInfo, new MetricRegistry(), Mockito.mock(FileSnapshotStore.class),
+      null, null);
     runner.setObserveRequests(productionObserveRequests);
     runner.setOffsetTracker(tracker);
     PipelineConfiguration pipelineConfiguration = MockStages.createPipelineConfigurationSourceProcessorTarget();
+    Files.createDirectories(PipelineDirectoryUtil.getPipelineDir(runtimeInfo, PIPELINE_NAME, REVISION).toPath());
     ProductionPipeline pipeline = new ProductionPipelineBuilder(
       PIPELINE_NAME,
       REVISION,
@@ -151,7 +156,9 @@ public class TestFailedProdRun {
       MockStages.createStageLibrary(),
       runner,
       null,
-      Mockito.mock(LineagePublisherTask.class)
+      Mockito.mock(BlobStoreTask.class),
+      Mockito.mock(LineagePublisherTask.class),
+      Mockito.mock(StatsCollector.class)
     ).build(
       MockStages.userContext(),
       pipelineConfiguration,

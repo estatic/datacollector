@@ -16,8 +16,8 @@
 package com.streamsets.pipeline.lib.generator.wholefile;
 
 import com.streamsets.pipeline.api.FileRef;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.config.ChecksumAlgorithm;
 import com.streamsets.pipeline.lib.generator.DataGenerator;
 import com.streamsets.pipeline.lib.generator.DataGeneratorException;
@@ -34,14 +34,14 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
 final class WholeFileDataGenerator implements DataGenerator {
-  private final Stage.Context context;
+  private final ProtoConfigurableEntity.Context context;
   private final OutputStream outputStream;
   private final boolean includeChecksumInTheEvents;
   private final ChecksumAlgorithm checksumAlgorithm;
   private final StreamCloseEventHandler<?> streamCloseEventHandler;
 
   WholeFileDataGenerator(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       OutputStream os,
       boolean includeChecksumInTheEvents,
       ChecksumAlgorithm checksumAlgorithm,

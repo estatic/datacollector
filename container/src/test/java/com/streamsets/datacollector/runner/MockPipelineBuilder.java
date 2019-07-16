@@ -15,11 +15,17 @@
  */
 package com.streamsets.datacollector.runner;
 
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.config.PipelineConfiguration;
+import com.streamsets.datacollector.event.dto.PipelineStartEvent;
 import com.streamsets.datacollector.lineage.LineagePublisherTask;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import org.mockito.Mockito;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Pipeline.Builder test specific builder (yes builder of a builder) that will provide mock defaults and allow user to
@@ -34,7 +40,10 @@ public class MockPipelineBuilder {
   private UserContext userContext;
   private PipelineConfiguration pipelineConf;
   private long startTime;
+  private BlobStoreTask blobStoreTask;
   private LineagePublisherTask lineagePublisherTask;
+  private List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs;
+  private StatsCollector statsCollector;
   private Observer observer;
 
   public MockPipelineBuilder() {
@@ -46,7 +55,10 @@ public class MockPipelineBuilder {
     this.userContext = MockStages.userContext();
     this.pipelineConf = MockStages.createPipelineConfigurationSourceTarget();
     this.startTime = System.currentTimeMillis();
+    this.blobStoreTask = Mockito.mock(BlobStoreTask.class);
     this.lineagePublisherTask = Mockito.mock(LineagePublisherTask.class);
+    this.interceptorConfs = Collections.emptyList();
+    this.statsCollector = Mockito.mock(StatsCollector.class);
     this.observer = null;
   }
 
@@ -90,6 +102,11 @@ public class MockPipelineBuilder {
     return this;
   }
 
+  public MockPipelineBuilder withBlobStoreTask(BlobStoreTask blobStoreTask) {
+    this.blobStoreTask = blobStoreTask;
+    return this;
+  }
+
   public MockPipelineBuilder withLineagePublisherTask(LineagePublisherTask lineagePublisherTask) {
     this.lineagePublisherTask = lineagePublisherTask;
     return this;
@@ -97,6 +114,11 @@ public class MockPipelineBuilder {
 
   public MockPipelineBuilder withObserver(Observer observer) {
     this.observer = observer;
+    return this;
+  }
+
+  public MockPipelineBuilder withInterceptorConfigurations(List<PipelineStartEvent.InterceptorConfiguration> confs) {
+    this.interceptorConfs = confs;
     return this;
   }
 
@@ -110,7 +132,10 @@ public class MockPipelineBuilder {
       userContext,
       pipelineConf,
       startTime,
-      lineagePublisherTask
+      blobStoreTask,
+      lineagePublisherTask,
+      statsCollector,
+      interceptorConfs
     ).setObserver(observer);
   }
 

@@ -79,6 +79,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = ElasticsearchOperationType.INDEX;
     conf.useSecurity= false;
     conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n}";
 
     Target target = new ElasticsearchTarget(conf);
     TargetRunner runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
@@ -100,6 +101,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = ElasticsearchOperationType.INDEX;
     conf.useSecurity = false;
     conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n}";
 
     target = new ElasticsearchTarget(conf);
     runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
@@ -119,6 +121,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = ElasticsearchOperationType.INDEX;
     conf.useSecurity = false;
     conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n}";
 
     target = new ElasticsearchTarget(conf);
     runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
@@ -138,6 +141,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = ElasticsearchOperationType.INDEX;
     conf.useSecurity = false;
     conf.securityConfig= new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n}";
 
     target = new ElasticsearchTarget(conf);
     runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
@@ -145,6 +149,34 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     Assert.assertEquals(2, issues.size());
     Assert.assertTrue(issues.get(0).toString().contains(Errors.ELASTICSEARCH_27.name()));
     Assert.assertTrue(issues.get(1).toString().contains(Errors.ELASTICSEARCH_30.name()));
+
+    conf.httpUris = Collections.singletonList("127.0.0.1:" + esHttpPort);
+    conf.timeDriver = "${time:now()}";
+    conf.timeZoneID = "UTC";
+    conf.indexTemplate = "${record:value('/index')}";
+    conf.typeTemplate = "${record:value('/type')}";
+    conf.docIdTemplate = "docId";
+    conf.parentIdTemplate = "";
+    conf.routingTemplate = "";
+    conf.charset = "UTF-8";
+    conf.defaultOperation = ElasticsearchOperationType.UPDATE;
+    conf.useSecurity = false;
+    conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n\"_retry_on_conflict\"}";
+
+    target = new ElasticsearchTarget(conf);
+    runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
+    issues = runner.runValidateConfigs();
+    Assert.assertEquals(1, issues.size());
+    Assert.assertTrue(issues.get(0).toString().contains(Errors.ELASTICSEARCH_34.name()));
+
+    conf.rawAdditionalProperties =  "{\n\"_retry_on_conflict\":3,}";
+
+    target = new ElasticsearchTarget(conf);
+    runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
+    issues = runner.runValidateConfigs();
+    Assert.assertEquals(1, issues.size());
+    Assert.assertTrue(issues.get(0).toString().contains(Errors.ELASTICSEARCH_34.name()));
   }
 
   private Target createTarget() {
@@ -176,6 +208,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = op;
     conf.useSecurity = false;
     conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n\"_retry_on_conflict\":1\n}";
 
     return new ElasticsearchTarget(conf);
   }
@@ -365,6 +398,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = ElasticsearchOperationType.INDEX;
     conf.useSecurity = false;
     conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n}";
 
     ElasticsearchTarget target = new ElasticsearchTarget(conf);
     TargetRunner runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
@@ -480,6 +514,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = ElasticsearchOperationType.INDEX;
     conf.useSecurity = false;
     conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties = "{}";
 
     // Invalid url
     conf.httpUris = Collections.singletonList("127.0.0.1:" + "NOT_A_NUMBER");
@@ -524,6 +559,7 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     conf.defaultOperation = ElasticsearchOperationType.CREATE;
     conf.useSecurity = false;
     conf.securityConfig = new SecurityConfig();
+    conf.rawAdditionalProperties =  "{\n}";
 
     ElasticsearchTarget target = new ElasticsearchTarget(conf);
     TargetRunner runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
@@ -632,4 +668,81 @@ public class ElasticSearchTargetIT extends ElasticsearchBaseIT {
     }
   }
 
+  @Test
+  public void testMergeRecords() throws Exception {
+    // Use the index field as document ID.
+    Target target = createTarget(
+            "${time:now()}",
+            "${record:value('/index')}",
+            "docId",
+            ElasticsearchOperationType.MERGE,
+            "",
+            ""
+    );
+    TargetRunner runner = new TargetRunner.Builder(ElasticSearchDTarget.class, target).build();
+    try {
+      runner.runInit();
+      List<Record> records = new ArrayList<>();
+      Record record1 = RecordCreator.create();
+      record1.set(Field.create(ImmutableMap.of("a", Field.create("Old"), // field to be changed
+              "nested", Field.create(ImmutableMap.of("one", Field.create("uno"), // nested unchanged
+                      "two", Field.create("dos"),      // nested changed
+                      "three", Field.create("tres"))), // nested left alone
+              "existing", Field.create("not touched"), // left alone
+              "index", Field.create("j"), "type", Field.create("t")))); // index and mapping
+      Record record2 = RecordCreator.create();
+      record2.set(Field.create(ImmutableMap.of("a", Field.create("New"), // field changed
+              "nested", Field.create(ImmutableMap.of("one", Field.create("uno"), // nested unchanged
+                      "two", Field.create("duo"),          // nested changed
+                      "four", Field.create("quattour"))),  // nested new field added
+              "new", Field.create("fresh"),                // new field added
+              "index", Field.create("j"), "type", Field.create("t")))); // index and mapping
+      records.add(record1);
+      records.add(record2);
+      runner.runWrite(records);
+      Assert.assertTrue(runner.getErrorRecords().isEmpty());
+      Assert.assertTrue(runner.getErrors().isEmpty());
+
+      prepareElasticSearchServerForQueries();
+
+      // Second record must be merged into first record: "New" replaces "Old", etc.
+      Map expected = ImmutableMap.builder().put("a", "New")  // field changed
+              .put("existing", "not touched") // untouched fields left alone
+              .put("nested", ImmutableMap.of( // can merge nested fields as well
+                 "one", "uno",                // nested and unchanged
+                 "two", "duo",                // nested and changed
+                 "three", "tres",             // nested and left alone
+                 "four", "quattour"           // nested new field added
+              ))
+              .put("new", "fresh")            // new field added
+              .put("index", "j")
+              .put("type", "t").build();
+
+      SearchResponse response = esServer.client().prepareSearch("j").setTypes("t")
+              .setSearchType(SearchType.DEFAULT).execute().actionGet();
+      SearchHit[] hits = response.getHits().getHits();
+      Assert.assertEquals(1, hits.length);
+      Map got = hits[0].getSource();
+
+      Assert.assertEquals(expected, got);
+
+    } finally {
+      runner.runDestroy();
+    }
+  }
+
+  @Test
+  public void testAddAdditionalProperties() {
+    ElasticsearchTarget target = createTarget("${time:now()}",
+        "${record:value('/index')}",
+        "docId",
+        ElasticsearchOperationType.UPDATE,
+        "",
+        ""
+    );
+
+    String expected = ",\"_retry_on_conflict\":1";
+
+    Assert.assertEquals(expected, target.addAdditionalProperties());
+  }
 }

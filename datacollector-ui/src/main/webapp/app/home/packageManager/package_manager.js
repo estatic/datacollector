@@ -34,12 +34,16 @@ angular
         }
       });
   }])
-  .controller('PackageManagerController', function ($scope, $rootScope, $routeParams, $q, $modal, $location,
-                                                    pipelineService, api, configuration, pipelineConstant, Analytics) {
+  .controller('PackageManagerController', function (
+    $scope, $rootScope, $routeParams, $q, $modal, $location, pipelineService, api, configuration, pipelineConstant,
+    Analytics
+  ) {
     $location.search('auth_token', null);
     $location.search('auth_user', null);
     $rootScope.common.errors = [];
+    $rootScope.common.title = "Package Manager";
 
+    var mlRegex = new RegExp('(TensorFlow)|(Databricks ML)|(PMML)|(MLeap)', 'i');
     var pipelinesLimit = 60;
 
     angular.extend($scope, {
@@ -47,6 +51,9 @@ angular
       navigationItems: [
         'All Stage Libraries',
         'Installed Stage Libraries',
+        'Enterprise Stage Libraries',
+        'Legacy Stage Libraries',
+        'Machine Learning',
         'Amazon Web Services',
         'Apache Kafka',
         'Apache Kudu',
@@ -87,6 +94,7 @@ angular
       manifestURL: '',
       isManagedByClouderaManager: false,
       fetching: true,
+      showLibraryId: false,
 
       toggleLibraryPanel: function () {
         $scope.hideLibraryPanel = !$scope.hideLibraryPanel;
@@ -104,19 +112,42 @@ angular
         switch ($scope.selectedNavigationItem) {
           case 'All Stage Libraries':
             $scope.filteredStageLibraries = _.filter($scope.stageLibraries, function(stageLibrary) {
-              return regex.test(stageLibrary.label);
+              return stageLibrary.stageLibraryManifest && regex.test(stageLibrary.stageLibraryManifest.stageLibLabel);
             });
             break;
           case 'Installed Stage Libraries':
             $scope.filteredStageLibraries = _.filter($scope.stageLibraries, function(stageLibrary) {
-              return regex.test(stageLibrary.label) && stageLibrary.installed;
+              return stageLibrary.stageLibraryManifest && regex.test(stageLibrary.stageLibraryManifest.stageLibLabel) &&
+                stageLibrary.stageLibraryManifest.installed;
+            });
+            break;
+          case 'Enterprise Stage Libraries':
+            $scope.filteredStageLibraries = _.filter($scope.stageLibraries, function(stageLibrary) {
+              return stageLibrary.stageLibraryManifest && regex.test(stageLibrary.stageLibraryManifest.stageLibLabel) &&
+                stageLibrary.stageLibraryManifest.stageLibLicense === 'StreamSetsEnterprise1.0';
+            });
+            break;
+          case 'Legacy Stage Libraries':
+            $scope.filteredStageLibraries = _.filter($scope.stageLibraries, function(stageLibrary) {
+              return stageLibrary.legacy;
+            });
+            break;
+          case 'Machine Learning':
+            $scope.filteredStageLibraries = _.filter($scope.stageLibraries, function(stageLibrary) {
+              return stageLibrary.stageLibraryManifest && regex.test(stageLibrary.stageLibraryManifest.stageLibLabel) &&
+                mlRegex.test(stageLibrary.stageLibraryManifest.stageLibLabel);
             });
             break;
           default:
             $scope.filteredStageLibraries = _.filter($scope.stageLibraries, function(stageLibrary) {
-              return regex.test(stageLibrary.label) && stageLibrary.label.indexOf($scope.selectedNavigationItem) !== -1;
+              return stageLibrary.stageLibraryManifest && regex.test(stageLibrary.stageLibraryManifest.stageLibLabel) &&
+                stageLibrary.stageLibraryManifest.stageLibLabel.indexOf($scope.selectedNavigationItem) !== -1;
             });
         }
+      },
+
+      getStageLibraryKey: function(stageLibrary) {
+        return getStageLibraryKey(stageLibrary);
       },
 
       /**
@@ -130,8 +161,9 @@ angular
           list = $scope.stageLibrariesExtras;
         }
         angular.forEach(list, function(stageLibrary) {
-          $scope.selectedStageLibraryList.push(stageLibrary.id);
-          $scope.selectedStageLibraryMap[stageLibrary.id] = true;
+          var id = getStageLibraryKey(stageLibrary);
+          $scope.selectedStageLibraryList.push(id);
+          $scope.selectedStageLibraryMap[id] = true;
         });
         $scope.allSelected = true;
       },
@@ -151,8 +183,9 @@ angular
        * @param stageLibrary
        */
       selectStageLibrary: function(stageLibrary) {
-        $scope.selectedStageLibraryMap[stageLibrary.id] = true;
-        $scope.selectedStageLibraryList.push(stageLibrary.id);
+        var id = getStageLibraryKey(stageLibrary);
+        $scope.selectedStageLibraryMap[id] = true;
+        $scope.selectedStageLibraryList.push(id);
       },
 
       /**
@@ -160,9 +193,10 @@ angular
        * @param stageLibrary
        */
       unSelectStageLibrary: function(stageLibrary) {
-        $scope.selectedStageLibraryMap[stageLibrary.id] = false;
-        var index = $scope.selectedStageLibraryList.indexOf(stageLibrary.id);
-        if (index != -1) {
+        var id = getStageLibraryKey(stageLibrary);
+        $scope.selectedStageLibraryMap[id] = false;
+        var index = $scope.selectedStageLibraryList.indexOf(id);
+        if (index !== -1) {
           $scope.selectedStageLibraryList.splice(index, 1);
         }
         $scope.allSelected = false;
@@ -183,6 +217,13 @@ angular
        * @returns {*}
        */
       customStageLibrarySortFunction: function (stageLibrary) {
+        if (stageLibrary.stageLibraryManifest) {
+          if ($scope.header.sortColumn === 'label') {
+            return stageLibrary.stageLibraryManifest.stageLibLabel;
+          } else if ($scope.header.sortColumn === 'installed') {
+            return stageLibrary.stageLibraryManifest.installed;
+          }
+        }
         return stageLibrary[$scope.header.sortColumn];
       },
 
@@ -211,8 +252,8 @@ angular
           1
         );
 
-        installStageLibraries(_.filter($scope.stageLibraries, function(lib) {
-          return !lib.installed && $scope.selectedStageLibraryList.indexOf(lib.id) !== -1;
+        installStageLibraries(_.filter($scope.filteredStageLibraries, function(lib) {
+          return !lib.stageLibraryManifest.installed && $scope.selectedStageLibraryList.indexOf(getStageLibraryKey(lib)) !== -1;
         }));
       },
 
@@ -231,8 +272,8 @@ angular
           1
         );
 
-        uninstallStageLibraries(_.filter($scope.stageLibraries, function(lib) {
-          return lib.installed && $scope.selectedStageLibraryList.indexOf(lib.id) !== -1;
+        uninstallStageLibraries(_.filter($scope.filteredStageLibraries, function(lib) {
+          return lib.stageLibraryManifest.installed && $scope.selectedStageLibraryList.indexOf(getStageLibraryKey(lib)) !== -1;
         }));
       },
 
@@ -246,9 +287,9 @@ angular
        * @returns {boolean}
        */
       hasSelectedLibrary: function(toInstall) {
-        return !_.any($scope.stageLibraries, function(lib) {
-          var condition = toInstall ? !lib.installed : lib.installed;
-          return condition && $scope.selectedStageLibraryList.indexOf(lib.id) !== -1;
+        return !_.any($scope.filteredStageLibraries, function(lib) {
+          var condition = toInstall ? !lib.stageLibraryManifest.installed : lib.stageLibraryManifest.installed;
+          return condition && $scope.selectedStageLibraryList.indexOf(getStageLibraryKey(lib)) !== -1;
         });
       },
 
@@ -292,9 +333,8 @@ angular
           'Install Additional Drivers',
           1
         );
-
         var installedLibraries = _.filter($scope.stageLibraries, function(stageLibrary) {
-          return stageLibrary.installed;
+          return stageLibrary.stageLibraryManifest && stageLibrary.stageLibraryManifest.installed;
         });
 
         var modalInstance = $modal.open({
@@ -325,7 +365,7 @@ angular
         );
 
         var selectedList = _.filter($scope.stageLibrariesExtras, function(lib) {
-          return  $scope.selectedStageLibraryList.indexOf(lib.id) !== -1;
+          return $scope.selectedStageLibraryList.indexOf(getStageLibraryKey(lib)) !== -1;
         });
 
         var modalInstance = $modal.open({
@@ -349,14 +389,48 @@ angular
 
       uploadFileBtn: function(uploadFile) {
         api.pipelineAgent.installExtras('libraryId', uploadFile);
+      },
+
+      getStageInfoList: function(stageDefList) {
+        var stageInfoList = [];
+        var originList = [];
+        var processorList = [];
+        var destinationList = [];
+        var others = [];
+        angular.forEach(stageDefList, function (stageInfo) {
+          if (!stageInfo.errorStage && !stageInfo.statsAggregatorStage) {
+            if (stageInfo.type === 'SOURCE') {
+              originList.push(stageInfo);
+            } else if (stageInfo.type === 'PROCESSOR') {
+              processorList.push(stageInfo);
+            } else if (stageInfo.type === 'TARGET') {
+              destinationList.push(stageInfo);
+            } else {
+              others.push(stageInfo);
+            }
+          }
+        });
+        stageInfoList.push.apply(stageInfoList, originList.sort(sortStageInfo));
+        stageInfoList.push.apply(stageInfoList, processorList.sort(sortStageInfo));
+        stageInfoList.push.apply(stageInfoList, destinationList.sort(sortStageInfo));
+        stageInfoList.push.apply(stageInfoList, others.sort(sortStageInfo));
+        return stageInfoList;
       }
 
     });
 
+    var sortStageInfo = function(a, b) {
+      if (a.label.toLowerCase() > b.label.toLowerCase()) {
+        return 1;
+      } else {
+        return -1;
+      }
+    };
+
     $q.all([
       configuration.init()
     ]).then(
-      function (results) {
+      function () {
         if(configuration.isAnalyticsEnabled()) {
           Analytics.trackPage('/collector/packageManager');
         }
@@ -370,11 +444,15 @@ angular
     var getLibraries = function(repoUrl, installedOnly) {
       $scope.fetching = true;
       $scope.stageLibraries = [];
-        api.pipelineAgent.getLibraries(repoUrl, installedOnly)
+      api.pipelineAgent.getLibraries(repoUrl, installedOnly)
         .then(
           function (res) {
             $scope.fetching = false;
-            $scope.stageLibraries = res.data;
+            $scope.repositoryManifestList = res.data;
+            angular.forEach($scope.repositoryManifestList, function (value) {
+              $scope.stageLibraries.push.apply($scope.stageLibraries, value.stageLibraries);
+            });
+
             $scope.manifestURL = res.headers('REPO_URL');
             $scope.updateStageLibraryList();
           },
@@ -386,7 +464,10 @@ angular
               .then(
                 function (res) {
                   $scope.fetching = false;
-                  $scope.stageLibraries = res.data;
+                  $scope.repositoryManifestList = res.data;
+                  angular.forEach($scope.repositoryManifestList, function (value) {
+                    $scope.stageLibraries.push.apply($scope.stageLibraries, value.stageLibraries);
+                  });
                   $scope.updateStageLibraryList();
                 },
                 function (res) {
@@ -396,7 +477,6 @@ angular
           }
         );
     };
-
 
     var getStageLibrariesExtras = function() {
       $scope.stageLibrariesExtras = [];
@@ -436,11 +516,11 @@ angular
         size: '',
         backdrop: 'static',
         resolve: {
-          customRepoUrl: function () {
-            return $scope.header.customRepoUrl;
-          },
           libraryList: function () {
             return libraryList;
+          },
+          withStageLibVersion:function () {
+            return true;
           }
         }
       });
@@ -460,7 +540,7 @@ angular
       });
       modalInstance.result.then(function() {
         angular.forEach(libraryList, function(library) {
-          library.installed = false;
+          library.stageLibraryManifest.installed = false;
           $scope.trackEvent(
             pipelineConstant.STAGE_LIBRARY_CATEGORY,
             pipelineConstant.UNINSTALL_ACTION,
@@ -471,7 +551,6 @@ angular
       }, function () {
       });
     };
-
 
     var updateCustomRepoUrl= function() {
       var modalInstance = $modal.open({
@@ -491,5 +570,13 @@ angular
         getLibraries($scope.header.customRepoUrl, false);
       }, function () {
       });
+    };
+
+    var getStageLibraryKey = function(stageLibrary) {
+      if (stageLibrary.stageLibraryManifest) {
+        return stageLibrary.stageLibraryManifest.stageLibId + ':' + stageLibrary.stagelibVersion;
+      } else {
+        return stageLibrary.id;
+      }
     };
   });

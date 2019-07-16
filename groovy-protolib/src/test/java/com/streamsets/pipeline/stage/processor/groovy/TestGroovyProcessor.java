@@ -25,6 +25,7 @@ import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.sdk.RecordCreator;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingMode;
 import com.streamsets.pipeline.stage.processor.scripting.ScriptingProcessorTestUtil;
+import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordType;
 import org.junit.Test;
 
 import java.util.Date;
@@ -209,28 +210,28 @@ public class TestGroovyProcessor {
   public void testTypedNullPassThrough() throws Exception {
     final String script = Resources.toString(Resources.getResource("PrimitiveTypesPassthroughScript.groovy"), Charsets.UTF_8);
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyPreserveTypeForNullValue(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyPreserveTypeForNullValue(GroovyDProcessor.class, processor);
   }
 
   @Test
   public void testAssignNullToTypedField() throws Exception {
     final String script = Resources.toString(Resources.getResource("AssignNullToTypedField.groovy"), Charsets.UTF_8);
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyPreserveTypeForNullValue(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyPreserveTypeForNullValue(GroovyDProcessor.class, processor);
   }
 
   @Test
   public void testNestedMapWithNull() throws Exception {
     final String script = Resources.toString(Resources.getResource("NestedMapWithNull.groovy"), Charsets.UTF_8);
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyNestedMap(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyNestedMap(GroovyDProcessor.class, processor);
   }
 
   @Test
   public void testChangeFieldTypeFromScripting() throws Exception {
     final String script = Resources.toString(Resources.getResource("ChangeFieldTypeScript.groovy"), Charsets.UTF_8);
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH,script);
-    ScriptingProcessorTestUtil.verifyChangedTypeFromScripting(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyChangedTypeFromScripting(GroovyDProcessor.class, processor);
   }
 
   @Test
@@ -242,7 +243,7 @@ public class TestGroovyProcessor {
 
     final String script = Resources.toString(Resources.getResource("AssignTypedNullField.groovy"), Charsets.UTF_8);
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH,script);
-    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(GroovyProcessor.class, processor, record);
+    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(GroovyDProcessor.class, processor, record);
   }
 
   @Test
@@ -264,7 +265,7 @@ public class TestGroovyProcessor {
 
     final String script = Resources.toString(Resources.getResource("AssignTypedNullField.groovy"), Charsets.UTF_8);
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(GroovyProcessor.class, processor, record);
+    ScriptingProcessorTestUtil.verifyTypedFieldWithNullValue(GroovyDProcessor.class, processor, record);
   }
 
   @Test
@@ -283,7 +284,7 @@ public class TestGroovyProcessor {
 
     final String script = Resources.toString(Resources.getResource("GetFieldNullScript.groovy"), Charsets.UTF_8);
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyNullField(GroovyProcessor.class, processor,record);
+    ScriptingProcessorTestUtil.verifyNullField(GroovyDProcessor.class, processor,record);
   }
 
   @Test
@@ -306,7 +307,7 @@ public class TestGroovyProcessor {
         ProcessingMode.RECORD,
         script
     );
-    ScriptingProcessorTestUtil.verifyCreateRecord(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyCreateRecord(GroovyDProcessor.class, processor);
   }
 
   @Test
@@ -316,6 +317,7 @@ public class TestGroovyProcessor {
 
     String script = "for (record in records) {\n" +
         "  record.attributes['" + headerKey + "'] = '" + value + "'\n" +
+        "  record.attributes.remove('remove')\n" +
         "  output.write(record)\n" +
         "}";
 
@@ -325,7 +327,22 @@ public class TestGroovyProcessor {
     );
 
     Record record = RecordCreator.create();
-    ScriptingProcessorTestUtil.verifyRecordHeaderAttribute(GroovyProcessor.class, processor, record);
+    ScriptingProcessorTestUtil.verifyRecordHeaderAttribute(GroovyDProcessor.class, processor, record);
+  }
+
+  @Test
+  public void testAccessSdcRecord() throws Exception {
+    String script = "for (record in records) {\n" +
+        "  record.attributes['attr'] = record.sdcRecord.get('/value').getAttribute('attr')\n" +
+        "  output.write(record)\n" +
+        "}";
+
+    Processor processor = new GroovyProcessor(
+        ProcessingMode.RECORD,
+        script
+    );
+
+    ScriptingProcessorTestUtil.verifyAccessToSdcRecord(GroovyDProcessor.class, processor);
   }
 
   @Test
@@ -344,7 +361,7 @@ public class TestGroovyProcessor {
         initScript,
         destroyScript
     );
-    ScriptingProcessorTestUtil.verifyInitDestroy(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyInitDestroy(GroovyDProcessor.class, processor);
   }
 
   @Test
@@ -354,7 +371,17 @@ public class TestGroovyProcessor {
         "  output.write(record);\n" +
         "}";
     Processor processor = new GroovyProcessor(ProcessingMode.BATCH, script);
-    ScriptingProcessorTestUtil.verifyConstants(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyConstants(GroovyDProcessor.class, processor);
+  }
+
+  @Test
+  public void testIsPreview() throws Exception {
+    String script = "for(record in records) {\n" +
+        "  record.value['isPreview'] = sdcFunctions.isPreview();\n" +
+        "  output.write(record);\n" +
+        "}";
+    Processor processor = new GroovyProcessor(ProcessingMode.BATCH, script);
+    ScriptingProcessorTestUtil.verifyIsPreview(GroovyDProcessor.class, processor);
   }
 
   private static final String WRITE_ERROR_SCRIPT = "for (record in records) { error.write(record, 'oops'); }";
@@ -365,7 +392,7 @@ public class TestGroovyProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordStopPipeline(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordStopPipeline(GroovyDProcessor.class, processor);
   }
 
   @Test
@@ -374,7 +401,7 @@ public class TestGroovyProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordDiscard(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordDiscard(GroovyDProcessor.class, processor);
   }
 
 
@@ -384,6 +411,47 @@ public class TestGroovyProcessor {
       ProcessingMode.RECORD,
       WRITE_ERROR_SCRIPT
     );
-    ScriptingProcessorTestUtil.verifyErrorRecordErrorSink(GroovyProcessor.class, processor);
+    ScriptingProcessorTestUtil.verifyErrorRecordErrorSink(GroovyDProcessor.class, processor);
+  }
+
+  @Test
+  public void testSdcRecord() throws Exception {
+    String script = "import com.streamsets.pipeline.api.Field\n" +
+      "for (record in records) {\n" +
+      "  record.sdcRecord.set('/new', Field.create(Field.Type.STRING, 'new-value'))\n" +
+      "  record.sdcRecord.get('/old').setAttribute('attr', 'attr-value')\n" +
+      "  output.write(record)\n" +
+      "}";
+
+    Processor processor = new GroovyProcessor(
+        ProcessingMode.RECORD,
+        script,
+        "",
+        "",
+        GroovyProcessor.GROOVY_ENGINE,
+        ScriptRecordType.SDC_RECORDS,
+        new HashMap<>()
+    );
+    ScriptingProcessorTestUtil.verifySdcRecord(GroovyDProcessor.class, processor);
+  }
+
+  @Test
+  public void testUserParams() throws Exception {
+    String script ="for(record in records) {\n" +
+        "  record.value['user-param-key'] = sdcUserParams['user-param-key'];\n" +
+        "  output.write(record);\n" +
+        "}";
+    Map<String, String> userParams = new HashMap<>();
+    userParams.put("user-param-key", "user-param-value");
+    Processor processor = new GroovyProcessor(
+        ProcessingMode.RECORD,
+        script,
+        "",
+        "",
+        GroovyProcessor.GROOVY_ENGINE,
+        ScriptRecordType.NATIVE_OBJECTS,
+        userParams
+     );
+    ScriptingProcessorTestUtil.verifyUserParams(GroovyDProcessor.class, processor);
   }
 }

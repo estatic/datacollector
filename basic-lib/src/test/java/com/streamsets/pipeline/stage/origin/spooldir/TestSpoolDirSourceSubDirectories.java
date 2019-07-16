@@ -23,8 +23,10 @@ import com.streamsets.pipeline.config.Compression;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.OnParseError;
 import com.streamsets.pipeline.config.PostProcessingOptions;
+import com.streamsets.pipeline.lib.dirspooler.FileOrdering;
 import com.streamsets.pipeline.lib.dirspooler.PathMatcherMode;
 import com.streamsets.pipeline.sdk.PushSourceRunner;
+import com.streamsets.pipeline.lib.dirspooler.SpoolDirConfigBean;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -83,6 +85,7 @@ public class TestSpoolDirSourceSubDirectories {
       Assert.assertTrue(source.getSpooler().isRunning());
       Assert.assertEquals(runner.getContext(), source.getSpooler().getContext());
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -169,8 +172,9 @@ public class TestSpoolDirSourceSubDirectories {
       });
       runner2.waitOnProduce();
 
-      TestOffsetUtil.compare(offset, runner2.getOffsets());
+      TestOffsetUtil.compare(offset, runner2.getOffsets(), false);
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -193,9 +197,10 @@ public class TestSpoolDirSourceSubDirectories {
       });
       runner.waitOnProduce();
 
-      TestOffsetUtil.compare("dir1/file-0.log::0", runner.getOffsets());
+      TestOffsetUtil.compare("dir1/file-0.log::0", runner.getOffsets(), false);
       //Assert.assertTrue(source.produceCalled);
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -214,9 +219,10 @@ public class TestSpoolDirSourceSubDirectories {
       });
       runner.waitOnProduce();
 
-      TestOffsetUtil.compare(offset, runner.getOffsets());
+      TestOffsetUtil.compare(offset, runner.getOffsets(), false);
       //Assert.assertFalse(source.produceCalled);
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -247,9 +253,10 @@ public class TestSpoolDirSourceSubDirectories {
       });
       runner.waitOnProduce();
 
-      TestOffsetUtil.compare("dir1/file-0.log::0", runner.getOffsets());
+      TestOffsetUtil.compare("dir1/file-0.log::0", runner.getOffsets(), false);
       //Assert.assertTrue(source.produceCalled);
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -273,9 +280,10 @@ public class TestSpoolDirSourceSubDirectories {
       });
       runner.waitOnProduce();
 
-      TestOffsetUtil.compare(offset, runner.getOffsets());
+      TestOffsetUtil.compare(offset, runner.getOffsets(), false);
       //Assert.assertTrue(source.produceCalled);
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -314,13 +322,77 @@ public class TestSpoolDirSourceSubDirectories {
       runner.waitOnProduce();
 
       Assert.assertEquals(2, batchCount.get());
-      TestOffsetUtil.compare("dir1/file-0.log::-1", runner.getOffsets());
+      TestOffsetUtil.compare("dir1/file-0.log::-1", runner.getOffsets(), false);
 
       //Produce will not be called as this file-0.log will not be eligible for produce
       //Assert.assertFalse(source.produceCalled);
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
 
+  @Test
+  public void testPostProcessDeleteOnSubDir() throws Exception {
+    SpoolDirConfigBean conf = new SpoolDirConfigBean();
+    conf.dataFormat = DataFormat.TEXT;
+    conf.spoolDir = createTestDir();
+    conf.batchSize = 10;
+    conf.overrunLimit = 100;
+    conf.poolingTimeoutSecs = 1;
+    conf.filePattern = "file-[0-9].log";
+    conf.pathMatcherMode = PathMatcherMode.GLOB;
+    conf.maxSpoolFiles = 10;
+    conf.initialFileToProcess = null;
+    conf.dataFormatConfig.compression = Compression.NONE;
+    conf.dataFormatConfig.filePatternInArchive = "*";
+    conf.errorArchiveDir = null;
+    conf.postProcessing = PostProcessingOptions.DELETE;
+    conf.retentionTimeMins = 10;
+    conf.dataFormatConfig.textMaxLineLen = 10;
+    conf.dataFormatConfig.onParseError = OnParseError.ERROR;
+    conf.dataFormatConfig.maxStackTraceLines = 0;
+    conf.processSubdirectories = true;
+    conf.useLastModified = FileOrdering.TIMESTAMP;
+
+    TSpoolDirSource source = new TSpoolDirSource(conf);
+
+    PushSourceRunner runner = new PushSourceRunner.Builder(TSpoolDirSource.class, source).addOutputLane("lane").build();
+    File file = new File(source.spoolDir, "dir1/file-0.log").getAbsoluteFile();
+    Assert.assertTrue(file.getParentFile().mkdirs());
+    Files.createFile(file.toPath());
+    AtomicInteger batchCount = new AtomicInteger(0);
+
+    runner.runInit();
+
+    try {
+      source.file = file;
+      source.offset = 0;
+      source.maxBatchSize = 10;
+      source.offsetIncrement = -1;
+
+      runner.runProduce(new HashMap<>(), 1000, output -> {
+        batchCount.incrementAndGet();
+
+        if (batchCount.get() < 2) {
+          Assert.assertEquals("dir1/file-0.log", output.getOffsetEntity());
+          Assert.assertEquals("{\"POS\":\"-1\"}", output.getNewOffset());
+          //Assert.assertTrue(source.produceCalled);
+
+          source.produceCalled = false;
+        } else {
+          runner.setStop();
+        }
+      });
+
+      runner.waitOnProduce();
+
+      Assert.assertEquals(2, batchCount.get());
+      TestOffsetUtil.compare("dir1/file-0.log::-1", runner.getOffsets(), false);
+      Assert.assertTrue(!Files.exists(file.toPath()));
+    } finally {
+      source.destroy();
+      runner.runDestroy();
+    }
+  }
 }

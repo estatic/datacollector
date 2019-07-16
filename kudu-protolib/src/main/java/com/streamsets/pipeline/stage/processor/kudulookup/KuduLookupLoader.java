@@ -15,8 +15,8 @@
  */
 package com.streamsets.pipeline.stage.processor.kudulookup;
 
-import com.codahale.metrics.Timer;
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -24,27 +24,28 @@ import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
+import com.streamsets.pipeline.api.impl.Utils;
+import com.streamsets.pipeline.stage.common.MissingValuesBehavior;
 import com.streamsets.pipeline.stage.lib.kudu.Errors;
 import com.streamsets.pipeline.stage.lib.kudu.KuduUtils;
-import com.streamsets.pipeline.api.impl.Utils;
 import org.apache.kudu.ColumnSchema;
-import org.apache.kudu.Type;
 import org.apache.kudu.Schema;
-import org.apache.kudu.client.KuduTable;
+import org.apache.kudu.Type;
 import org.apache.kudu.client.AsyncKuduClient;
 import org.apache.kudu.client.AsyncKuduScanner;
-import org.apache.kudu.client.RowResultIterator;
-import org.apache.kudu.client.RowResult;
 import org.apache.kudu.client.KuduException;
 import org.apache.kudu.client.KuduPredicate;
+import org.apache.kudu.client.KuduTable;
+import org.apache.kudu.client.RowResult;
+import org.apache.kudu.client.RowResultIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public class KuduLookupLoader extends CacheLoader<KuduLookupKey, List<Map<String, Field>>> {
@@ -63,7 +64,7 @@ public class KuduLookupLoader extends CacheLoader<KuduLookupKey, List<Map<String
 
   private final LoadingCache<String, KuduTable> tableCache;
 
-  private final boolean ignoreMissing;
+  private final KuduLookupConfig conf;
 
   public KuduLookupLoader(Stage.Context context,
                           AsyncKuduClient kuduClient,
@@ -76,7 +77,7 @@ public class KuduLookupLoader extends CacheLoader<KuduLookupKey, List<Map<String
     this.kuduClient = kuduClient;
     this.keyColumns = keyColumns;
     this.columnToField = columnToField;
-    this.ignoreMissing = conf.ignoreMissing;
+    this.conf = conf;
 
     // output fields
     for (KuduOutputColumnMapping columnConfig : conf.outputColumnMapping) {
@@ -144,26 +145,45 @@ public class KuduLookupLoader extends CacheLoader<KuduLookupKey, List<Map<String
             Type type = null;
             String columnName = column.getKey();
             if (result.isNull(columnName)){
-              // Apply default value or send to error
-              if (ignoreMissing && !outputDefault.get(columnName).isEmpty()) {
-                // Apply default value
-                ColumnSchema columnSchema = schema.getColumn(columnName);
-                field = Field.create(
-                    KuduUtils.convertFromKuduType(columnSchema.getType()),
-                    outputDefault.get(columnName)
-                );
+              // No record in necessary column. Apply default value or send to error
+              if (conf.ignoreMissing) {
+                // Apply default value only when default value is configured
+                if (!outputDefault.get(columnName).isEmpty()) {
+                  ColumnSchema columnSchema = schema.getColumn(columnName);
+                  field = Field.create(
+                      KuduUtils.convertFromKuduType(columnSchema.getType()),
+                      outputDefault.get(columnName)
+                  );
+                }
               } else {
-                // Missing value for output, and default value is not configured
+                // Can't ignore missing value thus send to error
                 throw new OnRecordErrorException(Errors.KUDU_35, columnName);
               }
             } else {
               type = result.getColumnType(column.getKey());
               field = KuduUtils.createField(result, columnName, type);
             }
-            fields.put(column.getValue(), field);
+            if (field != null) {
+              fields.put(column.getValue(), field);
+            }
           }
           lookupItems.add(fields);
         }
+      }
+      // No data found. Apply default if 'pass to next stage' is set and default value is configured
+      if (lookupItems.isEmpty() && conf.missingLookupBehavior == MissingValuesBehavior.PASS_RECORD_ON) {
+        Map<String, Field> addDefaults = new HashMap<>();
+        for (Map.Entry<String, String> output: outputColumnToField.entrySet()) {
+          ColumnSchema columnSchema = schema.getColumn(output.getKey());
+          if (!outputDefault.get(output.getKey()).isEmpty()) {
+            addDefaults.put(output.getValue(), Field.create(
+                KuduUtils.convertFromKuduType(columnSchema.getType()),
+                outputDefault.get(output.getKey())
+                )
+            );
+          }
+        }
+        lookupItems.add(addDefaults);
       }
     } catch (KuduException e) {
       // Exception executing query
@@ -197,7 +217,7 @@ public class KuduLookupLoader extends CacheLoader<KuduLookupKey, List<Map<String
       throw new StageException(Errors.KUDU_03, Utils.format("Key column '{}' doesn't exist in Kudu table ", keyColumn), ex);
     }
     Type type = schema.getType();
-    KuduPredicate predicate = null;
+    KuduPredicate predicate;
     String fieldName = columnToField.get(keyColumn);
 
     try {
@@ -222,9 +242,17 @@ public class KuduLookupLoader extends CacheLoader<KuduLookupKey, List<Map<String
           predicate = KuduPredicate.newComparisonPredicate(schema, KuduPredicate.ComparisonOp.EQUAL, field.getValueAsByteArray());
           break;
         case UNIXTIME_MICROS:
-          predicate = KuduPredicate.newComparisonPredicate(schema, KuduPredicate.ComparisonOp.EQUAL, field.getValueAsDatetime().getTime());
+          predicate = KuduPredicate.newComparisonPredicate(schema, KuduPredicate.ComparisonOp.EQUAL, field.getValueAsDatetime().getTime() * 1000L);
           break;
         default:
+          if ("DECIMAL".equals(type.name())) {
+            predicate = KuduPredicate.newComparisonPredicate(
+                schema,
+                KuduPredicate.ComparisonOp.EQUAL,
+                field.getValueAsDecimal()
+            );
+            break;
+          }
           throw new StageException(Errors.KUDU_33, type.getName());
       }
     } catch (IllegalArgumentException ex){

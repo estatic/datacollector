@@ -23,7 +23,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSourceOffsetCommitter;
+import com.streamsets.pipeline.api.base.configurablestage.DSourceOffsetCommitter;
 import com.streamsets.pipeline.stage.origin.sdcipc.Configs;
 
 @StageDef(
@@ -33,7 +33,7 @@ import com.streamsets.pipeline.stage.origin.sdcipc.Configs;
         "It buffers records in memory/disk. In case of failure/stop records may be lost.",
     execution = ExecutionMode.STANDALONE,
     icon = "dev.png",
-    onlineHelpRefUrl = "index.html#Pipeline_Design/DevStages.html",
+    onlineHelpRefUrl ="index.html#datacollector/UserGuide/Pipeline_Design/DevStages.html",
     upgrader = SdcIpcWithDiskBufferSourceUpgrader.class
 )
 @ConfigGroups(Groups.class)

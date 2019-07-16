@@ -18,9 +18,10 @@ package com.streamsets.pipeline.stage.origin.websocket;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.lib.http.JerseyClientUtil;
+import com.streamsets.pipeline.lib.microservice.ResponseConfigBean;
 import com.streamsets.pipeline.sdk.PushSourceRunner;
 import com.streamsets.pipeline.stage.destination.http.HttpClientTarget;
-import com.streamsets.pipeline.stage.origin.websocketserver.WebSocketServerPushSource;
+import com.streamsets.pipeline.stage.origin.websocketserver.WebSocketServerDPushSource;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -46,9 +47,11 @@ public class TestWebSocketClientSource {
   public List<Stage.ConfigIssue> runStageValidation(String url) throws Exception {
     WebSocketClientSourceConfigBean config = getConf(url);
 
-    WebSocketClientSource webSocketClientSource = PowerMockito.spy(new WebSocketClientSource(config));
+    WebSocketClientSource webSocketClientSource = PowerMockito.spy(
+        new WebSocketClientSource(config, new ResponseConfigBean())
+    );
 
-    PushSourceRunner runner = new PushSourceRunner.Builder(WebSocketServerPushSource.class, webSocketClientSource)
+    PushSourceRunner runner = new PushSourceRunner.Builder(WebSocketServerDPushSource.class, webSocketClientSource)
         .addOutputLane("a")
         .build();
 

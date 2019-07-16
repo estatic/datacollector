@@ -15,6 +15,7 @@
  */
 package com.streamsets.pipeline.lib.parser.log;
 
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.config.LogMode;
 import com.streamsets.pipeline.config.OnParseError;
@@ -40,7 +41,7 @@ public class LogDataFormatValidator {
   private final String customLogFormat;
   private final String regex;
   private final String grokPatternDefinition;
-  private final String grokPattern;
+  private final List<String> grokPatternList;
   private final Map<String, Integer> fieldPathsToGroupName;
   private final boolean enableLog4jCustomLogFormat;
   private final String log4jCustomLogFormat;
@@ -55,7 +56,7 @@ public class LogDataFormatValidator {
       String customLogFormat,
       String regex,
       String grokPatternDefinition,
-      String grokPattern,
+      List<String> grokPatternList,
       boolean enableLog4jCustomLogFormat,
       String log4jCustomLogFormat,
       OnParseError onParseError,
@@ -69,7 +70,7 @@ public class LogDataFormatValidator {
     this.customLogFormat = customLogFormat;
     this.regex = regex;
     this.grokPatternDefinition = grokPatternDefinition;
-    this.grokPattern = grokPattern;
+    this.grokPatternList = grokPatternList;
     this.enableLog4jCustomLogFormat = enableLog4jCustomLogFormat;
     this.log4jCustomLogFormat = log4jCustomLogFormat;
     this.maxStackTraceLines = maxStackTraceLines;
@@ -85,14 +86,18 @@ public class LogDataFormatValidator {
       .setConfig(LogDataParserFactory.REGEX_KEY, regex)
       .setConfig(LogDataParserFactory.REGEX_FIELD_PATH_TO_GROUP_KEY, fieldPathsToGroupName)
       .setConfig(LogDataParserFactory.GROK_PATTERN_DEFINITION_KEY, grokPatternDefinition)
-      .setConfig(LogDataParserFactory.GROK_PATTERN_KEY, grokPattern)
+      .setConfig(LogDataParserFactory.GROK_PATTERN_KEY, grokPatternList)
       .setConfig(LogDataParserFactory.LOG4J_FORMAT_KEY, log4jCustomLogFormat)
       .setConfig(LogDataParserFactory.ON_PARSE_ERROR_KEY, onParseError)
       .setConfig(LogDataParserFactory.LOG4J_TRIM_STACK_TRACES_TO_LENGTH_KEY, maxStackTraceLines)
       .setMode(logMode);
   }
 
-  public void validateLogFormatConfig(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  public void validateLogFormatConfig(ProtoConfigurableEntity.Context context, List<Stage.ConfigIssue> issues) {
+    validateLogFormatConfig(context, "", issues);
+  }
+
+  public void validateLogFormatConfig(ProtoConfigurableEntity.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
     if (logMaxObjectLen == 0 || logMaxObjectLen < -1) {
       issues.add(
           context.createConfigIssue(
@@ -125,7 +130,7 @@ public class LogDataFormatValidator {
   }
 
   private void validateApacheCustomLogFormat(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       String configPrefix,
       List<Stage.ConfigIssue> issues
   ) {
@@ -157,7 +162,7 @@ public class LogDataFormatValidator {
   }
 
   private void validateLog4jCustomLogFormat(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       String configPrefix,
       List<Stage.ConfigIssue> issues
   ) {
@@ -191,7 +196,7 @@ public class LogDataFormatValidator {
   }
 
   private void validateRegExFormat(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       String configPrefix,
       List<Stage.ConfigIssue> issues
   ) {
@@ -229,7 +234,7 @@ public class LogDataFormatValidator {
   }
 
   private void validateGrokPattern(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       String configPrefix,
       List<Stage.ConfigIssue> issues
   ) {
@@ -245,7 +250,9 @@ public class LogDataFormatValidator {
         grokDictionary.addDictionary(new StringReader(grokPatternDefinition));
       }
       grokDictionary.bind();
-      grokDictionary.compileExpression(grokPattern);
+      for (String grokPattern : grokPatternList) {
+        grokDictionary.compileExpression(grokPattern);
+      }
     } catch (GrokCompilationException|IOException e){
       issues.add(
         context.createConfigIssue(

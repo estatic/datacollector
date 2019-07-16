@@ -15,6 +15,8 @@
  */
 package com.streamsets.datacollector.execution.manager.standalone.dagger;
 
+import com.streamsets.datacollector.antennadoctor.AntennaDoctorModule;
+import com.streamsets.datacollector.blobstore.BlobStoreModule;
 import com.streamsets.datacollector.bundles.SupportBundleModule;
 import com.streamsets.datacollector.execution.executor.ExecutorModule;
 import com.streamsets.datacollector.execution.manager.standalone.StandaloneAndClusterPipelineManager;
@@ -26,6 +28,7 @@ import com.streamsets.datacollector.lineage.LineageModule;
 import com.streamsets.datacollector.store.CacheAclStoreModule;
 import com.streamsets.datacollector.store.CachePipelineStoreModule;
 
+import com.streamsets.datacollector.usagestats.StatsCollectorModule;
 import dagger.Module;
 
 /**
@@ -42,8 +45,11 @@ import dagger.Module;
     PreviewerProviderModule.class,
     StandaloneAndClusterRunnerProviderModule.class,
     CacheSnapshotStoreModule.class,
+    AntennaDoctorModule.class,
     SupportBundleModule.class,
-    LineageModule.class
+    BlobStoreModule.class,
+    LineageModule.class,
+    StatsCollectorModule.class
 })
 public class StandalonePipelineManagerModule {
 

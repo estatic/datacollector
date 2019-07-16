@@ -22,26 +22,22 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DPushSource;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 import com.streamsets.pipeline.lib.mqtt.Groups;
 import com.streamsets.pipeline.lib.mqtt.MqttClientConfigBean;
 
 @StageDef(
-    version = 2,
+    version = 3,
     label = "MQTT Subscriber",
     description = "Uses an MQTT client to subscribe to a topic on the MQTT Broker",
     icon = "mqtt_multithreaded.png",
     execution = {ExecutionMode.STANDALONE, ExecutionMode.EDGE},
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/MQTTSubscriber.html#task_wnz_mxt_lz",
+    onlineHelpRefUrl ="index.html?contextID=task_wnz_mxt_lz",
     upgrader = MqttClientSourceUpgrader.class
 )
 @HideConfigs({
-    "subscriberConf.dataFormatConfig.jsonContent",
-    "commonConf.tlsConfig.keyStoreFilePath",
-    "commonConf.tlsConfig.keyStoreType",
-    "commonConf.tlsConfig.keyStorePassword",
-    "commonConf.tlsConfig.keyStoreAlgorithm"
+    "subscriberConf.dataFormatConfig.jsonContent"
 })
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

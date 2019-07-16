@@ -16,22 +16,30 @@
 package com.streamsets.datacollector.runner;
 
 import com.google.common.collect.ImmutableList;
+import com.streamsets.datacollector.classpath.ClasspathValidatorResult;
 import com.streamsets.datacollector.cluster.ClusterModeConstants;
 import com.streamsets.datacollector.config.ConfigDefinition;
 import com.streamsets.datacollector.config.CredentialStoreDefinition;
+import com.streamsets.datacollector.config.InterceptorDefinition;
 import com.streamsets.datacollector.config.LineagePublisherDefinition;
 import com.streamsets.datacollector.config.ModelDefinition;
 import com.streamsets.datacollector.config.ModelType;
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.config.PipelineDefinition;
+import com.streamsets.datacollector.config.PipelineFragmentConfiguration;
+import com.streamsets.datacollector.config.PipelineFragmentDefinition;
 import com.streamsets.datacollector.config.PipelineRulesDefinition;
 import com.streamsets.datacollector.config.RawSourceDefinition;
 import com.streamsets.datacollector.config.ServiceDefinition;
 import com.streamsets.datacollector.config.StageConfiguration;
 import com.streamsets.datacollector.config.StageDefinition;
+import com.streamsets.datacollector.config.StageLibraryDefinition;
+import com.streamsets.datacollector.config.StageLibraryDelegateDefinitition;
 import com.streamsets.datacollector.creation.PipelineConfigBean;
 import com.streamsets.datacollector.el.ElConstantDefinition;
 import com.streamsets.datacollector.el.ElFunctionDefinition;
+import com.streamsets.datacollector.restapi.bean.EventDefinitionJson;
+import com.streamsets.datacollector.restapi.bean.RepositoryManifestJson;
 import com.streamsets.datacollector.runner.preview.StageConfigurationBuilder;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
 import com.streamsets.datacollector.store.PipelineInfo;
@@ -45,6 +53,7 @@ import com.streamsets.pipeline.api.DeliveryGuarantee;
 import com.streamsets.pipeline.api.ErrorListener;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.Executor;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.OffsetCommitTrigger;
 import com.streamsets.pipeline.api.OffsetCommitter;
 import com.streamsets.pipeline.api.Processor;
@@ -53,12 +62,14 @@ import com.streamsets.pipeline.api.RawSource;
 import com.streamsets.pipeline.api.RawSourcePreviewer;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.Stage;
+import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.StageUpgrader;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.api.base.BaseSource;
 import com.streamsets.pipeline.api.base.BaseTarget;
 import com.streamsets.pipeline.api.impl.ClusterSource;
+import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -611,7 +622,7 @@ public class MockStages {
   }
 
   public static UserContext userContext() {
-    return new UserContext("test-user");
+    return new UserContext("test-user", false, false);
   }
 
   public static class MockStageLibraryTask implements StageLibraryTask {
@@ -656,6 +667,11 @@ public class MockStages {
     }
 
     @Override
+    public PipelineFragmentDefinition getPipelineFragment() {
+      return PipelineFragmentDefinition.getPipelineFragmentDef();
+    }
+
+    @Override
     public PipelineRulesDefinition getPipelineRules() {
       return PipelineRulesDefinition.getPipelineRulesDef();
     }
@@ -691,6 +707,11 @@ public class MockStages {
     }
 
     @Override
+    public List<InterceptorDefinition> getInterceptorDefinitions() {
+      return Collections.emptyList();
+    }
+
+    @Override
     public StageDefinition getStage(String library, String name, boolean forExecution) {
       for (StageDefinition def : stages) {
         if (def.getLibrary().equals(library) && def.getName().equals(name)) {
@@ -707,6 +728,46 @@ public class MockStages {
 
     @Override
     public Map<String, String> getStageNameAliases() {
+      return Collections.emptyMap();
+    }
+
+    @Override
+    public List<ClasspathValidatorResult> validateStageLibClasspath() {
+      return Collections.emptyList();
+    }
+
+    @Override
+    public List<StageLibraryDelegateDefinitition> getStageLibraryDelegateDefinitions() {
+      return Collections.emptyList();
+    }
+
+    @Override
+    public StageLibraryDelegateDefinitition getStageLibraryDelegateDefinition(String stageLibrary, Class exportedInterface) {
+      return null;
+    }
+
+    @Override
+    public List<StageLibraryDefinition> getLoadedStageLibraries() {
+      return Collections.emptyList();
+    }
+
+    @Override
+    public List<RepositoryManifestJson> getRepositoryManifestList() {
+      return null;
+    }
+
+    @Override
+    public boolean isMultipleOriginSupported() {
+      return false;
+    }
+
+    @Override
+    public List<String> getLegacyStageLibs() {
+      return Collections.emptyList();
+    }
+
+    @Override
+    public Map<String, EventDefinitionJson> getEventDefinitions() {
       return Collections.emptyMap();
     }
 
@@ -736,42 +797,67 @@ public class MockStages {
           Arrays.asList(brokerHostConfig, brokerPortConfig));
 
         StageDefinition sDef = new StageDefinitionBuilder(cl, MSource.class, "sourceName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withRawSourceDefintion(rawSourceDefinition)
           .build();
         StageDefinition socDef = new StageDefinitionBuilder(cl, MSourceOffsetCommitter.class, "sourceOffsetCommitterName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .build();
         // Event producing source
         StageDefinition seDef = new StageDefinitionBuilder(cl, MSource.class, "sourceNameEvent")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withProducingEvents(true)
           .build();
         StageDefinition pushSourceDef = new StageDefinitionBuilder(cl, MPushSource.class, "pushSourceName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withProducingEvents(true)
           .build();
 
-
+        StageDefinition hiddenPDef = new StageDefinitionBuilder(cl, MProcessor.class, "hiddenProcessor")
+          .withStageDef(Mockito.mock(StageDef.class))
+          .withHideStage(Collections.singletonList(HideStage.Type.FIELD_PROCESSOR))
+          .build();
         StageDefinition pDef = new StageDefinitionBuilder(cl, MProcessor.class, "processorName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .build();
 
         ModelDefinition m = new ModelDefinition(ModelType.FIELD_SELECTOR_MULTI_VALUE, null, Collections.<String>emptyList(),
-          Collections.<String>emptyList(), null, null);
+          Collections.<String>emptyList(), null, null, null);
         ConfigDefinition stageReqField = new ConfigDefinition("stageRequiredFields", ConfigDef.Type.MODEL, "stageRequiredFields",
           "stageRequiredFields", null, false, "groupName", "stageRequiredFieldName", m, "", null, 0, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0, Collections.<Class> emptyList(),
           ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
 
         StageDefinition tDef = new StageDefinitionBuilder(cl, MTarget.class, "targetName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withConfig(stageReqField)
-          .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_BATCH, ExecutionMode.CLUSTER_MESOS_STREAMING)
+          .withExecutionModes(
+              ExecutionMode.CLUSTER_YARN_STREAMING,
+              ExecutionMode.STANDALONE,
+              ExecutionMode.CLUSTER_BATCH,
+              ExecutionMode.CLUSTER_MESOS_STREAMING,
+              ExecutionMode.BATCH,
+              ExecutionMode.STREAMING
+          )
           .build();
 
         StageDefinition tEventDef = new StageDefinitionBuilder(cl, MExecutor.class, "executorName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withConfig(stageReqField)
           .withProducingEvents(true)
           .withPipelineLifecycleStage(true)
-          .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_BATCH, ExecutionMode.CLUSTER_MESOS_STREAMING)
+          .withExecutionModes(
+              ExecutionMode.CLUSTER_YARN_STREAMING,
+              ExecutionMode.STANDALONE,
+              ExecutionMode.CLUSTER_BATCH,
+              ExecutionMode.CLUSTER_MESOS_STREAMING,
+              ExecutionMode.BATCH,
+              ExecutionMode.STREAMING
+          )
           .build();
 
         StageDefinition teDef = new StageDefinitionBuilder(cl, MTarget.class, "targetNameEvent")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withProducingEvents(true)
           .build();
 
@@ -782,6 +868,7 @@ public class MockStages {
           ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
 
         StageDefinition targetWithReqField = new StageDefinitionBuilder(cl, MTarget.class, "targetWithReqField")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withConfig(reqField)
           .build();
 
@@ -810,6 +897,7 @@ public class MockStages {
         );
 
         StageDefinition targetWithRequiredMapField = new StageDefinitionBuilder(cl, MTarget.class, "targetWithRequiredMapField")
+            .withStageDef(Mockito.mock(StageDef.class))
             .withConfig(requiredMapField)
             .build();
 
@@ -821,16 +909,32 @@ public class MockStages {
           Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
 
         StageDefinition eDef = new StageDefinitionBuilder(cl, ETarget.class, "errorTarget")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withErrorStage(true)
           .withPreconditions(false)
           .withConfig(errorTargetConf)
-          .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_BATCH, ExecutionMode.CLUSTER_MESOS_STREAMING)
+          .withExecutionModes(
+              ExecutionMode.CLUSTER_YARN_STREAMING,
+              ExecutionMode.STANDALONE,
+              ExecutionMode.CLUSTER_BATCH,
+              ExecutionMode.CLUSTER_MESOS_STREAMING,
+              ExecutionMode.BATCH,
+              ExecutionMode.STREAMING
+          )
           .build();
 
         StageDefinition statsDef = new StageDefinitionBuilder(cl, StatsTarget.class, "statsAggregator")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withPreconditions(false)
           .withStatsAggregatorStage(true)
-          .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_BATCH, ExecutionMode.CLUSTER_MESOS_STREAMING)
+          .withExecutionModes(
+              ExecutionMode.CLUSTER_YARN_STREAMING,
+              ExecutionMode.STANDALONE,
+              ExecutionMode.CLUSTER_BATCH,
+              ExecutionMode.CLUSTER_MESOS_STREAMING,
+              ExecutionMode.BATCH,
+              ExecutionMode.STREAMING
+          )
           .build();
 
         ConfigDefinition depConfDef = new ConfigDefinition(
@@ -851,18 +955,33 @@ public class MockStages {
           Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, triggered);
 
         StageDefinition swcDef = new StageDefinitionBuilder(cl, MSource.class, "sourceWithConfigsName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withConfig(depConfDef, triggeredConfDef)
           .build();
 
         StageDefinition clusterStageDef = new StageDefinitionBuilder(cl, ClusterMSource.class, "clusterSource")
-          .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.CLUSTER_BATCH, ExecutionMode.CLUSTER_MESOS_STREAMING)
+          .withStageDef(Mockito.mock(StageDef.class))
+          .withExecutionModes(
+              ExecutionMode.CLUSTER_YARN_STREAMING,
+              ExecutionMode.CLUSTER_BATCH,
+              ExecutionMode.CLUSTER_MESOS_STREAMING,
+              ExecutionMode.BATCH,
+              ExecutionMode.STREAMING
+          )
           .build();
 
         StageDefinition clusterLibraryStageDef = new StageDefinitionBuilder(cl, ClusterMSource.class, "clusterLibrarySource")
-          .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.CLUSTER_BATCH)
+          .withStageDef(Mockito.mock(StageDef.class))
+          .withExecutionModes(
+              ExecutionMode.CLUSTER_YARN_STREAMING,
+              ExecutionMode.CLUSTER_BATCH,
+              ExecutionMode.BATCH,
+              ExecutionMode.STREAMING
+          )
           .build();
 
         StageDefinition commonLibraryTargetDef = new StageDefinitionBuilder(cl, MTarget.class, "commonLibraryTarget")
+          .withStageDef(Mockito.mock(StageDef.class))
           .build();
 
         ConfigDefinition regularConf = new ConfigDefinition(
@@ -874,7 +993,7 @@ public class MockStages {
         List<ConfigDefinition> list = new ArrayList<>();
         list.add(regularConf);
         ModelDefinition modelDefinition = new ModelDefinition(ModelType.LIST_BEAN, null, Collections.<String>emptyList(),
-          Collections.<String>emptyList(), null, list);
+          Collections.<String>emptyList(), null, list, null);
 
         ConfigDefinition complexConf = new ConfigDefinition(
           "complexConfName", ConfigDef.Type.MODEL, "complexConfLabel", "complexConfDesc", null, true,
@@ -883,15 +1002,18 @@ public class MockStages {
           ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
 
         StageDefinition complexStage = new StageDefinitionBuilder(cl,ComplexSource.class, "complexStageName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withConfig(complexConf)
           .build();
 
         StageDefinition offsetControlTarget = new StageDefinitionBuilder(cl, OffsetControllerTarget.class, "offsetControlTarget")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withOffsetCommitTrigger(true)
           .build();
 
 
         StageDefinition multiLaneSource = new StageDefinitionBuilder(cl, OffsetControllerSource.class, "multiLaneSource")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withOutputStreams(2)
           .build();
 
@@ -901,6 +1023,7 @@ public class MockStages {
               socDef,
               seDef,
               pushSourceDef,
+              hiddenPDef,
               pDef,
               tDef,
               tEventDef,
@@ -938,6 +1061,7 @@ public class MockStages {
         if (stages.containsKey(name)) {
           StageDefinition oldDef = stages.get(name);
           StageDefinition newDef = new StageDefinition(
+              oldDef.getStageDef(),
               StageDefinitionBuilder.createLibraryDef(klass.getClassLoader()),
               false,
               klass,
@@ -966,7 +1090,15 @@ public class MockStages {
               false,
               false,
               false,
-              Collections.emptyList()
+              Collections.emptyList(),
+              Collections.emptyList(),
+              false,
+              false,
+              -1,
+              null,
+              false,
+              Collections.emptyList(),
+              null
           );
           stages.put(name, newDef);
         } else {
@@ -1004,18 +1136,33 @@ public class MockStages {
         Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, null);
 
       return new StageDefinitionBuilder(cl, ETarget.class, "errorTarget")
+        .withStageDef(Mockito.mock(StageDef.class))
         .withErrorStage(true)
         .withPreconditions(false)
         .withConfig(errorTargetConf)
-        .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_BATCH, ExecutionMode.CLUSTER_MESOS_STREAMING)
+        .withExecutionModes(
+            ExecutionMode.CLUSTER_YARN_STREAMING,
+            ExecutionMode.STANDALONE,
+            ExecutionMode.CLUSTER_BATCH,
+            ExecutionMode.CLUSTER_MESOS_STREAMING,
+            ExecutionMode.BATCH,
+            ExecutionMode.STREAMING
+        )
         .build();
     }
 
     public static StageDefinition getStatsAggStageDefinition(ClassLoader cl) {
       return new StageDefinitionBuilder(cl, StatsTarget.class, "statsAggregator")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withPreconditions(false)
           .withStatsAggregatorStage(true)
-          .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_BATCH)
+          .withExecutionModes(
+              ExecutionMode.CLUSTER_YARN_STREAMING,
+              ExecutionMode.STANDALONE,
+              ExecutionMode.CLUSTER_BATCH,
+              ExecutionMode.BATCH,
+              ExecutionMode.STREAMING
+          )
           .build();
     }
 
@@ -1030,6 +1177,7 @@ public class MockStages {
 
       public ClusterStreamingBuilder(ClassLoader cl) {
         clusterStageDef = new StageDefinitionBuilder(cl, MSource.class, "sourceName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.CLUSTER_BATCH, ExecutionMode.CLUSTER_MESOS_STREAMING)
           .withRawSourceDefintion(getRawSourceDefinition())
           .withLibJarsRegexp(ClusterModeConstants.SPARK_KAFKA_JAR_REGEX)
@@ -1057,6 +1205,7 @@ public class MockStages {
 
       public ClusterMapRStreamingBuilder(ClassLoader cl) {
         clusterStageDef = new StageDefinitionBuilder(cl, MSource.class, "sourceName")
+            .withStageDef(Mockito.mock(StageDef.class))
             .withExecutionModes(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE)
             .withRawSourceDefintion(getRawSourceDefinition())
             .withLibJarsRegexp("maprfs-\\d+.*")
@@ -1083,6 +1232,7 @@ public class MockStages {
 
       public ClusterBatchBuilder(ClassLoader cl) {
         clusterStageDef = new StageDefinitionBuilder(cl, MSource.class, "sourceName")
+          .withStageDef(Mockito.mock(StageDef.class))
           .withExecutionModes(ExecutionMode.CLUSTER_BATCH, ExecutionMode.STANDALONE)
           .withRawSourceDefintion(getRawSourceDefinition())
           .withLibJarsRegexp(ClusterModeConstants.AVRO_JAR_REGEX, ClusterModeConstants.AVRO_MAPRED_JAR_REGEX)
@@ -1173,17 +1323,212 @@ public class MockStages {
         null,
         createPipelineConfigs(),
         null,
+        Collections.emptyList(),
         stages,
         getErrorStageConfig(),
         getStatsAggregatorStageConfig(),
         Collections.emptyList(),
-        Collections.emptyList()
+        Collections.emptyList(),
+        null
     );
     Map<String, Object> metadata = new HashMap<>();
     metadata.put("a", "A");
     pipelineConfiguration.setMetadata(metadata);
     return pipelineConfiguration;
   }
+
+  public static PipelineConfiguration createPipelineConfigSourceFragmentTarget() {
+    StageConfiguration processor = new StageConfigurationBuilder("p", "processorName")
+        .withInputLanes("s")
+        .withOutputLanes("p1")
+        .build();
+    StageConfiguration processor2 = new StageConfigurationBuilder("p2", "processorName")
+        .withInputLanes("p1")
+        .withOutputLanes("p")
+        .build();
+    PipelineFragmentConfiguration fragment = new PipelineFragmentConfiguration(
+        UUID.randomUUID(),
+        1,
+        1,
+        "random_title",
+        "random_id",
+        "random_fragment_instance_id",
+        "weird description",
+        null,
+        Arrays.asList(processor, processor2),
+        Collections.emptyMap(),
+        Collections.emptyList(),
+        null
+    );
+    fragment.setFragmentInstanceId("fragment_01");
+
+    List<StageConfiguration> stages = new ArrayList<>();
+    StageConfiguration source = new StageConfigurationBuilder("s", "sourceName")
+        .withOutputLanes("s")
+        .build();
+    stages.add(source);
+
+    StageConfiguration fragmentProcessor =
+        new StageConfigurationBuilder("fp1", PipelineFragmentConfiguration.FRAGMENT_PROCESSOR_STAGE_NAME)
+            .withInputLanes("s")
+            .withOutputLanes("p")
+            .withConfig(
+                new Config(
+                    PipelineFragmentConfiguration.CONF_FRAGMENT_ID,
+                    fragment.getPipelineId()
+                ),
+                new Config(
+                    PipelineFragmentConfiguration.CONF_FRAGMENT_INSTANCE_ID,
+                    fragment.getFragmentInstanceId()
+                )
+            )
+            .build();
+    stages.add(fragmentProcessor);
+
+    StageConfiguration target = new StageConfigurationBuilder("t", "targetName")
+        .withInputLanes("p")
+        .build();
+    stages.add(target);
+
+    PipelineConfiguration pipelineConfiguration = new PipelineConfiguration(
+        PipelineStoreTask.SCHEMA_VERSION,
+        PipelineConfigBean.VERSION,
+        "pipelineId",
+        UUID.randomUUID(),
+        "label",
+        null,
+        createPipelineConfigs(),
+        null,
+        Collections.singletonList(fragment),
+        stages,
+        getErrorStageConfig(),
+        getStatsAggregatorStageConfig(),
+        Collections.emptyList(),
+        Collections.emptyList(),
+        null
+    );
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("a", "A");
+    pipelineConfiguration.setMetadata(metadata);
+    return pipelineConfiguration;
+  }
+
+  public static PipelineConfiguration createPipelineConfigSourceFragmentInsideFragmentTarget() {
+    StageConfiguration processor2 = new StageConfigurationBuilder("p2", "processorName")
+        .withInputLanes("p2")
+        .withOutputLanes("p3")
+        .build();
+    PipelineFragmentConfiguration nestedFragment = new PipelineFragmentConfiguration(
+        UUID.randomUUID(),
+        1,
+        1,
+        "random_title",
+        "random_id",
+        "random_fragment_instance_id",
+        "weird description",
+        null,
+        Collections.singletonList(processor2),
+        Collections.emptyMap(),
+        Collections.emptyList(),
+        null
+    );
+    nestedFragment.setFragmentInstanceId("nestedFragment_01");
+
+
+    StageConfiguration processor1 = new StageConfigurationBuilder("p1", "processorName")
+        .withInputLanes("p1")
+        .withOutputLanes("p2")
+        .build();
+
+    StageConfiguration fragmentProcessor =
+        new StageConfigurationBuilder("fp1", PipelineFragmentConfiguration.FRAGMENT_PROCESSOR_STAGE_NAME)
+            .withInputLanes("p2")
+            .withOutputLanes("p3")
+            .withConfig(
+                new Config(
+                    PipelineFragmentConfiguration.CONF_FRAGMENT_ID,
+                    nestedFragment.getPipelineId()
+                ),
+                new Config(
+                    PipelineFragmentConfiguration.CONF_FRAGMENT_INSTANCE_ID,
+                    nestedFragment.getFragmentInstanceId()
+                )
+            )
+            .build();
+
+    PipelineFragmentConfiguration fragment = new PipelineFragmentConfiguration(
+        UUID.randomUUID(),
+        1,
+        1,
+        "random_title",
+        "random_id",
+        "random_fragment_instance_id",
+        "weird description",
+        Collections.singletonList(nestedFragment),
+        ImmutableList.of(processor1, fragmentProcessor),
+        Collections.emptyMap(),
+        Collections.emptyList(),
+        null
+    );
+    fragment.setFragmentInstanceId("fragment_01");
+
+
+    List<StageConfiguration> stages = new ArrayList<>();
+    StageConfiguration source = new StageConfigurationBuilder("s", "sourceName")
+        .withOutputLanes("s")
+        .build();
+    stages.add(source);
+
+    StageConfiguration target = new StageConfigurationBuilder("t", "targetName")
+        .withInputLanes("p3")
+        .build();
+    stages.add(target);
+    StageConfiguration processor3 = new StageConfigurationBuilder("p0", "processorName")
+        .withInputLanes("s")
+        .withOutputLanes("p1")
+        .build();
+    stages.add(processor3);
+
+    StageConfiguration fragmentProcessor2 =
+        new StageConfigurationBuilder("fp2", PipelineFragmentConfiguration.FRAGMENT_PROCESSOR_STAGE_NAME)
+            .withInputLanes("p1")
+            .withOutputLanes("p3")
+            .withConfig(
+                new Config(
+                    PipelineFragmentConfiguration.CONF_FRAGMENT_ID,
+                    fragment.getPipelineId()
+                ),
+                new Config(
+                    PipelineFragmentConfiguration.CONF_FRAGMENT_INSTANCE_ID,
+                    fragment.getFragmentInstanceId()
+                )
+            )
+            .build();
+    stages.add(fragmentProcessor2);
+
+    PipelineConfiguration pipelineConfiguration = new PipelineConfiguration(
+        PipelineStoreTask.SCHEMA_VERSION,
+        PipelineConfigBean.VERSION,
+        "pipelineId",
+        UUID.randomUUID(),
+        "label",
+        null,
+        createPipelineConfigs(),
+        null,
+        Collections.singletonList(fragment),
+        stages,
+        getErrorStageConfig(),
+        getStatsAggregatorStageConfig(),
+        Collections.emptyList(),
+        Collections.emptyList(),
+        null
+    );
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("a", "A");
+    pipelineConfiguration.setMetadata(metadata);
+    return pipelineConfiguration;
+  }
+
 
   @SuppressWarnings("unchecked")
   public static PipelineConfiguration createPipelineConfigurationSourceTargetWithEventsOpen() {
@@ -1256,6 +1601,32 @@ public class MockStages {
   }
 
   @SuppressWarnings("unchecked")
+  public static PipelineConfiguration createPipelineConfigurationSourceTargetWithMultipleEventsProcessed() {
+    List<StageConfiguration> stages = new ArrayList<>();
+
+    StageConfiguration source = new StageConfigurationBuilder("s", "sourceNameEvent")
+      .withOutputLanes("t")
+      .withEventLanes("se")
+      .build();
+    stages.add(source);
+    StageConfiguration executor = new StageConfigurationBuilder("e", "executorName")
+      .withInputLanes("se", "te")
+      .build();
+    stages.add(executor);
+    StageConfiguration target = new StageConfigurationBuilder("t", "targetNameEvent")
+      .withInputLanes("t")
+      .withEventLanes("te")
+      .build();
+    stages.add(target);
+
+    PipelineConfiguration pipelineConfiguration = pipeline(stages);
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("a", "A");
+    pipelineConfiguration.setMetadata(metadata);
+    return pipelineConfiguration;
+  }
+
+  @SuppressWarnings("unchecked")
   public static PipelineConfiguration createPipelineConfigurationSourceTargetDeclaredEventLaneWithoutSupportingEvents() {
     List<StageConfiguration> stages = new ArrayList<>();
 
@@ -1300,6 +1671,27 @@ public class MockStages {
     metadata.put("a", "A");
     pipelineConfiguration.setMetadata(metadata);
     return pipelineConfiguration;
+  }
+
+  @SuppressWarnings("unchecked")
+  public static PipelineConfiguration createPipelineWithHiddenStage() {
+    List<StageConfiguration> stages = new ArrayList<>();
+    StageConfiguration source = new StageConfigurationBuilder("s", "sourceName")
+      .withOutputLanes("s")
+      .build();
+    stages.add(source);
+    StageConfiguration processor = new StageConfigurationBuilder("p", "hiddenProcessor")
+      .withInputLanes("s")
+      .withOutputLanes("p")
+      .build();
+    stages.add(processor);
+    StageConfiguration target = new StageConfigurationBuilder("t", "targetName")
+      .withInputLanes("p")
+      .build();
+    stages.add(target);
+
+    PipelineConfiguration pipelineConfiguration = pipeline(stages);
+    return pipeline(stages);
   }
 
   @SuppressWarnings("unchecked")
@@ -1703,13 +2095,35 @@ public class MockStages {
   }
 
   private static PipelineConfiguration pipeline(List<StageConfiguration> stages) {
-    return pipeline(stages, Collections.emptyList(), Collections.emptyList());
+    return pipeline(
+        stages,
+        Collections.emptyList(),
+        Collections.emptyList(),
+        getErrorStageConfig(),
+        getStatsAggregatorStageConfig()
+    );
+  }
+
+  private static PipelineConfiguration pipeline(
+      List<StageConfiguration> stages,
+      List<StageConfiguration> startStages,
+      List<StageConfiguration> stopStages
+  ) {
+    return pipeline(
+        stages,
+        startStages,
+        stopStages,
+        getErrorStageConfig(),
+        getStatsAggregatorStageConfig()
+    );
   }
 
   private static PipelineConfiguration pipeline(
     List<StageConfiguration> stages,
     List<StageConfiguration> startStages,
-    List<StageConfiguration> stopStages
+    List<StageConfiguration> stopStages,
+    StageConfiguration errorStageConfig,
+    StageConfiguration statsAggregatorStageConfig
   ) {
     return new PipelineConfiguration(
         PipelineStoreTask.SCHEMA_VERSION,
@@ -1721,8 +2135,8 @@ public class MockStages {
         createPipelineConfigs(),
         null,
         stages,
-        getErrorStageConfig(),
-        getStatsAggregatorStageConfig(),
+        errorStageConfig,
+        statsAggregatorStageConfig,
         startStages,
         stopStages
     );

@@ -22,11 +22,13 @@ import com.streamsets.datacollector.config.RawSourceDefinition;
 import com.streamsets.datacollector.config.ServiceDependencyDefinition;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.config.StageLibraryDefinition;
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.pipeline.api.ExecutionMode;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.ProtoSource;
 import com.streamsets.pipeline.api.Stage;
+import com.streamsets.pipeline.api.StageDef;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.StageUpgrader;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.api.Executor;
@@ -39,6 +41,7 @@ import java.util.Properties;
 /**
  */
 public class StageDefinitionBuilder {
+  StageDef stageDef = null;
   StageLibraryDefinition libraryDefinition;
   boolean privateClassLoader = false;
   Class<? extends Stage> klass;
@@ -57,7 +60,13 @@ public class StageDefinitionBuilder {
   boolean variableOutputStreams = false;
   int outputStreams;
   String outputStreamLabelProviderClass = null;
-  List<ExecutionMode> executionModes = Arrays.asList(ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.STANDALONE, ExecutionMode.CLUSTER_BATCH);
+  List<ExecutionMode> executionModes = Arrays.asList(
+      ExecutionMode.CLUSTER_YARN_STREAMING,
+      ExecutionMode.STANDALONE,
+      ExecutionMode.CLUSTER_BATCH,
+      ExecutionMode.BATCH,
+      ExecutionMode.STREAMING
+  );
   boolean recordsByRef = false;
   StageUpgrader upgrader = new StageUpgrader.Default();
   List<String> libJarsRegex = Collections.emptyList();
@@ -68,6 +77,7 @@ public class StageDefinitionBuilder {
   boolean offsetCommitTrigger = false;
   boolean producesEvents = false;
   List<ServiceDependencyDefinition> services = Collections.emptyList();
+  List<HideStage.Type> hideStage = Collections.emptyList();
 
   public StageDefinitionBuilder(ClassLoader cl, Class<? extends Stage> klass, String name) {
     this.libraryDefinition = createLibraryDef(cl);
@@ -77,6 +87,11 @@ public class StageDefinitionBuilder {
     this.description = name + "Description";
     this.type = autoDetectStageType(klass);
     this.outputStreams = type.isOneOf(StageType.TARGET, StageType.EXECUTOR) ? 0 : 1;
+  }
+
+  public StageDefinitionBuilder withStageDef(StageDef stageDef) {
+    this.stageDef = stageDef;
+    return this;
   }
 
   public StageDefinitionBuilder withLabel(String label) {
@@ -164,8 +179,14 @@ public class StageDefinitionBuilder {
     return this;
   }
 
+  public StageDefinitionBuilder withHideStage(List<HideStage.Type> hideStage) {
+    this.hideStage = hideStage;
+    return this;
+  }
+
   public StageDefinition build() {
     return new StageDefinition(
+      stageDef,
       libraryDefinition,
       privateClassLoader,
       klass,
@@ -194,7 +215,15 @@ public class StageDefinitionBuilder {
       pipelineLifecycleStage,
       offsetCommitTrigger,
       producesEvents,
-      services
+      services,
+      hideStage,
+      false,
+      false,
+      -1,
+      null,
+       false,
+       Collections.emptyList(),
+      stageDef.upgraderDef()
     );
   }
 

@@ -21,18 +21,19 @@ import com.streamsets.pipeline.api.Executor;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.PipelineLifecycleStage;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DExecutor;
+import com.streamsets.pipeline.api.base.configurablestage.DExecutor;
 import com.streamsets.pipeline.stage.destination.mapreduce.config.JobConfig;
 import com.streamsets.pipeline.stage.destination.mapreduce.config.MapReduceConfig;
 
 @StageDef(
-    version = 1,
+    version = 3,
+    upgrader = MapReduceExecutorUpgrader.class,
     label = "MapReduce",
     description = "Starts a MapReduce job",
     icon = "mapreduce-executor.png",
     privateClassLoader = true,
     producesEvents = true,
-    onlineHelpRefUrl = "index.html#Executors/MapReduce.html#task_olh_bmk_fx"
+    onlineHelpRefUrl ="index.html?contextID=task_olh_bmk_fx"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

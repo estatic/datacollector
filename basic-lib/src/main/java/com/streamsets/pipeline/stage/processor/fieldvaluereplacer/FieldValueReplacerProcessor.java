@@ -85,14 +85,6 @@ public class FieldValueReplacerProcessor extends SingleLaneRecordProcessor {
     Set<String> fieldPaths = record.getEscapedFieldPaths();
     Set<String> fieldsThatDoNotExist = new HashSet<>();
 
-    ELEval fieldPathEval = getContext().createELEval(String.format(
-        "%s---%s---%s",
-        getContext().getPipelineId(),
-        getContext().getStageInfo().getInstanceName(),
-        "fieldPathEval"
-    ), RecordEL.class, FieldEL.class);
-    ELVars fieldPathVars = getContext().createELVars();
-
     RecordEL.setRecordInContext(nullConditionELVars, record);
 
     if(nullReplacerConditionalConfigs != null && !nullReplacerConditionalConfigs.isEmpty()) {
@@ -108,7 +100,8 @@ public class FieldValueReplacerProcessor extends SingleLaneRecordProcessor {
           final List<String> matchingPaths = FieldPathExpressionUtil.evaluateMatchingFieldPaths(fieldToReplace,
               fieldPathEval,
               fieldPathVars,
-              record
+              record,
+              fieldPaths
           );
           if (matchingPaths.isEmpty()) {
             fieldsThatDoNotExist.add(fieldToReplace);
@@ -144,7 +137,8 @@ public class FieldValueReplacerProcessor extends SingleLaneRecordProcessor {
               fieldToReplace,
               fieldPathEval,
               fieldPathVars,
-              record
+              record,
+              fieldPaths
           )) {
             if (record.has(matchingField)) {
 
@@ -201,7 +195,7 @@ public class FieldValueReplacerProcessor extends SingleLaneRecordProcessor {
                 throw new IllegalArgumentException(Utils.format(
                     Errors.VALUE_REPLACER_03.getMessage(),
                     field.getType(), matchingField
-                ));
+                ), e);
               }
             }
           }
@@ -231,8 +225,11 @@ public class FieldValueReplacerProcessor extends SingleLaneRecordProcessor {
       for (String fieldNameToNull : fieldNamesToNull) {
         try {
           final List<String> matchingPaths = FieldPathExpressionUtil.evaluateMatchingFieldPaths(
-              fieldNameToNull, fieldPathEval, fieldPathVars,
-              record
+              fieldNameToNull,
+              fieldPathEval,
+              fieldPathVars,
+              record,
+              fieldPaths
           );
           if (matchingPaths.isEmpty()) {
             // FieldPathExpressionUtil.evaluateMatchingFieldPaths does NOT return the supplied param in its result
@@ -336,7 +333,11 @@ public class FieldValueReplacerProcessor extends SingleLaneRecordProcessor {
           throw new IllegalArgumentException(Utils.format(Errors.VALUE_REPLACER_03.getMessage(), field.getType(), matchingField));
       }
     } catch (Exception e) {
-      throw new IllegalArgumentException(Utils.format(Errors.VALUE_REPLACER_03.getMessage(), field.getType()));
+      if (e instanceof IllegalArgumentException) {
+        throw (IllegalArgumentException)e;
+      } else {
+        throw new IllegalArgumentException(Utils.format(Errors.VALUE_REPLACER_03.getMessage(), field.getType()), e);
+      }
     }
   }
 

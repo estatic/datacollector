@@ -18,6 +18,7 @@ package com.streamsets.pipeline.stage.destination.http;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.RateLimiter;
 import com.streamsets.pipeline.api.Batch;
+import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.BaseTarget;
@@ -31,6 +32,8 @@ import com.streamsets.pipeline.lib.http.HttpClientCommon;
 import com.streamsets.pipeline.lib.http.HttpMethod;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
+import com.streamsets.pipeline.stage.destination.lib.ResponseType;
+import com.streamsets.pipeline.stage.origin.restservice.RestServiceReceiver;
 import com.streamsets.pipeline.stage.util.http.HttpStageUtil;
 import org.glassfish.jersey.client.oauth1.OAuth1ClientSupport;
 import org.slf4j.Logger;
@@ -62,7 +65,7 @@ public class HttpClientTarget extends BaseTarget {
   private ErrorRecordHandler errorRecordHandler;
   private RateLimiter rateLimiter;
 
-  HttpClientTarget(HttpClientTargetConfig conf) {
+  protected HttpClientTarget(HttpClientTargetConfig conf) {
     this.conf = conf;
     this.httpClientCommon = new HttpClientCommon(conf.client);
   }
@@ -102,10 +105,13 @@ public class HttpClientTarget extends BaseTarget {
       if (batch.getRecords().hasNext()) {
         // Use first record for resolving url, headers, ...
         Record firstRecord = batch.getRecords().next();
-        Invocation.Builder builder = getBuilder(firstRecord);
+        MultivaluedMap<String, Object> resolvedHeaders =  httpClientCommon.resolveHeaders(conf.headers, firstRecord);
+        Invocation.Builder builder = getBuilder(firstRecord).headers(resolvedHeaders);
+        String contentType = HttpStageUtil.getContentTypeWithDefault(resolvedHeaders, getContentType());
         HttpMethod method = httpClientCommon.getHttpMethod(conf.httpMethod, conf.methodExpression, firstRecord);
 
-        if (method == HttpMethod.POST || method == HttpMethod.PUT) {
+        if (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH ||
+            method == HttpMethod.DELETE) {
           StreamingOutput streamingOutput = outputStream -> {
             try (DataGenerator dataGenerator = generatorFactory.getGenerator(outputStream)) {
               Iterator<Record> records = batch.getRecords();
@@ -118,7 +124,7 @@ public class HttpClientTarget extends BaseTarget {
               throw new IOException(e);
             }
           };
-          response = builder.method(method.getLabel(), Entity.entity(streamingOutput, getContentType()));
+          response = builder.method(method.getLabel(), Entity.entity(streamingOutput, contentType));
         } else {
           response = builder.method(method.getLabel());
         }
@@ -138,6 +144,18 @@ public class HttpClientTarget extends BaseTarget {
                   response.getStatusInfo().getReasonPhrase() + " " + responseBody
               )
           );
+        } else {
+          // Success case
+          if (conf.responseConf.sendResponseToOrigin) {
+            if (ResponseType.SUCCESS_RECORDS.equals(conf.responseConf.responseType)) {
+              Iterator<Record> records = batch.getRecords();
+              while (records.hasNext()) {
+                getContext().toSourceResponse(records.next());
+              }
+            } else {
+              getContext().toSourceResponse(createResponseRecord(responseBody));
+            }
+          }
         }
       }
     } catch (Exception ex) {
@@ -155,12 +173,13 @@ public class HttpClientTarget extends BaseTarget {
     Iterator<Record> records = batch.getRecords();
     while (records.hasNext()) {
       Record record = records.next();
-      AsyncInvoker asyncInvoker = getBuilder(record).async();
+      MultivaluedMap<String, Object> resolvedHeaders =  httpClientCommon.resolveHeaders(conf.headers, record);
+      AsyncInvoker asyncInvoker = getBuilder(record).headers(resolvedHeaders).async();
+      String contentType = HttpStageUtil.getContentTypeWithDefault(resolvedHeaders, getContentType());
       HttpMethod method = httpClientCommon.getHttpMethod(conf.httpMethod, conf.methodExpression, record);
-      String contentType = getContentType();
       rateLimiter.acquire();
       try {
-        if (method == HttpMethod.POST || method == HttpMethod.PUT) {
+        if (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH) {
           StreamingOutput streamingOutput = outputStream -> {
             try (DataGenerator dataGenerator = generatorFactory.getGenerator(outputStream)) {
               dataGenerator.write(record);
@@ -200,10 +219,8 @@ public class HttpClientTarget extends BaseTarget {
         !target.getUri().getScheme().toLowerCase().startsWith("https")) {
       throw new StageException(Errors.HTTP_07);
     }
-    MultivaluedMap<String, Object> resolvedHeaders =  httpClientCommon.resolveHeaders(conf.headers, record);
     return target.request()
-        .property(OAuth1ClientSupport.OAUTH_PROPERTY_ACCESS_TOKEN, httpClientCommon.getAuthToken())
-        .headers(resolvedHeaders);
+        .property(OAuth1ClientSupport.OAUTH_PROPERTY_ACCESS_TOKEN, httpClientCommon.getAuthToken());
   }
 
   /**
@@ -238,6 +255,14 @@ public class HttpClientTarget extends BaseTarget {
             response.getStatus(),
             response.getStatusInfo().getReasonPhrase() + " " + responseBody
         );
+      } else {
+        if (conf.responseConf.sendResponseToOrigin) {
+          if (ResponseType.SUCCESS_RECORDS.equals(conf.responseConf.responseType)) {
+            getContext().toSourceResponse(record);
+          } else {
+            getContext().toSourceResponse(createResponseRecord(responseBody));
+          }
+        }
       }
     } catch (InterruptedException | ExecutionException e) {
       LOG.error(Errors.HTTP_41.getMessage(), e.toString(), e);
@@ -261,6 +286,13 @@ public class HttpClientTarget extends BaseTarget {
         // Default is binary blob
         return MediaType.APPLICATION_OCTET_STREAM;
     }
+  }
+
+  private Record createResponseRecord(String responseBody) {
+    Record responseRecord = getContext().createRecord("responseRecord");
+    responseRecord.set(Field.create(responseBody));
+    responseRecord.getHeader().setAttribute(RestServiceReceiver.RAW_DATA_RECORD_HEADER_ATTR_NAME, "true");
+    return responseRecord;
   }
 
   @Override

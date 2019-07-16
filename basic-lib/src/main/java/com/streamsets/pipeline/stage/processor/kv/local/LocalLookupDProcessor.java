@@ -19,15 +19,16 @@ import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 @StageDef(
     version = 1,
     label = "Static Lookup",
     description = "Performs key-value lookups in static table.",
     icon = "dedup.png",
-    onlineHelpRefUrl = "index.html#Processors/StaticLookup.html#task_xk1_z4r_pv"
+    onlineHelpRefUrl ="index.html?contextID=task_xk1_z4r_pv"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

@@ -16,7 +16,7 @@
 package com.streamsets.datacollector.execution.runner.common;
 
 import com.codahale.metrics.MetricRegistry;
-import com.streamsets.datacollector.config.MemoryLimitConfiguration;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.execution.Manager;
 import com.streamsets.datacollector.execution.PipelineStateStore;
 import com.streamsets.datacollector.execution.PipelineStatus;
@@ -30,7 +30,9 @@ import com.streamsets.datacollector.record.RecordImpl;
 import com.streamsets.datacollector.runner.ErrorSink;
 import com.streamsets.datacollector.runner.MockStages;
 import com.streamsets.datacollector.runner.Pipeline;
+import com.streamsets.datacollector.runner.SourceResponseSink;
 import com.streamsets.datacollector.runner.production.BadRecordsHandler;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.util.TestUtil;
 import com.streamsets.pipeline.api.Batch;
@@ -185,14 +187,15 @@ public class TestErrorRecord {
     ProductionPipelineRunner runner = new ProductionPipelineRunner(
         TestUtil.MY_PIPELINE,
         "0",
+        null,
         new Configuration(),
         runtimeInfo,
         new MetricRegistry(),
         null,
+        null,
         null
     );
     runner.setDeliveryGuarantee(DeliveryGuarantee.AT_LEAST_ONCE);
-    runner.setMemoryLimitConfiguration(new MemoryLimitConfiguration());
     runner.setObserveRequests(new ArrayBlockingQueue<>(100, true /*FIFO*/));
     runner.setOffsetTracker(new TestUtil.SourceOffsetTrackerImpl(Collections.singletonMap(Source.POLL_SOURCE_OFFSET_KEY, "1")));
     ProductionPipeline pipeline = new ProductionPipelineBuilder(
@@ -203,7 +206,9 @@ public class TestErrorRecord {
         MockStages.createStageLibrary(),
         runner,
         null,
-        Mockito.mock(LineagePublisherTask.class)
+        Mockito.mock(BlobStoreTask.class),
+        Mockito.mock(LineagePublisherTask.class),
+        Mockito.mock(StatsCollector.class)
     ).build(
         MockStages.userContext(),
         MockStages.createPipelineConfigurationSourceProcessorTarget(),
@@ -224,9 +229,14 @@ public class TestErrorRecord {
         0
     );
 
-    PowerMockito.replace(
-        MemberMatcher.method(BadRecordsHandler.class, "handle", String.class, String.class, ErrorSink.class)
-    ).with((proxy, method, args) -> {
+    PowerMockito.replace(MemberMatcher.method(
+        BadRecordsHandler.class,
+        "handle",
+        String.class,
+        String.class,
+        ErrorSink.class,
+        SourceResponseSink.class
+    )).with((proxy, method, args) -> {
       ErrorSink errorSink = (ErrorSink) args[2];
       for (Map.Entry<String, List<Record>> entry : errorSink.getErrorRecords().entrySet()) {
         for (Record record : entry.getValue()) {
@@ -239,7 +249,7 @@ public class TestErrorRecord {
     captureMockStages(errorStage, new AtomicBoolean(false));
 
     ProductionPipelineRunnable runnable =
-        new ProductionPipelineRunnable(null, (StandaloneRunner) ((AsyncRunner) this.runner).getRunner(), pipeline,
+        new ProductionPipelineRunnable(null, this.runner.getRunner(StandaloneRunner.class), pipeline,
             TestUtil.MY_PIPELINE, "0", Collections.<Future<?>> emptyList());
     Thread t = new Thread(runnable);
     t.start();

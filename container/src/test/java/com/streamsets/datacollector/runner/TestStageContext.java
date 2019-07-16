@@ -22,7 +22,6 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.datacollector.email.EmailException;
 import com.streamsets.datacollector.email.EmailSender;
 import com.streamsets.datacollector.lineage.LineageEventImpl;
@@ -40,6 +39,7 @@ import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.OnRecordError;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.lineage.LineageEvent;
 import com.streamsets.pipeline.api.lineage.LineageEventType;
 import com.streamsets.pipeline.api.lineage.LineageSpecificAttribute;
@@ -103,8 +103,8 @@ public class TestStageContext {
     Assert.assertEquals(1, errorSink.getTotalErrorRecords());
     Record eRecord = errorSink.getErrorRecords().get("stage").get(0);
     Assert.assertEquals(record.getHeader().getSourceId(), eRecord.getHeader().getSourceId());
-    Assert.assertEquals("CONTAINER_0002", eRecord.getHeader().getErrorCode());
-    Assert.assertEquals("CONTAINER_0002 - FOO", eRecord.getHeader().getErrorMessage());
+    Assert.assertEquals("CONTAINER_0001", eRecord.getHeader().getErrorCode());
+    Assert.assertEquals("CONTAINER_0001 - FOO", eRecord.getHeader().getErrorMessage());
   }
 
   @Test
@@ -181,7 +181,8 @@ public class TestStageContext {
       sender,
       new Configuration(),
       new LineagePublisherDelegator.NoopDelegator(),
-      Mockito.mock(RuntimeInfo.class)
+      Mockito.mock(RuntimeInfo.class),
+      Collections.emptyMap()
     );
 
     try {
@@ -213,7 +214,8 @@ public class TestStageContext {
       sender,
       new Configuration(),
       new LineagePublisherDelegator.NoopDelegator(),
-      Mockito.mock(RuntimeInfo.class)
+      Mockito.mock(RuntimeInfo.class),
+      Collections.emptyMap()
     );
 
     context.notify(ImmutableList.of("foo", "bar"), "SUBJECT", "BODY");
@@ -230,9 +232,9 @@ public class TestStageContext {
 
     EventRecord event = context.createEventRecord("custom_type", 2, "eventSourceId");
     Assert.assertNotNull(event);
-    Assert.assertEquals("custom_type", event.getHeader().getAttribute(EventRecord.TYPE));
-    Assert.assertEquals("2", event.getHeader().getAttribute(EventRecord.VERSION));
-    Assert.assertNotNull(event.getHeader().getAttribute(EventRecord.CREATION_TIMESTAMP));
+    Assert.assertEquals("custom_type", event.getEventType());
+    Assert.assertEquals("2", event.getEventVersion());
+    Assert.assertNotNull(event.getEventCreationTimestamp());
   }
 
   @Test
@@ -250,7 +252,11 @@ public class TestStageContext {
               "pipelineId",
               "sdc-id",
               "http://streamsets.com",
-              "stageName"
+              "stageName",
+              "Description",
+              "v1",
+              ImmutableMap.of("param1", "value1"),
+              ImmutableMap.of("param1", "value1")
           );
           for (LineageSpecificAttribute other : type.getSpecificAttributes()) {
             if (ok % 2 == 1) {
@@ -278,17 +284,18 @@ public class TestStageContext {
     StageContext context = createStageContextForSDK();
 
     EventSink sink = new EventSink();
+    sink.registerInterceptorsForStage("stage", Collections.emptyList());
     context.setEventSink(sink);
 
     EventRecord event = new EventRecordImpl("custom-type", 1, "local-stage", "super-secret-id", null, null);
     event.set(Field.create(ImmutableMap.of("key", Field.create("value"))));
     context.toEvent(event);
     Assert.assertEquals(1, sink.getStageEvents("stage").size());
-    Record retrieved = sink.getStageEvents("stage").get(0);
+    EventRecord retrieved = sink.getStageEventsAsEventRecords("stage").get(0);
 
     // Header is properly propagated
-    Assert.assertEquals("custom-type", retrieved.getHeader().getAttribute(EventRecord.TYPE));
-    Assert.assertEquals("1", retrieved.getHeader().getAttribute(EventRecord.VERSION));
+    Assert.assertEquals("custom-type", retrieved.getEventType());
+    Assert.assertEquals("1", retrieved.getEventVersion());
 
     // Data
     Field rootField = retrieved.get();
@@ -471,7 +478,8 @@ public class TestStageContext {
       new EmailSender(new Configuration()),
       configuration,
       new LineagePublisherDelegator.NoopDelegator(),
-      Mockito.mock(RuntimeInfo.class)
+      Mockito.mock(RuntimeInfo.class),
+      Collections.emptyMap()
     );
   }
 }

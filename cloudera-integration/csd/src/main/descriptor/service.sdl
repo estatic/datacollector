@@ -30,13 +30,22 @@
   ],
   "commands" : [
     {
-      "name" : "DPMTokenRegen",
-      "label" : "(Re)generate DPM tokens",
-      "description" : "(Re)generate DPM tokens for all SDC instances.",
-      "roleCommand" : "DPMTokenRegen",
+      "name" : "RegisterSCH",
+      "label" : "Register Control Hub tokens",
+      "description" : "Register all SDC instances in Control Hub",
+      "roleCommand" : "RegisterSCH",
+      "roleName" : "DATACOLLECTOR",
+      "runMode" : "all"
+    },
+    {
+      "name" : "UnregisterSCH",
+      "label" : "Unregister Control Hub tokens",
+      "description" : "Unregister all SDC instances from Control Hub",
+      "roleCommand" : "UnregisterSCH",
       "roleName" : "DATACOLLECTOR",
       "runMode" : "all"
     }
+
   ],
   "rolesWithExternalLinks" : ["DATACOLLECTOR"],
   "roles": [
@@ -55,13 +64,14 @@
           "FILE_AUTH_TYPE": "${http.authentication}",
           "LOGIN_MODULE": "${http.authentication.login.module}",
           "USE_LDAP_FILE_CONFIG": "${use.ldap.login.file}",
+          "LDAP_FILE_SUBSTITUTIONS": "${ldap.login.file.allow.substitutions}",
           "DPM_TOKEN_PATH": "${dpm.authToken.path}",
           "DPM_BASE_URL": "${dpm.base.url}",
           "DPM_USER": "${dpm.user}",
           "DPM_PASSWORD": "${dpm.password}",
           "SDC_JAVA_OPTS": "${java.opts}",
-          "SDC_CURL_OPTS": "${curl.opts}",
-          "DEBUG": "${debug.control.script}"
+          "DEBUG": "${debug.control.script}",
+          "CUSTOMER_ID": "${customer.id}"
         }
       },
       "kerberosPrincipals" : [
@@ -105,26 +115,50 @@
           }
         },
         {
-          "name": "DPMTokenRegen",
-          "label" : "(Re)generate DPM token",
-          "description" : "(Re)generate DPM token for this SDC instances.",
+          "name": "RegisterSCH",
+          "label" : "Register Control Hub token",
+          "description" : "Register this SDC instances in Control Hub",
           "expectedExitCodes": [0],
           "requiredRoleState": "stopped",
           "commandRunner": {
             "program": "scripts/control.sh",
-            "args": ["dpm"],
+            "args": ["sch_enable"],
             "environmentVariables": {
+              "SDC_LOG": "${log_dir}",
               "SDC_DATA": "${data.directory}",
+              "SDC_RESOURCES": "${resources.directory}",
               "DPM_TOKEN_PATH": "${dpm.authToken.path}",
               "DPM_BASE_URL": "${dpm.base.url}",
               "DPM_USER": "${dpm.user}",
               "DPM_PASSWORD": "${dpm.password}",
               "SDC_JAVA_OPTS": "${java.opts}",
-              "SDC_CURL_OPTS": "${curl.opts}",
+              "DEBUG": "${debug.control.script}"
+            }
+          }
+        },
+        {
+          "name": "UnregisterSCH",
+          "label" : "Unregister Control Hub token",
+          "description" : "Unregister this SDC instances in Control Hub",
+          "expectedExitCodes": [0],
+          "requiredRoleState": "stopped",
+          "commandRunner": {
+            "program": "scripts/control.sh",
+            "args": ["sch_disable"],
+            "environmentVariables": {
+              "SDC_LOG": "${log_dir}",
+              "SDC_DATA": "${data.directory}",
+              "SDC_RESOURCES": "${resources.directory}",
+              "DPM_TOKEN_PATH": "${dpm.authToken.path}",
+              "DPM_BASE_URL": "${dpm.base.url}",
+              "DPM_USER": "${dpm.user}",
+              "DPM_PASSWORD": "${dpm.password}",
+              "SDC_JAVA_OPTS": "${java.opts}",
               "DEBUG": "${debug.control.script}"
             }
           }
         }
+
       ],
       "externalLink": {
         "name": "datacollector_web_ui",
@@ -163,7 +197,6 @@
               "http.access.control.allow.headers",
               "http.access.control.allow.methods",
               "ui.header.title",
-              "ui.enable.usage.data.collection",
               "ui.enable.webSocket",
               "ui.undo.limit",
               "mail.transport.protocol",
@@ -187,12 +220,12 @@
               "production.maxPipelineErrors",
               "stage.conf_hadoop.always.impersonate.current.user",
               "ui.enable.webSocket",
-              "ui.enable.usage.data.collection",
               "dpm.enabled",
               "dpm.base.url",
               "dpm.remote.control.job.labels",
               "dpm.remote.control.ping.frequency",
               "dpm.remote.control.events.recipient",
+              "dpm.alias.name.enabled",
               "pipeline.access.control.enabled",
               "vault.addr",
               "vault.app.id",
@@ -229,14 +262,6 @@
               {
                 "key" : "ui.local.help.base.url",
                 "value" : "/docs"
-              },
-              {
-                "key" : "ui.refresh.interval.ms",
-                "value" : "2000"
-              },
-              {
-                "key" : "ui.jvmMetrics.refresh.interval.ms",
-                "value" : "4000"
               }
             ]
           },
@@ -286,10 +311,20 @@
           },
           {
             "filename": "ldap-login.conf"
+          },
+          {
+            "filename": "generated-ldap-login-append.conf"
           }
         ]
       },
       "parameters": [
+        {
+          "name": "customer.id",
+          "label": "Customer ID",
+          "description": "Customer ID that will be used when contacting StreamSets support.",
+          "type": "string",
+          "default": ""
+        },
         {
           "name": "sdc.base.http.url",
           "label": "Data collector base URL",
@@ -384,6 +419,13 @@
           "name": "use.ldap.login.file",
           "label": "Use Safety Valve to edit LDAP information",
           "description": "Edit ldap-login.conf directly from Safety Valve instead of entering configuration from Configuration Wizard. If checked, all ldap.* entries are ignored",
+          "type": "boolean",
+          "default": "false"
+        },
+        {
+          "name": "ldap.login.file.allow.substitutions",
+          "label": "LDAP Config File Substitutions",
+          "description": "Enable to perform certain substitutions in the ldap-login.conf file. Place holders _HOST and _KEYTAB_PATH will be replaced with hostname and location of SDC keytab respectively.",
           "type": "boolean",
           "default": "false"
         },
@@ -518,7 +560,7 @@
         },
         {
           "name": "production.maxPipelineErrors",
-          "label": "Max Error Records Per Stage",
+          "label": "Max Pipeline Errors",
           "description": "The max number of errors per pipeline that will be retained in memory when the pipeline is running. If set to zero, error records will not be retained in memory. If the specified limit is reached the oldest records will be discarded to make room for the newest one.The maximum size that the error output file is allowed to reach before being rolled over to backup files",
           "type": "long",
           "default": 100
@@ -679,13 +721,6 @@
           "default":  ""
         },
         {
-          "name": "ui.enable.usage.data.collection",
-          "label": "Usage collection",
-          "description": "Allows anonymous Google Analytics information to be sent to StreamSets.",
-          "type": "boolean",
-          "default": "true"
-        },
-        {
           "name": "ui.enable.webSocket",
           "label": "Enable websockets",
           "description": "Enables Data Collector to use WebSocket to gather pipeline information.",
@@ -698,6 +733,20 @@
           "description": "Number of recent actions stored so you can undo them.",
           "type": "long",
           "default": 10
+         },
+         {
+          "name": "ui.refresh.interval.ms",
+          "label": "UI Refresh Interval",
+          "description": "Interval used to refresh various UI elements such as metrics.",
+          "type": "long",
+          "default": 2000
+         },
+         {
+          "name": "ui.jvmMetrics.refresh.interval.ms",
+          "label": "JVM Metrics Refresh Interval",
+          "description": "Interval in which the SDC Metrics page will refresh.",
+          "type": "long",
+          "default": 4000
         },
         {
           "name": "mail.transport.protocol",
@@ -930,7 +979,7 @@
           "name": "dpm.enabled",
           "type": "boolean",
           "default": "false",
-          "label": "Enable DPM",
+          "label": "Enable Control Hub",
           "description": "Enable StreamSets Enterprise",
           "required": "false"
         },
@@ -938,8 +987,8 @@
           "name": "dpm.base.url",
           "type": "uri",
           "default": "",
-          "label": "DPM URL",
-          "description": "Base URL for DPM.",
+          "label": "Control Hub URL",
+          "description": "Base URL for Control Hub.",
           "required": "false",
           "conformRegex" : "^.*[^/]$"
         },
@@ -947,7 +996,7 @@
           "name": "dpm.user",
           "type": "string",
           "default": "",
-          "label": "DPM User ID",
+          "label": "Control Hub User ID",
           "description": "User ID of organization admin that have privileges to register new SDCs.",
           "required": "false"
         },
@@ -955,32 +1004,40 @@
           "name": "dpm.password",
           "type": "password",
           "default": "",
-          "label": "DPM Password",
+          "label": "Control Hub Password",
           "description": "Password of organization admin that have privileges to register new SDCs.",
           "required": "false"
         },
         {
           "name": "dpm.remote.control.job.labels",
           "type": "string_array",
-          "label": "DPM labels",
-          "description": "Labels that will be reported to DPM.",
+          "label": "Control Hub labels",
+          "description": "Labels that will be reported to Control Hub.",
           "default": ["all"],
           "required": "false"
         },
         {
           "name": "dpm.remote.control.ping.frequency",
           "type": "long",
-          "label": "DPM Ping Frequency",
-          "description": "Data Collector Ping Frequency to DPM (in milliseconds)",
+          "label": "Control Hub Ping Frequency",
+          "description": "Data Collector Ping Frequency to Control Hub (in milliseconds)",
           "default": "5000",
           "required": "false"
         },
         {
           "name": "dpm.remote.control.events.recipient",
           "type": "string",
-          "label": "DPM Remote control App",
+          "label": "Control Hub Remote control App",
           "description": "App to send remote control events",
           "default": "jobrunner-app",
+          "required": "false"
+        },
+        {
+          "name": "dpm.alias.name.enabled",
+          "type": "boolean",
+          "label": "Enable alias name for Control Hub enabled Datacollector",
+          "description": "Alias name to use for Hadoop proxy user when stage impersonation is enabled",
+          "default": "false",
           "required": "false"
         },
         {
@@ -988,8 +1045,8 @@
           "type": "path",
           "pathType": "localDataDir",
           "default": "/etc/cm-sdc-dpm/",
-          "label": "DPM token location",
-          "description": "Location on each machine's local drive where DPM authentication token for SDC will be kept.",
+          "label": "Control Hub token location",
+          "description": "Location on each machine's local drive where Control Hub authentication token for SDC will be kept.",
           "required": "false"
         },
         {
@@ -1009,14 +1066,6 @@
           "required": "false"
         },
         {
-          "name": "curl.opts",
-          "type": "string",
-          "default": "--tlsv1.2",
-          "label": "Curl options",
-          "description": "Additional arguments that should be passed to curl when registering data collectors with DPM.",
-          "required": "false"
-        },
-        {
           "name": "pipeline.access.control.enabled",
           "type": "boolean",
           "default": "false",
@@ -1024,7 +1073,18 @@
           "description": "Pipeline Sharing / ACLs",
           "required": "false"
         }
-      ]
+      ],
+      "cgroup" : {
+        "cpu" : {
+          "autoConfigured" : true
+        },
+        "memory" : {
+          "autoConfigured" : true
+        },
+        "blkio" : {
+          "autoConfigured" : true
+        }
+      }
     }
   ]
 }

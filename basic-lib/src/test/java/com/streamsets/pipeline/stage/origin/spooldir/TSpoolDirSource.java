@@ -15,11 +15,19 @@
  */
 package com.streamsets.pipeline.stage.origin.spooldir;
 
+import com.streamsets.pipeline.api.StageDef;
+import com.streamsets.pipeline.lib.dirspooler.Offset;
+import com.streamsets.pipeline.lib.dirspooler.SpoolDirConfigBean;
 import com.streamsets.pipeline.lib.dirspooler.SpoolDirRunnable;
 
 import java.io.File;
 import java.util.Map;
 
+@StageDef(
+  version = 1,
+  label = "Test stage",
+  onlineHelpRefUrl = ""
+)
 public class TSpoolDirSource extends SpoolDirSource {
   File file;
   long offset;
@@ -37,7 +45,7 @@ public class TSpoolDirSource extends SpoolDirSource {
   }
 
   @Override
-  SpoolDirRunnable getSpoolDirRunnable(int threadNumber, int batchSize, Map<String, Offset> lastSourceOffset) {
+  public SpoolDirRunnable getSpoolDirRunnable(int threadNumber, int batchSize, Map<String, Offset> lastSourceOffset) {
     runnable = new TSpoolDirRunnable(
         getContext(),
         getNumberOfThreads(),

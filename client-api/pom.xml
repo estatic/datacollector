@@ -23,16 +23,20 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root</relativePath>
   </parent>
   <artifactId>streamsets-datacollector-client-api</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
-  <description>StreamSets Data Collector CLI</description>
-  <name>StreamSets Data Collector CLI</name>
+  <version>3.10.0-SNAPSHOT</version>
+  <description>StreamSets Data Collector Client API</description>
+  <name>StreamSets Data Collector Client API</name>
   <packaging>jar</packaging>
 
   <dependencies>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-api</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.swagger</groupId>
       <artifactId>swagger-annotations</artifactId>
@@ -73,11 +77,6 @@
     <dependency>
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-container</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.streamsets</groupId>
-      <artifactId>streamsets-datacollector-api</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

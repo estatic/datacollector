@@ -16,6 +16,7 @@
 package com.streamsets.pipeline.stage.processor.kv;
 
 import com.streamsets.pipeline.api.ConfigDef;
+import com.streamsets.pipeline.api.Dependency;
 import com.streamsets.pipeline.api.ValueChooserModel;
 
 import java.util.concurrent.TimeUnit;
@@ -70,7 +71,7 @@ public class CacheConfig {
       displayPosition = 130,
       group = "#0"
   )
-  public long expirationTime;
+  public long expirationTime = 1;
 
   @ConfigDef(
       required = true,
@@ -83,5 +84,20 @@ public class CacheConfig {
       group = "#0"
   )
   @ValueChooserModel(TimeUnitChooserValues.class)
-  public TimeUnit timeUnit;
+  public TimeUnit timeUnit = TimeUnit.SECONDS;
+
+    @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.BOOLEAN,
+      label = "Retry on Missing Value",
+      defaultValue = "false",
+      description = "By default, the processor remembers that a look up for a given column failed and always returns" +
+        " the default value. This is to avoid doing unnecessary look ups for known missing values. Select this option" +
+        " if new values might be inserted and the processor should retry the request rather than returning the cached" +
+        " default value.",
+      displayPosition = 150,
+      dependencies = @Dependency(configName = "enabled", triggeredByValues = "true"),
+      group = "#0"
+  )
+  public boolean retryOnCacheMiss = false;
 }

@@ -23,8 +23,8 @@ import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
 import com.streamsets.pipeline.sdk.RecordCreator;
 import com.streamsets.pipeline.sdk.TargetRunner;
-import com.streamsets.pipeline.stage.BaseHiveIT;
 import com.streamsets.pipeline.stage.HiveMetastoreTargetBuilder;
+import com.streamsets.pipeline.stage.HiveTestUtil;
 import com.streamsets.pipeline.stage.lib.hive.Errors;
 import com.streamsets.pipeline.stage.lib.hive.HiveConfigBean;
 import com.streamsets.pipeline.stage.lib.hive.HiveMetastoreUtil;
@@ -78,6 +78,8 @@ import java.util.Map;
 @PowerMockIgnore("javax.security.*")
 public class TestHiveMetastoreTarget {
   private static final Logger LOG = LoggerFactory.getLogger(TestHiveMetastoreTarget.class);
+
+
 
   @Before
   public void setup() throws Exception{
@@ -137,7 +139,7 @@ public class TestHiveMetastoreTarget {
         generateColumnTypeInfo(),
         generatePartitionTypeInfo(),
         true,
-        BaseHiveIT.getDefaultWareHouseDir() +"/sample",
+        HiveTestUtil.WAREHOUSE_DIR +"/sample",
         "",
         HMPDataFormat.AVRO
     );
@@ -154,6 +156,7 @@ public class TestHiveMetastoreTarget {
         "sample",
         generatePartitionValueInfo("12-25-2015"),
         "/user/hive/warehouse/sample",
+        true,
         HMPDataFormat.AVRO
     );
     Map<String, Field> fieldMap = f.getValueAsMap();
@@ -292,6 +295,13 @@ public class TestHiveMetastoreTarget {
     runHMSTargetWriteAndValidateResultingAction(
         generateRecordWithMissingField(
             HiveMetastoreUtil.LOCATION_FIELD,
+            HiveMetastoreUtil.MetadataRecordType.PARTITION
+        ),
+        onRecordError
+    );
+    runHMSTargetWriteAndValidateResultingAction(
+        generateRecordWithMissingField(
+            HiveMetastoreUtil.CUSTOM_LOCATION,
             HiveMetastoreUtil.MetadataRecordType.PARTITION
         ),
         onRecordError

@@ -20,8 +20,8 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.config.TimeZoneChooserValues;
-import com.streamsets.pipeline.configurablestage.DProcessor;
 import com.streamsets.pipeline.api.ListBeanModel;
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.lib.el.RecordEL;
@@ -36,13 +36,13 @@ import java.util.Map;
 import java.util.TimeZone;
 
 @StageDef(
-    version = 2,
+    version = 3,
     label="Hive Metadata",
     description = "Generates Hive metadata and write information for HDFS",
     icon="metadata.png",
     outputStreams = HiveMetadataOutputStreams.class,
     privateClassLoader = true,
-    onlineHelpRefUrl = "index.html#Processors/HiveMetadata.html#task_hpg_pft_zv",
+    onlineHelpRefUrl ="index.html?contextID=task_hpg_pft_zv",
     upgrader = HiveMetadataProcessorUpgrader.class
 )
 
@@ -178,6 +178,17 @@ public class HiveMetadataDProcessor extends DProcessor {
   public String timeZoneID;
 
   @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "false",
+      label = "Convert Timestamps to String",
+      description = "Set this option to convert DATETIME record fields to String",
+      displayPosition = 115,
+      group = "ADVANCED"
+  )
+  public boolean convertTimesToString;
+
+  @ConfigDef(
       required = false,
       defaultValue = "{}",
       type = ConfigDef.Type.MAP,
@@ -214,6 +225,7 @@ public class HiveMetadataDProcessor extends DProcessor {
       timeDriver,
       decimalDefaultsConfig,
       TimeZone.getTimeZone(ZoneId.of(timeZoneID)),
+      convertTimesToString,
       dataFormat,
       commentExpression,
       metadataHeaderAttributeConfigs

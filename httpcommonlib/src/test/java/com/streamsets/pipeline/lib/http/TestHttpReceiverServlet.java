@@ -30,10 +30,36 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 public class TestHttpReceiverServlet {
+
+  @Test
+  public void testGetQueryParameters() throws Exception {
+    HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+
+    // Just one parameter
+    Mockito.when(req.getQueryString()).thenReturn(HttpConstants.X_SDC_APPLICATION_ID_HEADER + "=bob");
+    Map<String, String[]> params = HttpReceiverServlet.getQueryParameters(req);
+    Assert.assertEquals(params.get(HttpConstants.X_SDC_APPLICATION_ID_HEADER)[0], "bob");
+
+    // Multiple parameters
+    Mockito.when(req.getQueryString()).thenReturn("param1=jim&" + HttpConstants.X_SDC_APPLICATION_ID_HEADER + "=bob&param3=bill");
+    params = HttpReceiverServlet.getQueryParameters(req);
+    Assert.assertEquals(params.get(HttpConstants.X_SDC_APPLICATION_ID_HEADER)[0], "bob");
+
+    // No parameters
+    Mockito.when(req.getQueryString()).thenReturn("");
+    params = HttpReceiverServlet.getQueryParameters(req);
+    Assert.assertEquals(params.get(HttpConstants.X_SDC_APPLICATION_ID_HEADER), null);
+
+    // Missing requested parameter
+    Mockito.when(req.getQueryString()).thenReturn("param1=jim&param2=mary");
+    params = HttpReceiverServlet.getQueryParameters(req);
+    Assert.assertEquals(params.get(HttpConstants.X_SDC_APPLICATION_ID_HEADER), null);
+  }
 
   @Test
   public void testValidateAppId() throws Exception {
@@ -175,7 +201,7 @@ public class TestHttpReceiverServlet {
         ContextInfoCreator.createSourceContext("n", false, OnRecordError.TO_ERROR, ImmutableList.of("a"));
     HttpReceiver receiver = Mockito.mock(HttpReceiverWithFragmenterWriter.class);
     Mockito.when(receiver.getAppId()).thenReturn(() -> "id");
-    Mockito.when(receiver.process(Mockito.any(), Mockito.any())).thenReturn(true);
+    Mockito.when(receiver.process(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(true);
     BlockingQueue<Exception> errorQueue = new ArrayBlockingQueue<Exception>(1);
     HttpReceiverServlet servlet = new HttpReceiverServlet(context, receiver, errorQueue);
     servlet = Mockito.spy(servlet);
@@ -205,7 +231,7 @@ public class TestHttpReceiverServlet {
     Mockito.doReturn(true).when(servlet).validatePostRequest(Mockito.eq(req), Mockito.eq(res));
     servlet.doPost(req, res);
     Mockito.verify(req, Mockito.times(1)).getInputStream();
-    Mockito.verify(receiver, Mockito.times(1)).process(Mockito.eq(req), Mockito.eq(is));
+    Mockito.verify(receiver, Mockito.times(1)).process(Mockito.eq(req), Mockito.eq(is), Mockito.any());
     Mockito.verify(res, Mockito.times(1)).setStatus(Mockito.eq(HttpServletResponse.SC_OK));
 
     // valid post request with compression
@@ -242,7 +268,7 @@ public class TestHttpReceiverServlet {
     servlet.doPost(req, res);
     Mockito.verify(req, Mockito.times(1)).getInputStream();
     ArgumentCaptor<InputStream> isCaptor = ArgumentCaptor.forClass(InputStream.class);
-    Mockito.verify(receiver, Mockito.times(1)).process(Mockito.eq(req), isCaptor.capture());
+    Mockito.verify(receiver, Mockito.times(1)).process(Mockito.eq(req), isCaptor.capture(), Mockito.any());
 
     // we are failing here becuase the stream does not have a valid snappy payload,
     // we use this to test also the exception path

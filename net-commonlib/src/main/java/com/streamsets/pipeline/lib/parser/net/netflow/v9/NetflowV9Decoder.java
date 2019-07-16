@@ -271,6 +271,7 @@ public class NetflowV9Decoder implements VersionSpecificNetflowDecoder<NetflowV9
               currentTemplateFieldCount = null;
               currentTemplateFields = null;
               currentTemplateFieldInd = -1;
+              currentTemplateId = null;
               break;
             case 1:
               // options template
@@ -387,6 +388,8 @@ public class NetflowV9Decoder implements VersionSpecificNetflowDecoder<NetflowV9
           // done reading a flow record
 
           NetflowV9Message msg = new NetflowV9Message();
+          msg.setSender(sender);
+          msg.setRecipient(recipient);
           msg.setFlowKind(FlowKind.FLOWSET);
           msg.setOutputValuesMode(outputValuesMode);
 
@@ -748,11 +751,12 @@ public class NetflowV9Decoder implements VersionSpecificNetflowDecoder<NetflowV9
   @Override
   public void resetState() {
     readHeader = false;
-    count = 0;
+    count = null;
     sysUptimeMs = null;
     unixSeconds = null;
     timestamp = 0;
     packetSequenceNum = null;
+    sourceIdBytes = null;
     engineType = 0;
     engineId = 0;
     sampling = 0;
@@ -761,7 +765,6 @@ public class NetflowV9Decoder implements VersionSpecificNetflowDecoder<NetflowV9
     packetId = null;
     readerId = null;
     readIndex = 0;
-    sourceIdBytes = null;
     sourceId = 0;
 
     currentFlowsetId = null;

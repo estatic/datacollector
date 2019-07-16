@@ -17,13 +17,16 @@ package com.streamsets.pipeline.stage.executor.finishpipeline;
 
 import com.streamsets.pipeline.api.Batch;
 import com.streamsets.pipeline.api.base.BaseExecutor;
+import com.streamsets.pipeline.stage.executor.finishpipeline.config.PipelineFinisherConfig;
 
 import java.util.List;
 
 public class PipelineFinisherExecutor extends BaseExecutor {
 
-  PipelineFinisherExecutor() {
-    //empty
+  private final PipelineFinisherConfig config;
+
+  PipelineFinisherExecutor(PipelineFinisherConfig config) {
+    this.config = config;
   }
 
   @Override
@@ -33,13 +36,8 @@ public class PipelineFinisherExecutor extends BaseExecutor {
 
   @Override
   public void write(Batch batch) {
-
-    if (getContext().isPreview()) {
-      return;
-    }
-
-    if (batch.getRecords().hasNext()) {
-      getContext().finishPipeline();
+    if(batch.getRecords().hasNext()) {
+      getContext().finishPipeline(config.resetOffset);
     }
   }
 

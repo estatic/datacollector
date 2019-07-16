@@ -22,6 +22,7 @@ import com.streamsets.pipeline.api.Label;
 public enum KafkaDestinationGroups implements Label {
   KAFKA("Kafka"),
   DATA_FORMAT("Data Format"),
+  RESPONSE("Response"),
   ;
 
   private final String label;

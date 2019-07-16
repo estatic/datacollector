@@ -16,7 +16,6 @@
 package com.streamsets.pipeline.sdk;
 
 import com.google.common.base.Preconditions;
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.runner.*;
 import com.streamsets.pipeline.api.BatchContext;
@@ -25,6 +24,7 @@ import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.OnRecordError;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.impl.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +45,7 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
    * Interface that caller needs to implement to get produced data.
    */
   public interface Callback {
-    public void processBatch(Output output);
+    public void processBatch(Output output) throws StageException;
   }
 
   public PushSourceRunner(
@@ -59,7 +59,8 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
     ExecutionMode executionMode,
     DeliveryGuarantee deliveryGuarantee,
     String resourcesDir,
-    RuntimeInfo runtimeInfo
+    RuntimeInfo runtimeInfo,
+    List<ServiceRunner> services
   ) {
     super(
       stageClass,
@@ -73,7 +74,8 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
       executionMode,
       deliveryGuarantee,
       resourcesDir,
-      runtimeInfo
+      runtimeInfo,
+      services
     );
   }
 
@@ -89,7 +91,8 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
     ExecutionMode executionMode,
     DeliveryGuarantee deliveryGuarantee,
     String resourcesDir,
-    RuntimeInfo runtimeInfo
+    RuntimeInfo runtimeInfo,
+    List<ServiceRunner> services
   ) {
     super(
       stageClass,
@@ -104,7 +107,8 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
       executionMode,
       deliveryGuarantee,
       resourcesDir,
-      runtimeInfo
+      runtimeInfo,
+      services
     );
   }
 
@@ -199,7 +203,12 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
 
   @Override
   public boolean processBatch(BatchContext batchContext, String entityName, String entityOffset) {
-    callback.processBatch(StageRunner.getOutput(entityName, entityOffset, batchContext.getBatchMaker()));
+    try {
+      callback.processBatch(StageRunner.getOutput(entityName, entityOffset, batchContext.getBatchMaker()));
+    } catch (StageException e) {
+      LOG.error("StageException while processing batch: {}", e.toString(), e);
+      return false;
+    }
 
     if(entityName != null) {
       commitOffset(entityName, entityOffset);
@@ -251,7 +260,8 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
           executionMode,
           deliveryGuarantee,
           resourcesDir,
-          runtimeInfo
+          runtimeInfo,
+          services
         );
       } else {
         return new PushSourceRunner(
@@ -265,7 +275,8 @@ public class PushSourceRunner extends StageRunner<PushSource>  implements PushSo
           executionMode,
           deliveryGuarantee,
           resourcesDir,
-          runtimeInfo
+          runtimeInfo,
+          services
         );
       }
     }

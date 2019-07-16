@@ -15,134 +15,162 @@
  */
 package com.streamsets.datacollector.client.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.streamsets.datacollector.client.StringUtil;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-@ApiModel(description = "")
-public class DefinitionsJson   {
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class DefinitionsJson {
+  private String schemaVersion;
+  private List<PipelineDefinitionJson> pipeline;
+  private List<PipelineFragmentDefinitionJson> pipelineFragment;
+  private List<PipelineRulesDefinitionJson> pipelineRules;
+  private List<StageDefinitionJson> stages;
+  private List<ServiceDefinitionJson> services;
+  private Map<String,Map<String, List<String>>> rulesElMetadata;
+  private Map<String, Object> elCatalog;
+  private Set<Object> runtimeConfigs;
+  private Map<String, String> stageIcons;
+  private List<String> legacyStageLibs;
+  private Map<String, EventDefinitionJson> eventDefinitions;
+  private String version;
+  private String executorVersion;
+  private String category;
+  private String categoryLabel;
 
-  private List<PipelineDefinitionJson> pipeline = new ArrayList<>();
-  private List<PipelineRulesDefinitionJson> pipelineRules = new ArrayList<>();
-  private List<StageDefinitionJson> stages = new ArrayList<>();
-  private List<ServiceDefinitionJson> services = new ArrayList<>();
-  private Map<String, Object> rulesElMetadata = new HashMap<>();
-  private Map<String, Object> elCatalog = new HashMap<>();
-  private List<Object> runtimeConfigs = new ArrayList<>();
-  private Map<String, String> stageIcons = new HashMap<>();
+  public String getSchemaVersion() {
+    return schemaVersion;
+  }
 
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("pipeline")
+  public DefinitionsJson setSchemaVersion(String schemaVersion) {
+    this.schemaVersion = schemaVersion;
+    return this;
+  }
+
   public List<PipelineDefinitionJson> getPipeline() {
     return pipeline;
   }
+
   public void setPipeline(List<PipelineDefinitionJson> pipeline) {
     this.pipeline = pipeline;
   }
 
+  public List<PipelineFragmentDefinitionJson> getPipelineFragment() {
+    return pipelineFragment;
+  }
 
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("pipelineRules")
+  public void setPipelineFragment(List<PipelineFragmentDefinitionJson> pipelineFragment) {
+    this.pipelineFragment = pipelineFragment;
+  }
+
+  public List<StageDefinitionJson> getStages() {
+    return stages;
+  }
+
   public List<PipelineRulesDefinitionJson> getPipelineRules() {
     return pipelineRules;
   }
+
   public void setPipelineRules(List<PipelineRulesDefinitionJson> pipelineRules) {
     this.pipelineRules = pipelineRules;
   }
 
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("stages")
-  public List<StageDefinitionJson> getStages() {
-    return stages;
-  }
   public void setStages(List<StageDefinitionJson> stages) {
     this.stages = stages;
   }
 
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("services")
-  public List<ServiceDefinitionJson> getServices() {
-    return services;
-  }
-  public void setServices(List<ServiceDefinitionJson> services) {
-    this.services = services;
-  }
-
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("rulesElMetadata")
-  public Map<String, Object> getRulesElMetadata() {
+  public Map<String,Map<String, List<String>>> getRulesElMetadata() {
     return rulesElMetadata;
   }
-  public void setRulesElMetadata(Map<String, Object> rulesElMetadata) {
+
+  public void setRulesElMetadata(Map<String,Map<String, List<String>>> rulesElMetadata) {
     this.rulesElMetadata = rulesElMetadata;
   }
 
-
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("elCatalog")
   public Map<String, Object> getElCatalog() {
     return elCatalog;
   }
+
   public void setElCatalog(Map<String, Object> elCatalog) {
     this.elCatalog = elCatalog;
   }
 
-
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("runtimeConfigs")
-  public List<Object> getRuntimeConfigs() {
+  public Set<Object> getRuntimeConfigs() {
     return runtimeConfigs;
   }
-  public void setRuntimeConfigs(List<Object> runtimeConfigs) {
+
+  public void setRuntimeConfigs(Set<Object> runtimeConfigs) {
     this.runtimeConfigs = runtimeConfigs;
   }
 
-  /**
-   **/
-  @ApiModelProperty(value = "")
-  @JsonProperty("stageIcons")
   public Map<String, String> getStageIcons() {
     return stageIcons;
   }
+
   public void setStageIcons(Map<String, String> stageIcons) {
     this.stageIcons = stageIcons;
   }
 
-
-  @Override
-  public String toString()  {
-    StringBuilder sb = new StringBuilder();
-    sb.append("class DefinitionsJson {\n");
-
-    sb.append("    pipeline: ").append(StringUtil.toIndentedString(pipeline)).append("\n");
-    sb.append("    pipelineRules: ").append(StringUtil.toIndentedString(pipelineRules)).append("\n");
-    sb.append("    stages: ").append(StringUtil.toIndentedString(stages)).append("\n");
-    sb.append("    services: ").append(StringUtil.toIndentedString(services)).append("\n");
-    sb.append("    rulesElMetadata: ").append(StringUtil.toIndentedString(rulesElMetadata)).append("\n");
-    sb.append("    elCatalog: ").append(StringUtil.toIndentedString(elCatalog)).append("\n");
-    sb.append("    runtimeConfigs: ").append(StringUtil.toIndentedString(runtimeConfigs)).append("\n");
-    sb.append("    stageIcons: ").append(StringUtil.toIndentedString(stageIcons)).append("\n");
-    sb.append("}");
-    return sb.toString();
+  public List<ServiceDefinitionJson> getServices() {
+    return services;
   }
+
+  public void setServices(List<ServiceDefinitionJson> services) {
+    this.services = services;
+  }
+
+  public List<String> getLegacyStageLibs() {
+    return legacyStageLibs;
+  }
+
+  public void setLegacyStageLibs(List<String> legacyStageLibs) {
+    this.legacyStageLibs = legacyStageLibs;
+  }
+
+  public Map<String, EventDefinitionJson> getEventDefinitions() {
+    return eventDefinitions;
+  }
+
+  public void setEventDefinitions(Map<String, EventDefinitionJson> eventDefinitions) {
+    this.eventDefinitions = eventDefinitions;
+  }
+
+  public String getVersion() {
+    return version;
+  }
+
+  public DefinitionsJson setVersion(String version) {
+    this.version = version;
+    return this;
+  }
+
+  public String getExecutorVersion() {
+    return executorVersion;
+  }
+
+  public DefinitionsJson setExecutorVersion(String executorVersion) {
+    this.executorVersion = executorVersion;
+    return this;
+  }
+
+  public String getCategory() {
+    return category;
+  }
+
+  public DefinitionsJson setCategory(String category) {
+    this.category = category;
+    return this;
+  }
+
+  public String getCategoryLabel() {
+    return categoryLabel;
+  }
+
+  public DefinitionsJson setCategoryLabel(String categoryLabel) {
+    this.categoryLabel = categoryLabel;
+    return this;
+  }
+
 }

@@ -15,6 +15,7 @@
  */
 package com.streamsets.pipeline.stage.origin.eventhubs;
 
+import com.microsoft.azure.eventhubs.ConnectionStringBuilder;
 import com.microsoft.azure.eventhubs.EventHubClient;
 import com.microsoft.azure.eventhubs.EventHubRuntimeInformation;
 import com.microsoft.azure.eventprocessorhost.EventProcessorHost;
@@ -23,7 +24,6 @@ import com.microsoft.azure.eventprocessorhost.ExceptionReceivedEventArgs;
 import com.microsoft.azure.eventprocessorhost.IEventProcessor;
 import com.microsoft.azure.eventprocessorhost.IEventProcessorFactory;
 import com.microsoft.azure.eventprocessorhost.PartitionContext;
-import com.microsoft.azure.servicebus.ConnectionStringBuilder;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.common.DataFormatConstants;
@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -89,7 +90,7 @@ public class EventHubConsumerSource implements PushSource, IEventProcessorFactor
     // validate the connection info
     if(issues.size() == 0) {
       try {
-        EventHubClient ehClient = eventHubCommon.createEventHubClient();
+        EventHubClient ehClient = eventHubCommon.createEventHubClient("event-hub-consumer-pool-%d");
         EventHubRuntimeInformation ehInfo = ehClient.getRuntimeInformation().get();
         ehClient.close().get();
       } catch (Exception e) {
@@ -109,12 +110,11 @@ public class EventHubConsumerSource implements PushSource, IEventProcessorFactor
   public void produce(Map<String, String> map, int maxBatchSize) throws StageException {
     List<EventProcessorHost> eventProcessorHostList = new ArrayList<>();
     try {
-      ConnectionStringBuilder eventHubConnectionString = new ConnectionStringBuilder(
-          commonConf.namespaceName,
-          commonConf.eventHubName,
-          commonConf.sasKeyName,
-          commonConf.sasKey
-      );
+      ConnectionStringBuilder eventHubConnectionString = new ConnectionStringBuilder()
+          .setNamespaceName(commonConf.namespaceName)
+          .setEventHubName(commonConf.eventHubName)
+          .setSasKey(commonConf.sasKey)
+          .setSasKeyName(commonConf.sasKeyName);
 
       String storageConnectionString = "DefaultEndpointsProtocol=https;AccountName=" +
           consumerConfigBean.storageAccountName + ";AccountKey=" + consumerConfigBean.storageAccountKey;
@@ -143,13 +143,13 @@ public class EventHubConsumerSource implements PushSource, IEventProcessorFactor
       throw new StageException(Errors.EVENT_HUB_02, ex, ex);
     } finally {
       eventProcessorHostList.forEach(eventProcessorHost -> {
+        CompletableFuture<Void> hostShutdown = eventProcessorHost.unregisterEventProcessor();
         try {
-          eventProcessorHost.unregisterEventProcessor();
-        } catch (InterruptedException | ExecutionException e) {
-          LOG.error("Exception during unregister of EventProcessor: {}", e.getMessage(), e);
+          hostShutdown.get();
+        } catch (InterruptedException | ExecutionException ex) {
+          LOG.error(Errors.EVENT_HUB_03.getMessage(), ex.toString(), ex);
         }
       });
-
     }
   }
 

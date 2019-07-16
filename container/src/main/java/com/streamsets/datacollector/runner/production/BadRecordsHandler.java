@@ -20,6 +20,7 @@ import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.record.RecordImpl;
 import com.streamsets.datacollector.runner.BatchImpl;
 import com.streamsets.datacollector.runner.ErrorSink;
+import com.streamsets.datacollector.runner.SourceResponseSink;
 import com.streamsets.datacollector.runner.StagePipe;
 import com.streamsets.datacollector.runner.StageRuntime;
 import com.streamsets.datacollector.validation.Issue;
@@ -56,7 +57,12 @@ public class BadRecordsHandler {
     return  errorStage.init();
   }
 
-  public void handle(String sourceEntity, String sourceOffset, ErrorSink errorSink) throws StageException {
+  public void handle(
+      String sourceEntity,
+      String sourceOffset,
+      ErrorSink errorSink,
+      SourceResponseSink sourceResponseSink
+  ) throws StageException {
     // Get error records from the error sink
     List<Record> badRecords = getBadRecords(errorSink);
 
@@ -67,12 +73,20 @@ public class BadRecordsHandler {
 
     synchronized (errorStage) {
       errorStage.execute(
-        sourceOffset,     // Source offset for this batch
-        -1,     // BatchSize is not used for target
-        new BatchImpl("errorStage", sourceEntity, sourceOffset, badRecords),
-        null,  // BatchMaker doesn't make sense for target
-        null,    // Error stage can't generate error records
-        null    // And also can't generate events
+          sourceOffset,
+          // Source offset for this batch
+          -1,
+          // BatchSize is not used for target
+          new BatchImpl("errorStage", sourceEntity, sourceOffset, badRecords),
+          null,
+          // BatchMaker doesn't make sense for target
+          null,
+          // Error stage can't generate error records
+          null,
+          // And also can't generate events
+          null,
+          // Doesn't yet suport user defined metrics
+          sourceResponseSink
       );
     }
   }

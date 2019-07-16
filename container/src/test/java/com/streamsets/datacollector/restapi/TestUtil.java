@@ -17,6 +17,7 @@ package com.streamsets.datacollector.restapi;
 
 import com.streamsets.datacollector.config.ConfigDefinition;
 import com.streamsets.datacollector.config.PipelineDefinition;
+import com.streamsets.datacollector.config.PipelineFragmentDefinition;
 import com.streamsets.datacollector.config.PipelineRulesDefinition;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.el.ElConstantDefinition;
@@ -31,6 +32,7 @@ import com.streamsets.pipeline.api.Batch;
 import com.streamsets.pipeline.api.BatchMaker;
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ExecutionMode;
+import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.BaseSource;
 import com.streamsets.pipeline.api.base.BaseTarget;
@@ -128,10 +130,12 @@ public class TestUtil {
       Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0, Collections.<Class> emptyList(),
       ConfigDef.Evaluation.IMPLICIT, null);
     StageDefinition sourceDef = new StageDefinitionBuilder(TestUtil.class.getClassLoader(), TSource.class, "source")
+      .withStageDef(Mockito.mock(StageDef.class))
       .withConfig(configDef1, configDef2, configDef3, configDef4)
       .withExecutionModes(ExecutionMode.CLUSTER_BATCH, ExecutionMode.STANDALONE)
       .build();
     StageDefinition targetDef = new StageDefinitionBuilder(TestUtil.class.getClassLoader(), TTarget.class, "target")
+      .withStageDef(Mockito.mock(StageDef.class))
       .withExecutionModes(ExecutionMode.CLUSTER_BATCH, ExecutionMode.STANDALONE)
       .build();
 
@@ -146,6 +150,7 @@ public class TestUtil {
     Mockito.when(lib.getStages()).thenReturn(stages);
 
     Mockito.when(lib.getPipeline()).thenReturn(PipelineDefinition.getPipelineDef());
+    Mockito.when(lib.getPipelineFragment()).thenReturn(PipelineFragmentDefinition.getPipelineFragmentDef());
     Mockito.when(lib.getPipelineRules()).thenReturn(PipelineRulesDefinition.getPipelineRulesDef());
     return lib;
   }

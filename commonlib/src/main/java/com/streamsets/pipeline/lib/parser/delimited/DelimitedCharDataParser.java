@@ -15,39 +15,47 @@
  */
 package com.streamsets.pipeline.lib.parser.delimited;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.streamsets.pipeline.api.Field;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.ext.io.OverrunReader;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.config.CsvHeader;
 import com.streamsets.pipeline.config.CsvRecordType;
+import com.streamsets.pipeline.lib.csv.CsvMultiCharDelimitedParser;
+import com.streamsets.pipeline.lib.csv.DelimitedDataParser;
 import com.streamsets.pipeline.lib.csv.OverrunCsvParser;
 import com.streamsets.pipeline.lib.parser.AbstractDataParser;
 import com.streamsets.pipeline.lib.parser.DataParserException;
 import com.streamsets.pipeline.lib.parser.ParserRuntimeException;
 import com.streamsets.pipeline.lib.parser.RecoverableDataParserException;
+import org.apache.commons.lang3.StringEscapeUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public class DelimitedCharDataParser extends AbstractDataParser {
-  private final Stage.Context context;
+  private final ProtoConfigurableEntity.Context context;
   private final String readerId;
-  private final OverrunCsvParser parser;
+  private final DelimitedDataParser parser;
   private final DelimitedDataParserSettings settings;
+  // Instance wise counter of extra columns that will remember how many columns have been every added in case
+  // that user checked 'Allow extra columns'
+  private int extraColumnCounter = 1;
 
   private List<Field> headers;
   private boolean eof;
 
   public DelimitedCharDataParser(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       String readerId,
       OverrunReader reader,
       long readerOffset,
@@ -58,26 +66,44 @@ public class DelimitedCharDataParser extends AbstractDataParser {
     this.readerId = readerId;
     this.settings = settings;
 
-    switch (settings.getHeader()) {
-      case WITH_HEADER:
-      case IGNORE_HEADER:
-        settings.setFormat(settings.getFormat().withHeader((String[])null).withSkipHeaderRecord(true));
-        break;
-      case NO_HEADER:
-        settings.setFormat(settings.getFormat().withHeader((String[])null).withSkipHeaderRecord(false));
-        break;
-      default:
-        throw new ParserRuntimeException(Utils.format("Unknown header error: {}", settings.getHeader()));
+    final CsvHeader header = settings.getHeader();
+    if (!Strings.isNullOrEmpty(settings.getMultiCharacterFieldDelimiter())) {
+      // use multi-character delimiter parser
+      parser = new CsvMultiCharDelimitedParser(
+          reader,
+          settings.getMultiCharacterQuoteChar(),
+          settings.getMultiCharacterEscapeChar(),
+          settings.getMultiCharacterFieldDelimiter(),
+          // we will make maxInputBufferSize equal to max record size, since that seems sensible
+          settings.getMaxObjectLen(),
+          settings.getMaxObjectLen(),
+          EnumSet.of(CsvHeader.WITH_HEADER, CsvHeader.IGNORE_HEADER).contains(header),
+          readerOffset,
+          settings.getSkipStartLines(),
+          settings.getMultiCharacterLineDelimiter()
+      );
+    } else {
+      switch (header) {
+        case WITH_HEADER:
+        case IGNORE_HEADER:
+          settings.setFormat(settings.getFormat().withHeader((String[])null).withSkipHeaderRecord(true));
+          break;
+        case NO_HEADER:
+          settings.setFormat(settings.getFormat().withHeader((String[])null).withSkipHeaderRecord(false));
+          break;
+        default:
+          throw new ParserRuntimeException(Utils.format("Unknown header error: {}", header));
+      }
+      parser = new OverrunCsvParser(
+          reader,
+          settings.getFormat(),
+          readerOffset,
+          settings.getSkipStartLines(),
+          settings.getMaxObjectLen()
+      );
     }
-    parser = new OverrunCsvParser(
-        reader,
-        settings.getFormat(),
-        readerOffset,
-        settings.getSkipStartLines(),
-        settings.getMaxObjectLen()
-    );
     String[] hs = parser.getHeaders();
-    if (settings.getHeader() != CsvHeader.IGNORE_HEADER && hs != null) {
+    if (header != CsvHeader.IGNORE_HEADER && hs != null) {
       headers = new ArrayList<>();
       for (String h : hs) {
         headers.add(Field.create(h));
@@ -104,9 +130,8 @@ public class DelimitedCharDataParser extends AbstractDataParser {
     if(headers != null && settings.allowExtraColumns()) {
       int numColumns = columns.length;
       int numHeaders = headers.size();
-      int n = 1;
       while (numHeaders < numColumns) {
-        headers.add(Field.create(String.format("%s%02d", settings.getExtraColumnPrefix(), n++)));
+        headers.add(Field.create(String.format("%s%02d", settings.getExtraColumnPrefix(), extraColumnCounter++)));
         ++numHeaders;
       }
     }

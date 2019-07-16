@@ -19,15 +19,14 @@ import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
-import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 import com.streamsets.pipeline.lib.mqtt.Groups;
 import com.streamsets.pipeline.lib.mqtt.MqttClientConfigBean;
 
 @StageDef(
-    version = 2,
+    version = 4,
     label = "MQTT Publisher",
     description = "Uses an MQTT Client to publish data to a topic on the MQTT Broker",
     icon = "mqtt.png",
@@ -36,19 +35,15 @@ import com.streamsets.pipeline.lib.mqtt.MqttClientConfigBean;
         ExecutionMode.CLUSTER_BATCH,
         ExecutionMode.CLUSTER_YARN_STREAMING,
         ExecutionMode.CLUSTER_MESOS_STREAMING,
-        ExecutionMode.EDGE
+        ExecutionMode.EDGE,
+        ExecutionMode.EMR_BATCH
+
     },
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Destinations/MQTTPublisher.html#task_vbn_cyt_lz",
+    onlineHelpRefUrl ="index.html?contextID=task_vbn_cyt_lz",
     upgrader = MqttClientTargetUpgrader.class
 )
 @ConfigGroups(Groups.class)
-@HideConfigs({
-    "commonConf.tlsConfig.keyStoreFilePath",
-    "commonConf.tlsConfig.keyStoreType",
-    "commonConf.tlsConfig.keyStorePassword",
-    "commonConf.tlsConfig.keyStoreAlgorithm"
-})
 @GenerateResourceBundle
 public class MqttClientDTarget extends DTarget {
 

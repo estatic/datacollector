@@ -31,6 +31,7 @@ import com.streamsets.pipeline.lib.el.ELUtils;
 import com.streamsets.pipeline.lib.el.RecordEL;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
+import com.streamsets.pipeline.stage.common.MissingValuesBehavior;
 import com.streamsets.pipeline.stage.lib.kudu.Errors;
 import com.streamsets.pipeline.stage.lib.kudu.KuduFieldMappingConfig;
 import com.streamsets.pipeline.stage.lib.kudu.KuduUtils;
@@ -54,6 +55,8 @@ public class KuduLookupProcessor extends SingleLaneRecordProcessor {
   private static final String KEY_MAPPING_CONFIGS = "keyColumnMapping";
   private static final String OUTPUT_MAPPING_CONFIG = "outputColumnMapping";
   private static final String EL_PREFIX = "${";
+  private static final String OPERATION_TIMEOUT = "operationTimeout";
+  private static final String ADMIN_OPERATION_TIMEOUT = "adminOperationTimeout";
 
   private static final Logger LOG = LoggerFactory.getLogger(KuduLookupProcessor.class);
   private KuduLookupConfig conf;
@@ -104,7 +107,38 @@ public class KuduLookupProcessor extends SingleLaneRecordProcessor {
       keyColumns.add(columnName);
       columnToField.put(columnName, fieldConfig.field);
     }
-    kuduClient = new AsyncKuduClient.AsyncKuduClientBuilder(conf.kuduMaster).defaultOperationTimeoutMs(conf.operationTimeout).build();
+
+    if (conf.operationTimeout < 0) {
+      issues.add(
+          getContext().createConfigIssue(
+              Groups.ADVANCED.name(),
+              KuduLookupConfig.CONF_PREFIX + OPERATION_TIMEOUT,
+              Errors.KUDU_02
+          )
+      );
+    }
+
+    if (conf.adminOperationTimeout < 0) {
+      issues.add(
+          getContext().createConfigIssue(
+              Groups.ADVANCED.name(),
+              KuduLookupConfig.CONF_PREFIX + ADMIN_OPERATION_TIMEOUT,
+              Errors.KUDU_02
+          )
+      );
+    }
+
+    AsyncKuduClient.AsyncKuduClientBuilder builder = new AsyncKuduClient.AsyncKuduClientBuilder(conf.kuduMaster)
+      .defaultOperationTimeoutMs(conf.operationTimeout)
+      .defaultAdminOperationTimeoutMs(conf.adminOperationTimeout);
+
+    // Caution: if number of worker thread is not configured, Kudu client may start a massive amount of worker threads.
+    // The formula is "2 x available cores"
+    if (conf.numWorkers > 0) {
+      builder.workerCount(conf.numWorkers);
+    }
+    kuduClient = builder.build();
+
     if (issues.isEmpty()) {
       kuduSession = kuduClient.newSession();
     }
@@ -115,16 +149,11 @@ public class KuduLookupProcessor extends SingleLaneRecordProcessor {
     }
     if (issues.isEmpty()) {
       if (conf.kuduTableTemplate.contains(EL_PREFIX)) {
-        ELUtils.validateExpression(
-            tableNameEval,
-            tableNameVars,
-            conf.kuduTableTemplate,
+        ELUtils.validateExpression(conf.kuduTableTemplate,
             getContext(),
             com.streamsets.pipeline.stage.destination.kudu.Groups.KUDU.getLabel(),
             KUDU_TABLE,
-            Errors.KUDU_12,
-            String.class,
-            issues
+            Errors.KUDU_12, issues
         );
       } else {
         // We have a table name that's not EL. We can validate if the table exists.
@@ -134,9 +163,9 @@ public class KuduLookupProcessor extends SingleLaneRecordProcessor {
             issues.add(
                 getContext().createConfigIssue(
                     Groups.KUDU.name(),
-                    KuduLookupConfig.CONF_PREFIX + tableName,
+                    KuduLookupConfig.CONF_PREFIX + KUDU_TABLE,
                     Errors.KUDU_01,
-                    conf.kuduTableTemplate
+                    tableName
                 )
             );
           }
@@ -144,7 +173,7 @@ public class KuduLookupProcessor extends SingleLaneRecordProcessor {
           issues.add(
               getContext().createConfigIssue(
                   Groups.KUDU.name(),
-                  KuduLookupConfig.CONF_PREFIX + tableName,
+                  KuduLookupConfig.CONF_PREFIX + KUDU_TABLE,
                   Errors.KUDU_03,
                   ex
               )
@@ -213,8 +242,13 @@ public class KuduLookupProcessor extends SingleLaneRecordProcessor {
         KuduLookupKey key = generateLookupKey(record, tableName);
         List<Map<String, Field>> values = cache.get(key);
         if (values.isEmpty()) {
-          // No results
-          errorRecordHandler.onError(new OnRecordErrorException(record, Errors.KUDU_31));
+          // No record found
+          if (conf.missingLookupBehavior == MissingValuesBehavior.SEND_TO_ERROR) {
+            errorRecordHandler.onError(new OnRecordErrorException(record, Errors.KUDU_31));
+          } else {
+            // Configured to 'Send to next stage' and 'pass as it is'
+            batchMaker.addRecord(record);
+          }
         } else {
           switch (conf.multipleValuesBehavior) {
             case FIRST_ONLY:

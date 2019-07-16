@@ -42,7 +42,7 @@ public enum ValidationError implements ErrorCode {
   VALIDATION_0013("{} cannot have output streams '{}'"),
   VALIDATION_0014("{} must have input streams"),
   VALIDATION_0015("Stage must have '{}' output stream(s) but has '{}'"),
-  VALIDATION_0016("Invalid stage name. Names can include the following characters '{}'"),
+  VALIDATION_0016("Invalid stage name '{}'. Names can include the following characters '{}'"),
   VALIDATION_0017("Invalid input stream names '{}'. Streams can include the following characters '{}'"),
   VALIDATION_0018("Invalid output stream names '{}'. Streams can include the following characters '{}'"),
 
@@ -69,9 +69,10 @@ public enum ValidationError implements ErrorCode {
   VALIDATION_0032("Stage must have at least one output stream"),
   VALIDATION_0033("Invalid Configuration, {}"),
 
-  VALIDATION_0034("Value for configuration '{}' cannot be greater then '{}'"),
-  VALIDATION_0035("Value for configuration '{}' cannot be less then '{}'"),
+  VALIDATION_0034("Value for configuration '{}' cannot be greater than '{}'"),
+  VALIDATION_0035("Value for configuration '{}' cannot be less than '{}'"),
   VALIDATION_0036("{} cannot have event streams '{}'"),
+  VALIDATION_0037("Stage can't be on the main pipeline canvas"),
 
   //Rule Validation Errors
   VALIDATION_0040("The data rule property '{}' must be defined"),
@@ -87,14 +88,13 @@ public enum ValidationError implements ErrorCode {
 
   VALIDATION_0060("Define the error record handling for the pipeline"),
   VALIDATION_0061("Define the directory for error record files"),
-  VALIDATION_0062("Configured memory limit '{}' is not an integer"),
-  VALIDATION_0063("Configured memory limit '{}' is above the maximum allowed '{}'"),
-  VALIDATION_0064("Error resolving memory limit: {}"),
 
   VALIDATION_0070("Pipeline does not define its execution mode"),
   VALIDATION_0071("Stage '{}' from '{}' library does not support '{}' execution mode"),
-  VALIDATION_0072("Data collector is in standalone mode, cannot run pipeline cluster mode"),
-  VALIDATION_0073("Data collector is in cluster mode, cannot run pipeline standalone mode"),
+  VALIDATION_0072("Data Collector is in standalone mode, cannot run pipeline cluster mode"),
+  VALIDATION_0073("Data Collector is in cluster mode, cannot run pipeline standalone mode"),
+  VALIDATION_0074("Origin '{}' of type '{}' is not bisectable, and can't be used for Advanced Error Handling"),
+
   VALIDATION_0080("Precondition '{}' must begin with '${' and end with '}'"),
   VALIDATION_0081("Invalid precondition '{}': {}"),
   VALIDATION_0082("Cannot create runner with execution mode '{}', another runner with execution mode '{}'"
@@ -103,18 +103,26 @@ public enum ValidationError implements ErrorCode {
   VALIDATION_0091("Found more than one Target stage that triggers offset commit"),
   VALIDATION_0092("Delivery Guarantee can only be {} if pipeline contains a Target that triggers offset commit"),
   VALIDATION_0093("The pipeline title is empty"),
+  VALIDATION_0094("Stage expects {} input lanes, but only {} given"),
 
   // Event related validations
-  VALIDATION_0100("Invalid event stream name '{}'. Streams can include the following characters '{}'"),
-  VALIDATION_0101("Stage have more then one event lane."),
-  VALIDATION_0102("Stage have configured event lane even though that it doesn't produce events."),
-  VALIDATION_0103("Stage '{}' have merged input from both data and event part of the pipeline."),
+  VALIDATION_0100("Invalid event stream name '{}'. Streams can include the following characters: '{}'"),
+  VALIDATION_0101("Stage has more than one event lane"),
+  VALIDATION_0102("Stage has configured event lane even though it doesn't produce events"),
+  VALIDATION_0103("Stage '{}' has input from both data and event branches of the pipeline. This is not allowed."),
   VALIDATION_0104("Stage has open event streams"),
   VALIDATION_0105("Invalid pipeline lifecycle specification: {}"),
   VALIDATION_0106("Pipeline lifecycle events are not supported in mode: {}"),
 
   // Service related validations
   VALIDATION_0200("Invalid services declaration, expected definition for '{}', but got '{}'"),
+
+  // cluster config validations
+  VALIDATION_0301("Cannot specify keytab if Kerberos is disabled via the {} configuration property"),
+  VALIDATION_0302("Keytab path must be absolute; specified path {} was relative{}"),
+  VALIDATION_0303("No file was found at {}; please double check the keytab path{}"),
+  VALIDATION_0304("{} was not a regular file; please double check the keytab path{}"),
+  VALIDATION_0305("Impersonation is required by {} configuration property, so an explicit user may not be specified."),
   ;
 
   private final String msg;

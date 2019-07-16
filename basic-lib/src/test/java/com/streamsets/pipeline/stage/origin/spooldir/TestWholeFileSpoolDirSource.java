@@ -25,6 +25,7 @@ import com.streamsets.pipeline.config.Compression;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.PostProcessingOptions;
 import com.streamsets.pipeline.lib.dirspooler.PathMatcherMode;
+import com.streamsets.pipeline.lib.dirspooler.SpoolDirConfigBean;
 import com.streamsets.pipeline.lib.dirspooler.SpoolDirRunnable;
 import com.streamsets.pipeline.lib.io.fileref.FileRefUtil;
 import com.streamsets.pipeline.sdk.PushSourceRunner;
@@ -142,6 +143,7 @@ public class TestWholeFileSpoolDirSource {
       Assert.assertEquals(Field.Type.MAP, record.get(FileRefUtil.FILE_INFO_FIELD_PATH).getType());
 
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -149,7 +151,7 @@ public class TestWholeFileSpoolDirSource {
 
   private void initMetrics(Stage.Context context) {
     context.createMeter(FileRefUtil.TRANSFER_THROUGHPUT_METER);
-    final Map<String, Object> gaugeStatistics = context.createGauge(FileRefUtil.GAUGE_NAME).getValue();
+    final Map<String, Object> gaugeStatistics = context.createGauge(FileRefUtil.fileStatisticGaugeName(context)).getValue();
     gaugeStatistics.put(FileRefUtil.TRANSFER_THROUGHPUT, 0L);
     gaugeStatistics.put(FileRefUtil.SENT_BYTES, 0L);
     gaugeStatistics.put(FileRefUtil.REMAINING_BYTES, 0L);
@@ -202,6 +204,7 @@ public class TestWholeFileSpoolDirSource {
       //Now make sure the file is copied properly,
       checkFileContent(new FileInputStream(sourcePath.toString()), new FileInputStream(targetFile));
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }

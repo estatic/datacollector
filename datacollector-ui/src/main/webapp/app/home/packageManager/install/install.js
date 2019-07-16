@@ -20,7 +20,7 @@
 angular
   .module('dataCollectorApp.home')
   .controller('InstallModalInstanceController',
-      function ($scope, $rootScope, $modalInstance, customRepoUrl, libraryList, api, pipelineConstant) {
+      function ($scope, $rootScope, $modalInstance, libraryList, withStageLibVersion, api, pipelineConstant, $modal) {
     angular.extend($scope, {
       common: {
         errors: []
@@ -31,19 +31,33 @@ angular
       operationStatusMap: {},
       failedLibraries: [],
       errorMap: {},
+      agreementCheckModel: {
+        hasEnterpriseConnectors: false,
+        agreementChecked: false,
+      },
 
       install: function(givenLibraries) {
         $scope.operationStatus = 'installing';
 
-        var libraries = givenLibraries || libraryList,
-            librariesToInstall = [libraries.shift()],
-            library = librariesToInstall[0];
+        var libraries = givenLibraries || libraryList;
+        var librariesToInstall = [libraries.shift()];
+        var library = librariesToInstall[0];
 
-        $scope.operationStatusMap[library.id] = 'installing';
-        api.pipelineAgent.installLibraries(customRepoUrl, _.pluck(librariesToInstall, 'id'))
+        $scope.operationStatusMap[library.stageLibraryManifest.stageLibId] = 'installing';
+
+        var stageLibIdList = [];
+        angular.forEach(librariesToInstall, function (lib) {
+          var id = lib.stageLibraryManifest.stageLibId;
+          if (withStageLibVersion) {
+            id += ":" + lib.stagelibVersion;
+          }
+          stageLibIdList.push(id);
+        });
+
+        api.pipelineAgent.installLibraries(stageLibIdList, withStageLibVersion)
             .then(function () {
               library.installed = true;
-              $scope.operationStatusMap[library.id] = 'installed';
+              $scope.operationStatusMap[library.stageLibraryManifest.stageLibId] = 'installed';
               $rootScope.common.trackEvent(
                   pipelineConstant.STAGE_LIBRARY_CATEGORY,
                   pipelineConstant.INSTALL_ACTION,
@@ -59,8 +73,8 @@ angular
             })
             .catch(function (res) {
               $scope.failedLibraries.push(library);
-              $scope.operationStatusMap[library.id] = 'failed';
-              $scope.errorMap[library.id] = res.data;
+              $scope.operationStatusMap[library.stageLibraryManifest.stageLibId] = 'failed';
+              $scope.errorMap[library.stageLibraryManifest.stageLibId] = res.data;
 
               if (libraries.length > 0) {
                 $scope.install(libraries);
@@ -91,16 +105,32 @@ angular
       },
 
       inStatus: function(library, status) {
-        return $scope.operationStatusMap[library.id] === status;
+        return $scope.operationStatusMap[library.stageLibraryManifest.stageLibId] === status;
       },
 
       showError: function(library) {
-        var err = $scope.errorMap[library.id];
-        $scope.common.errors = [err];
+        var err = $scope.errorMap[library.stageLibraryManifest.stageLibId];
+
+        // If we know how to properly display the error
+        if(err.RemoteException) {
+          $modal.open({
+            templateUrl: 'errorModalContent.html',
+            controller: 'ErrorModalInstanceController',
+            size: 'lg',
+            backdrop: true,
+            resolve: {
+              errorObj: function () {
+                return err;
+              }
+            }
+          });
+        } else {
+          $scope.common.errors = [err];
+        }
       },
 
       hasError: function(library) {
-        return !!$scope.errorMap[library.id];
+        return !!$scope.errorMap[library.stageLibraryManifest.stageLibId];
       },
 
       hasErrors: function() {
@@ -110,8 +140,11 @@ angular
 
     if (libraryList && libraryList.length) {
       angular.forEach(libraryList, function(library) {
-        if (library.id.indexOf('streamsets-datacollector-mapr_') !== -1) {
+        if (library.stageLibraryManifest.stageLibId.indexOf('streamsets-datacollector-mapr_') !== -1) {
           $scope.maprStageLib = true;
+        }
+        if (library.stageLibraryManifest.stageLibLicense === 'StreamSetsEnterprise1.0') {
+          $scope.agreementCheckModel.hasEnterpriseConnectors = true;
         }
       });
     }

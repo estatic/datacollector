@@ -21,7 +21,8 @@ import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSource;
+import com.streamsets.pipeline.api.base.configurablestage.DSource;
+import com.streamsets.pipeline.lib.event.NoMoreDataEvent;
 import com.streamsets.pipeline.stage.common.mongodb.Groups;
 
 @StageDef(
@@ -31,7 +32,9 @@ import com.streamsets.pipeline.stage.common.mongodb.Groups;
     icon="mongodb.png",
     execution = ExecutionMode.STANDALONE,
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/MongoDB.html#task_mdf_2rs_ns",
+    producesEvents = true,
+    eventDefs = {NoMoreDataEvent.class},
+    onlineHelpRefUrl ="index.html?contextID=task_mdf_2rs_ns",
     upgrader = MongoDBSourceUpgrader.class,
     resetOffset = true
 )

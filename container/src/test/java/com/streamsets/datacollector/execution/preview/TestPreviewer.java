@@ -17,6 +17,7 @@ package com.streamsets.datacollector.execution.preview;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.execution.PreviewOutput;
 import com.streamsets.datacollector.execution.PreviewStatus;
@@ -34,6 +35,7 @@ import com.streamsets.datacollector.runner.StageOutput;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
 import com.streamsets.datacollector.store.PipelineStoreException;
 import com.streamsets.datacollector.store.PipelineStoreTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.util.ContainerError;
 import com.streamsets.datacollector.util.PipelineException;
@@ -89,7 +91,9 @@ public abstract class TestPreviewer {
       StageLibraryTask.class,
       PipelineStoreTask.class,
       SyncPreviewer.class,
-      LineagePublisherTask.class
+      BlobStoreTask.class,
+      LineagePublisherTask.class,
+      StatsCollector.class
     },
     library = true
   )
@@ -117,10 +121,21 @@ public abstract class TestPreviewer {
       return MockStages.createStageLibrary(new URLClassLoader(new URL[0]));
     }
 
+    @Provides @Singleton
+    public StatsCollector provideStatsCollector() {
+      return Mockito.mock(StatsCollector.class);
+    }
+
     @Provides
     @Singleton
     public LineagePublisherTask providesLineagePublisherTask() {
       return Mockito.mock(LineagePublisherTask.class);
+    }
+
+    @Provides
+    @Singleton
+    public BlobStoreTask providesBlobStoreTask() {
+      return Mockito.mock(BlobStoreTask.class);
     }
 
   }
@@ -341,7 +356,8 @@ public abstract class TestPreviewer {
     Assert.assertEquals(PreviewStatus.CREATED, previewer.getStatus());
 
     //start preview
-    previewer.start(1, 10, false, true, null, new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, false, true, null,
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     //when sync previewer returns from start, the preview should be finished
@@ -403,7 +419,8 @@ public abstract class TestPreviewer {
     Assert.assertEquals(PreviewStatus.CREATED, previewer.getStatus());
 
     //start preview
-    previewer.start(1, 10, false, true, null, new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, false, true, null,
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     //when sync previewer returns from start, the preview should be finished
@@ -447,7 +464,8 @@ public abstract class TestPreviewer {
 
     Previewer previewer  = createPreviewer();
 
-    previewer.start(1, 10, true, true, "p", new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true, "p",
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.FINISHED.name(), previewer.getStatus().name());
@@ -460,7 +478,8 @@ public abstract class TestPreviewer {
       Mockito.anyString())).thenReturn(MockStages.createPipelineConfigurationComplexSourceProcessorTarget());
     previewer  = createPreviewer();
 
-    previewer.start(1, 10, true, true,"p1", new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true,"p1",
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.FINISHED.name(), previewer.getStatus().name());
@@ -473,7 +492,8 @@ public abstract class TestPreviewer {
       Mockito.anyString())).thenReturn(MockStages.createPipelineConfigurationComplexSourceProcessorTarget());
     previewer  = createPreviewer();
 
-    previewer.start(1, 10, true, true,"p5", new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true,"p5",
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.FINISHED.name(), previewer.getStatus().name());
@@ -487,7 +507,8 @@ public abstract class TestPreviewer {
       Mockito.anyString())).thenReturn(MockStages.createPipelineConfigurationComplexSourceProcessorTarget());
     previewer  = createPreviewer();
 
-    previewer.start(1, 10, true, true,"p6", new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true,"p6",
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.FINISHED.name(), previewer.getStatus().name());
@@ -499,7 +520,8 @@ public abstract class TestPreviewer {
       Mockito.anyString())).thenReturn(MockStages.createPipelineConfigurationComplexSourceProcessorTarget());
     previewer  = createPreviewer();
 
-    previewer.start(1, 10, true, true,"t", new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true,"t",
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.FINISHED.name(), previewer.getStatus().name());
@@ -538,7 +560,8 @@ public abstract class TestPreviewer {
     PipelineConfiguration pipelineConf = MockStages.createPipelineConfigurationSourceProcessorTarget();
     Previewer previewer  = createPreviewer();
 
-    previewer.start(1, 10, true, true,null, new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true,null,
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.FINISHED.name(), previewer.getStatus().name());
@@ -555,7 +578,8 @@ public abstract class TestPreviewer {
     //modifying the source output
     sourceOutput.getOutput().get(pipelineConf.getStages().get(0).getOutputLanes().get(0)).set(0, modRecord);
 
-    previewer.start(1, 10, true, true,null, Arrays.asList(sourceOutput), 5000);
+    previewer.start(1, 10, true, true,null,
+        Arrays.asList(sourceOutput), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.FINISHED.name(), previewer.getStatus().name());
@@ -596,7 +620,8 @@ public abstract class TestPreviewer {
     Mockito.when(pipelineStore.load(Mockito.anyString(),
       Mockito.anyString())).thenReturn(MockStages.createPipelineConfigurationSourceProcessorTarget());
     Previewer previewer  = createPreviewer();
-    previewer.start(1, 10, true, true,null, new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true,null,
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
     Assert.assertEquals(PreviewStatus.INVALID, previewer.getStatus());
     Assert.assertTrue(previewer.getOutput().getIssues().getIssueCount() > 0);
@@ -634,7 +659,8 @@ public abstract class TestPreviewer {
       Mockito.anyString())).thenReturn(MockStages.createPipelineConfigurationSourceProcessorTarget());
     Previewer previewer  = createPreviewer();
 
-    previewer.start(1, 10, true, true,null, new ArrayList<StageOutput>(), 5000);
+    previewer.start(1, 10, true, true,null,
+        new ArrayList<StageOutput>(), 5000, false);
     previewer.waitForCompletion(5000);
 
     Assert.assertEquals(PreviewStatus.INVALID.name(), previewer.getStatus().name());

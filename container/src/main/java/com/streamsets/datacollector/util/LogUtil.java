@@ -67,6 +67,10 @@ public class LogUtil {
   public static void resetRollingFileAppender(String pipeline, String rev, String suffix) {
     String loggerName = getLoggerName(pipeline, rev, suffix);
     Logger logger =Logger.getLogger(loggerName);
+    Appender logAppender = logger.getAppender(loggerName);
+    if (logAppender != null) {
+      logAppender.close();
+    }
     logger.removeAppender(loggerName);
   }
 

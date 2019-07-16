@@ -21,7 +21,7 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 
 import java.util.List;
 import java.util.Map;
@@ -32,7 +32,7 @@ import java.util.Map;
     description = "Writes data to Hive tables using the streaming API. Requires ORC storage format.",
     icon = "hive.png",
     privateClassLoader = true,
-    onlineHelpRefUrl = "index.html#Destinations/Hive.html#task_cx3_lhh_ht"
+    onlineHelpRefUrl ="index.html?contextID=task_cx3_lhh_ht"
 )
 @ConfigGroups(value = Groups.class)
 @GenerateResourceBundle

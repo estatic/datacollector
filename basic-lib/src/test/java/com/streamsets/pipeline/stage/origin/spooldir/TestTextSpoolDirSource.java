@@ -21,11 +21,15 @@ import com.streamsets.pipeline.config.Compression;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.OnParseError;
 import com.streamsets.pipeline.config.PostProcessingOptions;
+import com.streamsets.pipeline.lib.dirspooler.LocalFileSystem;
+import com.streamsets.pipeline.lib.dirspooler.Offset;
 import com.streamsets.pipeline.lib.dirspooler.PathMatcherMode;
+import com.streamsets.pipeline.lib.dirspooler.SpoolDirConfigBean;
 import com.streamsets.pipeline.lib.dirspooler.SpoolDirRunnable;
 import com.streamsets.pipeline.sdk.PushSourceRunner;
 import com.streamsets.pipeline.sdk.SourceRunner;
 import com.streamsets.pipeline.sdk.StageRunner;
+import com.streamsets.pipeline.lib.dirspooler.WrappedFile;
 import org.apache.commons.io.IOUtils;
 import org.junit.Assert;
 import org.junit.Test;
@@ -59,13 +63,13 @@ public class TestTextSpoolDirSource {
   private final static String GBK_STRING = "ÓÃ»§Ãû:ôâÈ»12";
   private final static String UTF_STRING = "脫脙禄搂脙没:么芒脠禄12";
 
-  private File createLogFile(String charset) throws Exception {
+  private WrappedFile createLogFile(String charset) throws Exception {
     File f = new File(createTestDir(), "test.log");
     Writer writer = new OutputStreamWriter(new FileOutputStream(f), charset);
     IOUtils.write(LINE1 + "\n", writer);
     IOUtils.write(LINE2, writer);
     writer.close();
-    return f;
+    return new LocalFileSystem("*", PathMatcherMode.GLOB).getFile(f.getAbsolutePath());
   }
 
   private SpoolDirSource createSource(String charset) {
@@ -111,6 +115,7 @@ public class TestTextSpoolDirSource {
       Assert.assertEquals(LINE2.substring(0, 10), records.get(1).get().getValueAsMap().get("text").getValueAsString());
       Assert.assertTrue(records.get(1).has("/truncated"));
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -161,6 +166,7 @@ public class TestTextSpoolDirSource {
       Assert.assertNotNull(records);
       Assert.assertEquals(0, records.size());
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -184,7 +190,7 @@ public class TestTextSpoolDirSource {
 
       BatchMaker batchMaker = SourceRunner.createTestBatchMaker("lane");
       SpoolDirRunnable runnable = source.getSpoolDirRunnable(threadNumber, batchSize, null);
-      Assert.assertEquals("-1", runnable.generateBatch(f, "0", 10, batchMaker));
+      Assert.assertEquals("-1", runnable.generateBatch(new LocalFileSystem("*", PathMatcherMode.GLOB).getFile(f.getAbsolutePath()), "0", 10, batchMaker));
       StageRunner.Output output = SourceRunner.getOutput(batchMaker);
       List<Record> records = output.getRecords().get("lane");
       Assert.assertNotNull(records);
@@ -195,6 +201,7 @@ public class TestTextSpoolDirSource {
       );
       Assert.assertTrue(records.get(0).has("/truncated"));
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }

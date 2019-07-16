@@ -18,10 +18,14 @@ package com.streamsets.datacollector.runner;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.RateLimiter;
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.datacollector.record.RecordImpl;
 import com.streamsets.pipeline.api.Record;
+import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.impl.Utils;
+import com.streamsets.pipeline.api.interceptor.Interceptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -33,8 +37,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class FullPipeBatch implements PipeBatch {
+  private static final Logger LOG = LoggerFactory.getLogger(FullPipeBatch.class);
 
   private final String sourceEntity;
   private final String lastOffset;
@@ -44,10 +50,15 @@ public class FullPipeBatch implements PipeBatch {
   private final List<StageOutput> stageOutputSnapshot;
   private final ErrorSink errorSink;
   private final EventSink eventSink;
+  private final ProcessedSink processedSink;
+  private final SourceResponseSink sourceResponseSink;
   private String newOffset;
   private int inputRecords;
   private int outputRecords;
   private RateLimiter rateLimiter;
+
+  // True if the batch was created by a framework rather then origin
+  private boolean isIdleBatch;
 
   public FullPipeBatch(String sourceEntity, String lastOffset, int batchSize, boolean snapshotStagesOutput) {
     this.sourceEntity = sourceEntity;
@@ -58,6 +69,8 @@ public class FullPipeBatch implements PipeBatch {
     stageOutputSnapshot = (snapshotStagesOutput) ? new ArrayList<StageOutput>() : null;
     errorSink = new ErrorSink();
     eventSink = new EventSink();
+    processedSink = new ProcessedSink();
+    sourceResponseSink = new SourceResponseSink();
   }
 
   @VisibleForTesting
@@ -90,7 +103,7 @@ public class FullPipeBatch implements PipeBatch {
 
   @Override
   @SuppressWarnings("unchecked")
-  public BatchImpl getBatch(final Pipe pipe) {
+  public BatchImpl getBatch(final Pipe pipe) throws StageException {
     List<Record> records = new ArrayList<>();
     List<String> inputLanes = pipe.getInputLanes();
     for (String inputLane : inputLanes) {
@@ -99,6 +112,11 @@ public class FullPipeBatch implements PipeBatch {
     if (pipe.getStage().getDefinition().getType().isOneOf(StageType.TARGET, StageType.EXECUTOR)) {
       outputRecords += records.size();
     }
+
+    // Run interceptors as part before providing data to the stage
+    records = intercept(records, pipe.getStage().getPreInterceptors());
+
+    // And finally give the batch to the stage itself
     return new BatchImpl(pipe.getStage().getInfo().getInstanceName(), sourceEntity, lastOffset, records);
   }
 
@@ -108,6 +126,9 @@ public class FullPipeBatch implements PipeBatch {
     Preconditions.checkState(!processedStages.contains(stageName), Utils.formatL(
       "The stage '{}' has been processed already", stageName));
     processedStages.add(stageName);
+    // Keep interceptors for this batch and stage
+    this.errorSink.registerInterceptorsForStage(stageName, pipe.getStage().getPreInterceptors());
+    this.eventSink.registerInterceptorsForStage(stageName, pipe.getStage().getPostInterceptors());
     for (String output : pipe.getOutputLanes()) {
       fullPayload.put(output, null);
     }
@@ -121,6 +142,12 @@ public class FullPipeBatch implements PipeBatch {
   @Override
   @SuppressWarnings("unchecked")
   public void skipStage(Pipe pipe) {
+    String stageName = pipe.getStage().getInfo().getInstanceName();
+    if(pipe instanceof StagePipe) {
+      this.errorSink.registerInterceptorsForStage(stageName, pipe.getStage().getPreInterceptors());
+      this.eventSink.registerInterceptorsForStage(stageName, pipe.getStage().getPostInterceptors());
+    }
+
     // Fill expected stage output lanes with empty lists
     pipe.getOutputLanes().stream().forEach(lane -> fullPayload.put((String)lane, Collections.emptyList()));
     // Components are allowed to generate events on destroy phase and hence we need to use default empty
@@ -129,24 +156,33 @@ public class FullPipeBatch implements PipeBatch {
   }
 
   @Override
-  public void completeStage(BatchMakerImpl batchMaker) {
+  public void completeStage(BatchMakerImpl batchMaker) throws StageException {
     StagePipe pipe = batchMaker.getStagePipe();
     if (pipe.getStage().getDefinition().getType() == StageType.SOURCE) {
       inputRecords += batchMaker.getSize() +
           errorSink.getErrorRecords(pipe.getStage().getInfo().getInstanceName()).size();
     }
     Map<String, List<Record>> stageOutput = batchMaker.getStageOutput();
+    List<? extends Interceptor> interceptors = pipe.getStage().getPostInterceptors();
     // convert lane names from stage naming to pipe naming when adding to the payload
     // leveraging the fact that the stage output lanes and the pipe output lanes are in the same order
     List<String> stageLaneNames = pipe.getStage().getConfiguration().getOutputLanes();
     for (int i = 0; i < stageLaneNames.size() ; i++) {
       String stageLaneName = stageLaneNames.get(i);
       String pipeLaneName = pipe.getOutputLanes().get(i);
-      fullPayload.put(pipeLaneName, stageOutput.get(stageLaneName));
+      List<Record> records  = stageOutput.get(stageLaneName);
+
+      fullPayload.put(pipeLaneName, intercept(records, interceptors));
     }
     if (stageOutputSnapshot != null) {
       String instanceName = pipe.getStage().getInfo().getInstanceName();
-      stageOutputSnapshot.add(new StageOutput(instanceName, batchMaker.getStageOutputSnapshot(), errorSink, eventSink));
+      // The snapshot have a (deep) copy of the records so we need to run the interceptors again. We might eventually
+      // decide to run the interceptor directly inside the batch to avoid this, but that is a future exercise.
+      Map<String, List<Record>> records = new HashMap<>();
+      for(Map.Entry<String, List<Record>> entry : batchMaker.getStageOutputSnapshot().entrySet()) {
+        records.put(entry.getKey(), intercept(entry.getValue(), interceptors));
+      }
+      stageOutputSnapshot.add(new StageOutput(instanceName, records, errorSink, eventSink));
     }
     if (pipe.getStage().getDefinition().getType().isOneOf(StageType.TARGET, StageType.EXECUTOR)) {
       outputRecords -= errorSink.getErrorRecords(pipe.getStage().getInfo().getInstanceName()).size();
@@ -155,7 +191,7 @@ public class FullPipeBatch implements PipeBatch {
   }
 
   @Override
-  public void completeStage(StagePipe pipe) {
+  public void completeStage(StagePipe pipe) throws StageException {
     List<String> inputLanes = pipe.getInputLanes();
     for(String inputLane : inputLanes) {
       fullPayload.remove(inputLane);
@@ -247,11 +283,18 @@ public class FullPipeBatch implements PipeBatch {
       stageOutput.putIfAbsent(laneName, records);
     });
 
-    // Convert salvaged structure to final snapshot
-    List<StageOutput> stageOutputSnapshot = new ArrayList<>();
-    salvagedStageOutputs.forEach((stageName, outputs) -> {
-      stageOutputSnapshot.add(new StageOutput(stageName, outputs, errorSink, eventSink));
-    });
+      // Convert salvaged structure to final snapshot
+      List<StageOutput> stageOutputSnapshot = new ArrayList<>();
+      salvagedStageOutputs.forEach((stageName, outputs) -> {
+        try {
+          stageOutputSnapshot.add(new StageOutput(stageName, outputs, errorSink, eventSink));
+        } catch (StageException e) {
+          // This method creates snapshot on a failure, thus this is in a sense a "follow up failure" that might be
+          // caused by the first one. Hence we only log the exception and move on in the spirit of this method -
+          // trying to scrap as much data as possible for the failure snapshot to ease troubleshooting.
+          LOG.debug("Ignoring exception during failure snapshot generation: {}", e.toString(), e);
+        }
+      });
 
     return stageOutputSnapshot;
   }
@@ -266,6 +309,15 @@ public class FullPipeBatch implements PipeBatch {
     return eventSink;
   }
 
+  @Override
+  public ProcessedSink getProcessedSink() {
+    return processedSink;
+  }
+
+  @Override
+  public SourceResponseSink getSourceResponseSink() {
+    return sourceResponseSink;
+  }
 
   @Override
   public void moveLane(String inputLane, String outputLane) {
@@ -329,4 +381,24 @@ public class FullPipeBatch implements PipeBatch {
     );
   }
 
+  /**
+   * Intercept given records with all the interceptors.
+   *
+   * We're not cloning records during interception as we aim at changing their original form.
+   */
+  private List<Record> intercept(List<Record> records, List<? extends Interceptor> interceptors) throws StageException {
+    for(Interceptor interceptor : interceptors)  {
+      records = interceptor.intercept(records);
+    }
+
+    return records;
+  }
+
+  public void setIdleBatch(boolean idleBatch) {
+    this.isIdleBatch = idleBatch;
+  }
+
+  public boolean isIdleBatch() {
+    return isIdleBatch;
+  }
 }

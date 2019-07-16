@@ -19,26 +19,29 @@ package com.streamsets.pipeline.stage.destination.maprstreams;
 import com.streamsets.pipeline.api.ErrorStage;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.stage.destination.kafka.KafkaTarget;
+import com.streamsets.pipeline.stage.destination.lib.ToOriginResponseConfig;
 
 @StageDef(
     version = 3,
     label = "Write to MapR Streams",
     description = "Writes records to MapR Streams as SDC Records",
     upgrader = MapRStreamsTargetUpgrader.class,
-    onlineHelpRefUrl = "index.html#Pipeline_Configuration/ErrorHandling.html#concept_kgc_l4y_5r")
-@ErrorStage
+    onlineHelpRefUrl ="index.html?contextID=concept_kgc_l4y_5r")
 @HideConfigs(preconditions = true, onErrorRecord = true, value = {"maprStreamsTargetConfigBean.dataFormat"})
+@ErrorStage
+@HideStage(HideStage.Type.ERROR_STAGE)
 @GenerateResourceBundle
 public class ToErrorMapRStreamsDTarget extends MapRStreamsDTarget {
 
   @Override
   protected Target createTarget() {
     maprStreamsTargetConfigBean.dataFormat = DataFormat.SDC_JSON;
-    return new KafkaTarget(convertToKafkaConfigBean(maprStreamsTargetConfigBean));
+    return new KafkaTarget(convertToKafkaConfigBean(maprStreamsTargetConfigBean), new ToOriginResponseConfig());
   }
 
 }

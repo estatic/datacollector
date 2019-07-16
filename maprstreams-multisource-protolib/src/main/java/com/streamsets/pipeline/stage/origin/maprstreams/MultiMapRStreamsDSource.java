@@ -15,28 +15,53 @@
  */
 package com.streamsets.pipeline.stage.origin.maprstreams;
 
+import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.RawSource;
 import com.streamsets.pipeline.api.StageDef;
 
+import com.streamsets.pipeline.api.ValueChooserModel;
+import com.streamsets.pipeline.lib.kafka.KafkaAutoOffsetReset;
+import com.streamsets.pipeline.lib.kafka.KafkaAutoOffsetResetValues;
 import com.streamsets.pipeline.stage.origin.multikafka.MultiKafkaDSource;
 import com.streamsets.pipeline.stage.origin.multikafka.MultiKafkaRawSourcePreviewer;
 
 @StageDef(
-    version = 1,
+    version = 2,
     label = "MapR Multitopic Streams Consumer",
     description = "Reads data from multiple topics of a MapR streams",
     execution = ExecutionMode.STANDALONE,
-    icon = "mapr.png",
+    icon = "mapr_es.png",
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/MapRStreamsMultiConsumer.html#task_pkc_lww_lbb"
+    onlineHelpRefUrl ="index.html?contextID=task_pkc_lww_lbb"
 )
 @RawSource(rawSourcePreviewer = MultiKafkaRawSourcePreviewer.class,  mimeType = "*/*")
 @HideConfigs({
-  "conf.brokerURI"
+  "conf.brokerURI",
+  "conf.kafkaAutoOffsetReset"
 })
 @GenerateResourceBundle
 public class MultiMapRStreamsDSource extends MultiKafkaDSource {
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.MODEL,
+      label = "Auto Offset Reset",
+      description = "Strategy to select the position to start consuming messages from the Kafka partition when no " +
+          "offset is currently saved",
+      defaultValue = "EARLIEST",
+      displayPosition = 80,
+      group = "KAFKA"
+  )
+  @ValueChooserModel(KafkaMaprAutoOffsetResetValues.class)
+  public KafkaMaprAutoOffsetReset kafkaMaprAutoOffsetReset;
+
+  @Override
+  protected PushSource createPushSource() {
+    conf.kafkaAutoOffsetReset = KafkaAutoOffsetReset.valueOf(kafkaMaprAutoOffsetReset.name());
+    return super.createPushSource();
+  }
 }

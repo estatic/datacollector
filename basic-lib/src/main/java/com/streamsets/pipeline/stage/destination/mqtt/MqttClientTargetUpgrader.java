@@ -19,17 +19,36 @@ import com.streamsets.pipeline.api.Config;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.StageUpgrader;
 import com.streamsets.pipeline.api.impl.Utils;
+import com.streamsets.pipeline.stage.origin.mqtt.MqttClientSourceUpgrader;
 import com.streamsets.pipeline.stage.util.tls.TlsConfigBeanUpgradeUtil;
 
 import java.util.List;
 
 public class MqttClientTargetUpgrader implements StageUpgrader {
-    @Override
-    public List<Config> upgrade(String library, String stageName, String stageInstance, int fromVersion, int toVersion, List<Config> configs) throws
-        StageException {
+  @Override
+  public List<Config> upgrade(
+      String library,
+      String stageName,
+      String stageInstance,
+      int fromVersion,
+      int toVersion,
+      List<Config> configs
+  ) throws StageException {
       switch(fromVersion) {
         case 1:
           TlsConfigBeanUpgradeUtil.upgradeHttpSslConfigBeanToTlsConfigBean(configs, "commonConf.");
+          if (toVersion == 2) {
+            break;
+          }
+          // fall through
+        case 2:
+          MqttClientSourceUpgrader.addCleanSessionFlag(configs);
+          if (toVersion == 3) {
+            break;
+          }
+          // fall through
+        case 3:
+          upgradeV3ToV4(configs);
           break;
         default:
           throw new IllegalStateException(Utils.format("Unexpected fromVersion {}", fromVersion));
@@ -37,4 +56,9 @@ public class MqttClientTargetUpgrader implements StageUpgrader {
       return configs;
     }
 
+  private void upgradeV3ToV4(List<Config> configs) {
+    configs.add(new Config("publisherConf.runtimeTopicResolution", false));
+    configs.add(new Config("publisherConf.topicExpression", "${record:value('/topic')}"));
+    configs.add(new Config("publisherConf.topicWhiteList", "*"));
+  }
 }

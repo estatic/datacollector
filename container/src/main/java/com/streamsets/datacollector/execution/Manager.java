@@ -15,11 +15,13 @@
  */
 package com.streamsets.datacollector.execution;
 
+import com.streamsets.datacollector.event.dto.PipelineStartEvent;
 import com.streamsets.datacollector.store.PipelineStoreException;
 import com.streamsets.datacollector.task.Task;
 import com.streamsets.datacollector.util.PipelineException;
 
 import java.util.List;
+import java.util.function.Function;
 
 // one per SDC
 public interface Manager extends Task {
@@ -34,7 +36,13 @@ public interface Manager extends Task {
   // (using a last-access cache). the previewer is given a PreviewerListener at <init> time which will be used
   // by the previewer to signal the PreviewOutput has been given back to the client and the Previewer could be
   // eagerly removed from the cache.
-  public Previewer createPreviewer(String user, String name, String rev) throws PipelineException;
+  public Previewer createPreviewer(
+      String user,
+      String name,
+      String rev,
+      List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
+      Function<Object, Void> afterActionsFunction
+  ) throws PipelineException;
 
   // returns the previewer from the cache with the specified ID
   public Previewer getPreviewer(String previewerId);

@@ -24,6 +24,9 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.request.schema.SchemaRequest;
+import org.apache.solr.client.solrj.response.schema.SchemaRepresentation;
+import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.common.SolrInputDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,15 +39,21 @@ import java.util.Map;
 
 public class SolrTarget06 implements SdcSolrTarget {
   private final static Logger LOG = LoggerFactory.getLogger(SolrTarget06.class);
+  private final static String VERSION ="6.1.0";
   private SolrClient solrClient;
 
-  private String solrURI;
-  private String zookeeperConnect;
-  private String defaultCollection;
-  private String instanceType;
-  private boolean kerberosAuth;
-  private static final String VERSION ="6.1.0";
-  private boolean skipValidation;
+  private final String solrURI;
+  private final String zookeeperConnect;
+  private final String defaultCollection;
+  private final String instanceType;
+  private final boolean kerberosAuth;
+  private final boolean skipValidation;
+  private final boolean ignoreOptionalFields;
+  private final boolean waitFlush;
+  private final boolean waitSearcher;
+  private final boolean softCommit;
+  private List<String> requiredFieldNamesMap;
+  private List<String> optionalFieldNamesMap;
 
   public SolrTarget06(
       String instanceType,
@@ -52,7 +61,11 @@ public class SolrTarget06 implements SdcSolrTarget {
       String zookeeperConnect,
       String defaultCollection,
       boolean kerberosAuth,
-      boolean skipValidation
+      boolean skipValidation,
+      boolean waitFlush,
+      boolean waitSearcher,
+      boolean softCommit,
+      boolean ignoreOptionalFields
   ) {
     this.instanceType = instanceType;
     this.solrURI = solrURI;
@@ -60,12 +73,54 @@ public class SolrTarget06 implements SdcSolrTarget {
     this.defaultCollection = defaultCollection;
     this.kerberosAuth = kerberosAuth;
     this.skipValidation = skipValidation;
+    this.waitFlush = waitFlush;
+    this.waitSearcher = waitSearcher;
+    this.softCommit = softCommit;
+    this.ignoreOptionalFields = ignoreOptionalFields;
+    this.requiredFieldNamesMap = new ArrayList<>();
+    this.optionalFieldNamesMap = new ArrayList<>();
   }
 
   public void init() throws Exception {
     solrClient = getSolrClient();
     if (!skipValidation) {
       solrClient.ping();
+    }
+    getRequiredFieldNames();
+    if (!ignoreOptionalFields) {
+      getOptionalFieldNames();
+    }
+  }
+
+  public List<String> getRequiredFieldNamesMap() {
+    return requiredFieldNamesMap;
+  }
+
+  private void getRequiredFieldNames() throws SolrServerException, IOException {
+    SchemaRequest schemaRequest = new SchemaRequest();
+    SchemaResponse schemaResponse = schemaRequest.process(solrClient);
+    SchemaRepresentation schemaRepresentation = schemaResponse.getSchemaRepresentation();
+    List<Map<String, Object>> fields = schemaRepresentation.getFields();
+    for (Map<String, Object> field : fields) {
+      if (field.containsKey(REQUIRED) && field.get(REQUIRED).equals(true)) {
+        requiredFieldNamesMap.add(field.get(NAME).toString());
+      }
+    }
+  }
+
+  public List<String> getOptionalFieldNamesMap() {
+    return optionalFieldNamesMap;
+  }
+
+  private void getOptionalFieldNames() throws SolrServerException, IOException {
+    SchemaRequest schemaRequest = new SchemaRequest();
+    SchemaResponse schemaResponse = schemaRequest.process(solrClient);
+    SchemaRepresentation schemaRepresentation = schemaResponse.getSchemaRepresentation();
+    List<Map<String, Object>> fields = schemaRepresentation.getFields();
+    for (Map<String, Object> field : fields) {
+      if (!field.containsKey(REQUIRED) || field.get(REQUIRED).equals(false)) {
+        optionalFieldNamesMap.add(field.get(NAME).toString());
+      }
     }
   }
 
@@ -130,15 +185,7 @@ public class SolrTarget06 implements SdcSolrTarget {
 
   public void commit() throws StageException {
     try {
-      this.solrClient.commit();
-    } catch (SolrServerException | IOException ex) {
-      throw new StageException(Errors.SOLR_05, ex.toString(), ex);
-    }
-  }
-
-  public void rollback() throws StageException {
-    try {
-      this.solrClient.rollback();
+      this.solrClient.commit(waitFlush, waitSearcher, softCommit);
     } catch (SolrServerException | IOException ex) {
       throw new StageException(Errors.SOLR_05, ex.toString(), ex);
     }

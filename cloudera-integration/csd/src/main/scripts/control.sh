@@ -45,7 +45,7 @@ log "DPM_USER: $DPM_USER"
 log "DPM_PASSWORD: (omitted)"
 log "SDC_JAVA_OPTS: $SDC_JAVA_OPTS"
 log "SDC_CURL_OPTS: $SDC_CURL_OPTS"
-log "DPM_TOKEN_REGENERATE: $DPM_TOKEN_REGENERATE"
+log "CUSTOMER_ID: $CUSTOMER_ID"
 log "DEBUG: $DEBUG"
 log "Running from: $0"
 
@@ -58,7 +58,6 @@ log "CSD_BUILT_DATE=$CSD_BUILT_DATE"
 # If we're in debug mode, enable printing each executed command
 if [[ $DEBUG = "true" ]]; then
   set -x
-  CURL_DEBUG="-v"
 fi
 
 function update_users {
@@ -71,7 +70,7 @@ function update_users {
 
 function generate_ldap_configs {
   if [ ! -z "$USE_LDAP_FILE_CONFIG" ] && [ "$USE_LDAP_FILE_CONFIG" = true ];then
-    log "use.ldap.login.file set to true. Applying the contents in $CONF_DIR/ldap-login.conf"
+    log "use.ldap.login.file set to true. Using the already generated content from $CONF_DIR/ldap-login.conf"
   else
     log "use.ldap.login.file set to false. Applying the configurations from ldap.* entries"
     ldap_configs=`cat "$CONF_DIR"/ldap.properties | grep "ldap" | grep -v "ldap.bindPassword" | sed -e 's/ldap\.\([^=]*\)=\(.*\)/  \1=\"\2\"/g'`
@@ -80,9 +79,21 @@ function generate_ldap_configs {
     bindPassword=\"@ldap-bind-password.txt@\"
     contextFactory=\"com.sun.jndi.ldap.LdapCtxFactory\"
     $ldap_configs;
-    };" > "$CONF_DIR"/ldap-login.conf
+    };
+    " > "$CONF_DIR"/ldap-login.conf
+
+    # Append any required additions (such as Kafka JAAS config)
+    cat "$CONF_DIR"/generated-ldap-login-append.conf >> "$CONF_DIR"/ldap-login.conf
+
+    # And finally create password file
     ldap_bind_password=`cat "$CONF_DIR"/ldap.properties | grep "ldap.bindPassword"`
     echo "$ldap_bind_password" | awk -F'=' '{ print $2 }' | tr -d '\n' > "$CONF_DIR"/ldap-bind-password.txt
+  fi
+
+  if [ ! -z "$LDAP_FILE_SUBSTITUTIONS" ] && [ "$LDAP_FILE_SUBSTITUTIONS" = true ];then
+    log "Performing LDAP config file substitutions"
+    hostname=`hostname -f`
+    sed -i -e "s|_HOST|$hostname|g" -e "s|_KEYTAB_PATH|$CONF_DIR/streamsets.keytab|g" $CONF_DIR/ldap-login.conf
   fi
 }
 
@@ -150,6 +161,11 @@ function start {
   prepend_file_content $CONF_DIR/sdc-security.policy $SDC_DIST/etc/sdc-security.policy
   prepend_file_content $CONF_DIR/sdc-env.sh $SDC_DIST/libexec/sdc-env.sh
 
+  # (Re)Generate customer.id file
+  if [[ ! -z $CUSTOMER_ID  ]]; then
+    echo $CUSTOMER_ID > $SDC_DATA/customer.id
+  fi
+
   # Source environment (at this point merged the CM config and parcel default)
   source "$CONF_DIR"/sdc-env.sh
 
@@ -157,100 +173,10 @@ function start {
   exec $SDC_DIST/bin/streamsets dc -verbose -skipenvsourcing -exec
 }
 
-# Execute CURL and die the script if the CURL execution failed
-function run_curl {
-  method=$1
-  url=$2
-  payload=$3
-  extraArgs=$4
-
-  log "Executing curl $method to $url"
-  output=`curl $CURL_DEBUG $SDC_CURL_OPTS -S -X "$method" -d "$payload" "$url" -H 'Content-Type:application/json' -H 'X-Requested-By:SDC' $extraArgs`
-  if [ $? -ne 0 ]; then
-    log "Failed $method to $url"
-    exit 1
-  fi
-}
-
-# Print out DPM's login URL
-function dpm_url_login {
-  echo ${DPM_BASE_URL}/security/public-rest/v1/authentication/login
-}
-
-# Print out DPM's token generation URL
-function dpm_url_token_gen {
-  echo ${DPM_BASE_URL}/security/rest/v1/organization/$dpmOrg/components
-}
-
-# Print out DPM's token regeneration URL
-function dpm_url_token_regen {
-  echo ${DPM_BASE_URL}/security/rest/v1/organization/$dpmOrg/components/regenerateAuthToken
-}
-
-# Print out DPM's logout URL
-function dpm_url_logout {
-  echo ${DPM_BASE_URL}/security/_logout
-}
-
-# Create DPM session and sets in in shared variable dpmSession
-function dpm_login {
-  log "Creating DPM session"
-  run_curl "POST" "$(dpm_url_login)" "{\"userName\":\"$DPM_USER\", \"password\": \"$DPM_PASSWORD\"}" "-D -"
-  # Session is stored in SS_SSO_LOGIN header and needs to be extracted
-  dpmSession=$(echo $output | grep SS-SSO-LOGIN | sed -e 's/[^=]*=//' -e 's/;.*//')
-
-  if [ -z "$dpmSession" ]; then
-    log "Can't open DPM session: $output"
-    exit 1
-  fi
-
-  log "Opened DPM session: $dpmSession"
-}
-
-# Log out DPM session
-function dpm_logout {
-  log "Logging out session: $dpmSession"
-  run_curl "GET" "$(dpm_url_logout)" "" "--header X-SS-User-Auth-Token:$dpmSession"
-}
-
-# Generate new DPM application token and fill it into token variable
-function dpm_generate_token {
-  log "Generating new token in session $dpmSession and in org $dpmOrg"
-  run_curl "PUT" "$(dpm_url_token_gen)" "{\"organization\": \"$dpmOrg\", \"componentType\" : \"dc\", \"numberOfComponents\" : 1, \"active\" : true}" "-H X-SS-REST-CALL:true -H X-SS-User-Auth-Token:$dpmSession"
-  token=$(echo $output | sed -e 's/.*"fullAuthToken":"//' -e 's/".*//')
-
-  if [ -z "$token" ]; then
-    log "Can't generate new token"
-    exit 1
-  fi
-}
-
-# Regenerate existing DPM application token and fill it into token variable
-function dpm_regenerate_token {
-  log "Regenerating token in session $dpmSession and in org $dpmOrg"
-
-  sdcId=`cat $SDC_DATA/sdc.id`
-  if [ -z "$sdcId" ]; then
-    log "Can't load SDC id"
-    exit 1
-  fi
-
-  log "SDC id is $sdcId"
-
-  run_curl "POST" "$(dpm_url_token_regen)" "[ \"$sdcId\" ]" "-H X-SS-REST-CALL:true -H X-SS-User-Auth-Token:$dpmSession"
-  token=$(echo $output | sed -e 's/.*"fullAuthToken":"//' -e 's/".*//')
-
-  if [ -z "$token" ]; then
-    log "Can't generate new token"
-    exit 1
-  fi
-}
-
-
-# Validate that we have all variables that are required for DPM (to register and such)
-function dpm_verify_config {
+# Validate that we have all variables that are required for Control Hub (to register and such)
+function sch_verify_config {
   die="false"
-  log "Validating DPM configuration"
+  log "Validating Control Hub configuration"
 
   if [ -z "$DPM_BASE_URL" ]; then
     log "Configuration 'dpm.base.url' is not properly set."
@@ -264,49 +190,35 @@ function dpm_verify_config {
     log "Configuration 'dpm.user' is not properly set."
     die="true"
   fi
-
-  # Calculate DPM organization
-  dpmOrg=`echo $DPM_USER | cut -f2 -d@`
-  if [ -z "$dpmOrg" ]; then
-    log "Configuration 'dpm.user' doesn't properly contain organization."
-    die="true"
-  fi
-  log "DPM organization is $dpmOrg"
-
-  if [ $die = "true" ]; then
-    log "Invalid configuration for DPM"
-    exit 1
-  fi
 }
 
-# Register auth token for this SDC instance in DPM
+# Register auth token for this SDC instance in Control Hub
 function dpm {
-  if [[ -f "$DPM_TOKEN_FILE" ]]; then
-    log "DPM token already exists, skipping for now."
+  if [[ -f "$DPM_TOKEN_FILE" || -s "$DPM_TOKEN_FILE" ]]; then
+    log "Control Hub token already exists, skipping for now."
     return
   fi
 
   # Since we know that the token doesn't exists yet, this will always generate new token
-  dpm_generate_or_regenerate
+  sch_enable
 }
 
-# Either generate new or re-generate existing DPM token
-function dpm_generate_or_regenerate {
-  dpm_verify_config
-  dpm_login
+# Enable SCH
+function sch_enable {
+  sch_verify_config
 
-  # Based on whether the token file already exists
-  if [ -f $DPM_TOKEN_FILE ]; then
-    dpm_regenerate_token
-    echo $token > $DPM_TOKEN_FILE
-  else
-    # Application token doesn't exists yet, we need to generate it
-    dpm_generate_token
-    mkdir -p "$(dirname $DPM_TOKEN_FILE)"
-    echo $token > $DPM_TOKEN_FILE
-  fi
+  # Finally enable SCH
+  touch $DPM_TOKEN_FILE
+  exec $SDC_DIST/bin/streamsets sch register -l $DPM_BASE_URL -u $DPM_USER -p $DPM_PASSWORD --token-file-path $DPM_TOKEN_FILE --skip-config-update
+}
 
-  dpm_logout
+# Disable SCH
+function sch_disable {
+  sch_verify_config
+
+  # Finally disable SCH
+  exec $SDC_DIST/bin/streamsets sch unregister -u $DPM_USER -p $DPM_PASSWORD --token-file-path $DPM_TOKEN_FILE --skip-config-update
+  rm -rf $DPM_TOKEN_FILE
 }
 
 export SDC_CONF=$CONF_DIR
@@ -343,17 +255,17 @@ if [ -f $SDC_PROPERTIES ]; then
   grep "^stage.alias.streamsets" $SDC_PROP_FILE >> $SDC_PROPERTIES
   grep "^library.alias.streamsets" $SDC_PROP_FILE >> $SDC_PROPERTIES
 
-  # Detect if this is a DPM enabled deployment
+  # Detect if this is a Control Hub enabled deployment
   if grep -q "dpm.enabled=true" $SDC_PROPERTIES; then
-    log "Detected DPM environment"
+    log "Detected Control Hub environment"
     DPM_ENABLED="true"
   else
-    log "Running in non-DPM environment"
+    log "Running in non-Control Hub environment"
   fi
 
-  # CM exposes DPM token config as path to file, so we need to convert it to
+  # CM exposes Control Hub token config as path to file, so we need to convert it to
   # the actual value that is expected by SDC. We will append it to the config
-  # only if we're actually running with DPM enabled, otherwise SDC can fail
+  # only if we're actually running with Control Hub enabled, otherwise SDC can fail
   # to start if given file doesn't exists.
   if [[ $DPM_ENABLED = "true" ]]; then
     echo "dpm.appAuthToken=@$DPM_TOKEN_FILE@" >> $SDC_PROPERTIES
@@ -372,8 +284,13 @@ case $CMD in
     exit 0
     ;;
 
-  dpm)
-    dpm_generate_or_regenerate
+  sch_enable)
+    sch_enable
+    exit 0
+    ;;
+
+  sch_disable)
+    sch_disable 
     exit 0
     ;;
 esac

@@ -13,15 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/**
- * Controller for Preview Pane.
- */
 
+// Controller for Preview Pane.
 angular
   .module('dataCollectorApp.home')
-
-  .controller('PreviewController', function ($scope, $rootScope, $q, _, api, previewService, pipelineConstant,
-                                             $timeout, $modal) {
+  .controller('PreviewController', function (
+    $scope, $rootScope, $q, _, api, previewService, pipelineConstant, $timeout, $modal
+  ) {
     var previewDataBackup, previewStatusTimer, currentPreviewerId, currentStage;
 
     angular.extend($scope, {
@@ -67,7 +65,6 @@ angular
         eventRecords: 10,
         newRecords: 10
       },
-
 
       /**
        * Preview Data for previous stage instance.
@@ -123,7 +120,7 @@ angular
         recordUpdated.dirty = true;
         recordValue.dirty = true;
 
-        if(!_.contains($scope.dirtyLanes, recordUpdated.laneName)) {
+        if (!_.contains($scope.dirtyLanes, recordUpdated.laneName)) {
           $scope.dirtyLanes.push(recordUpdated.laneName);
           $rootScope.$broadcast('updateDirtyLaneConnector', $scope.dirtyLanes);
         }
@@ -135,10 +132,11 @@ angular
        * @param stageInstance
        */
       stepPreview: function(stageInstance) {
-        var dirtyLanes = $scope.dirtyLanes,
-          previewBatchOutput = $scope.previewData.batchesOutput[0],
-          previewConfig = $scope.pipelineConfig.uiInfo.previewConfig,
-          stageOutputs = [];
+        var dirtyLanes = $scope.dirtyLanes;
+        var previewBatchOutput = $scope.previewData.batchesOutput[0];
+        var previewConfig = $scope.pipelineConfig.uiInfo.previewConfig;
+        var stageOutputs = [];
+        var testOrigin = (previewConfig.previewSource === pipelineConstant.TEST_ORIGIN);
 
         angular.forEach(previewBatchOutput, function(stageOutput, index) {
           var lanesList = _.keys(stageOutput.output);
@@ -154,49 +152,58 @@ angular
 
         $scope.showLoading = true;
 
-        api.pipelineAgent.createPreview($scope.activeConfigInfo.pipelineId, $scope.previewSourceOffset,
-          previewConfig.batchSize, 0, !previewConfig.writeToDestinations, !previewConfig.executeLifecycleEvents,
-          stageOutputs, null, previewConfig.timeout)
-          .then(function (response) {
-            var res = response.data;
-            var defer = $q.defer();
-            currentPreviewerId = res.previewerId;
-            checkForPreviewStatus(res.previewerId, defer);
+        api.pipelineAgent.createPreview(
+          $scope.activeConfigInfo.pipelineId,
+          $scope.previewSourceOffset,
+          previewConfig.batchSize,
+          0,
+          !previewConfig.writeToDestinations,
+          !previewConfig.executeLifecycleEvents,
+          stageOutputs,
+          null,
+          previewConfig.timeout,
+          $scope.edgeHttpUrl,
+          testOrigin
+        ).then(function (response) {
+          var res = response.data;
+          var defer = $q.defer();
+          currentPreviewerId = res.previewerId;
+          checkForPreviewStatus($scope.activeConfigInfo.pipelineId, res.previewerId, defer);
 
-            defer.promise.then(function(previewData) {
-              var updatedPreviewBatchOutput = previewData.batchesOutput[0];
+          defer.promise.then(function(previewData) {
+            var updatedPreviewBatchOutput = previewData.batchesOutput[0];
 
-              angular.forEach(updatedPreviewBatchOutput, function(stageOutput, index) {
-                var lanesList = _.keys(stageOutput.output);
-                lanesList.push(stageOutput.instanceName + '_EventLane');
-                var intersection = _.intersection(dirtyLanes, lanesList);
-                var changedStageOutput = previewBatchOutput[index];
+            angular.forEach(updatedPreviewBatchOutput, function(stageOutput, index) {
+              var lanesList = _.keys(stageOutput.output);
+              lanesList.push(stageOutput.instanceName + '_EventLane');
+              var intersection = _.intersection(dirtyLanes, lanesList);
+              var changedStageOutput = previewBatchOutput[index];
 
-                if(intersection && intersection.length) {
-                  angular.forEach(intersection, function(laneName) {
-                    stageOutput.output[laneName] = angular.copy(changedStageOutput.output[laneName]);
-                  });
-                  stageOutput.eventRecords = angular.copy(changedStageOutput.eventRecords);
-                }
-              });
-
-              $scope.previewData = previewData;
-
-              if(!$scope.previewMultipleStages) {
-                $scope.changeStageSelection({
-                  selectedObject: stageInstance,
-                  type: pipelineConstant.STAGE_INSTANCE
+              if (intersection && intersection.length) {
+                angular.forEach(intersection, function(laneName) {
+                  stageOutput.output[laneName] = angular.copy(changedStageOutput.output[laneName]);
                 });
+                stageOutput.eventRecords = angular.copy(changedStageOutput.eventRecords);
               }
-
-              $rootScope.$broadcast('updateErrorCount',
-                previewService.getPreviewStageErrorCounts($scope.previewData.batchesOutput[0]));
-              $scope.stepExecuted = true;
-              $scope.showLoading = false;
-              $rootScope.common.errors = [];
             });
 
-          })
+            $scope.previewData = previewData;
+
+            if (!$scope.previewMultipleStages) {
+              $scope.changeStageSelection({
+                selectedObject: stageInstance,
+                type: pipelineConstant.STAGE_INSTANCE
+              });
+            }
+
+            $rootScope.$broadcast('updateErrorCount',
+              previewService.getPreviewStageErrorCounts($scope.previewData.batchesOutput[0]));
+            $scope.stepExecuted = true;
+            $scope.showLoading = false;
+            $rootScope.common.errors = [];
+          });
+
+        })
           .catch(function(res) {
             $rootScope.common.errors = [res.data];
             $scope.showLoading = false;
@@ -208,6 +215,7 @@ angular
        *
        */
       revertChanges: function() {
+        var previewConfig = $scope.pipelineConfig.uiInfo.previewConfig;
         $scope.previewData = angular.copy(previewDataBackup);
         $scope.previewDataUpdated = false;
         $scope.stepExecuted = false;
@@ -215,8 +223,11 @@ angular
 
         $rootScope.$broadcast('clearDirtyLaneConnector');
 
-        if(!$scope.previewMultipleStages) {
-          var firstStageInstance = $scope.pipelineConfig.stages[0];
+        if (!$scope.previewMultipleStages) {
+          var firstStageInstance = $scope.stageInstances[0];
+          if (previewConfig.previewSource === pipelineConstant.TEST_ORIGIN) {
+            firstStageInstance = $scope.pipelineConfig.testOriginStage;
+          }
           $scope.changeStageSelection({
             selectedObject: firstStageInstance,
             type: pipelineConstant.STAGE_INSTANCE
@@ -239,7 +250,7 @@ angular
         $scope.previewDataUpdated = true;
         previewService.removeRecordFromSource(batchData, stageInstance, record);
 
-        if(!_.contains($scope.dirtyLanes, record.laneName)) {
+        if (!_.contains($scope.dirtyLanes, record.laneName)) {
           $scope.dirtyLanes.push(record.laneName);
           $rootScope.$broadcast('updateDirtyLaneConnector', $scope.dirtyLanes);
         }
@@ -249,8 +260,8 @@ angular
        * Cancel Preview Button call back function
        */
       cancelPreview: function() {
-        if(currentPreviewerId) {
-          api.pipelineAgent.cancelPreview(currentPreviewerId);
+        if (currentPreviewerId) {
+          api.pipelineAgent.cancelPreview($scope.activeConfigInfo.pipelineId, currentPreviewerId);
         }
         $scope.closePreview();
         $scope.showLoading = false;
@@ -298,6 +309,7 @@ angular
             errorObj: function () {
               return {
                 RemoteException: {
+                  antennaDoctorMessages: errorMessage.antennaDoctorMessages,
                   localizedMessage: errorMessage.localized,
                   stackTrace: errorMessage.errorStackTrace
                 }
@@ -312,7 +324,7 @@ angular
        * Used to determine when Multiple Preview is available.
        */
       hasMultipleStages: function() {
-        return $scope.pipelineConfig && $scope.pipelineConfig.stages && $scope.pipelineConfig.stages.length > 1;
+        return $scope.pipelineConfig && $scope.stageInstances && $scope.stageInstances.length > 1;
       }
     });
 
@@ -322,16 +334,16 @@ angular
      * @param stageInstance
      */
     var updatePreviewDataForStage = function(stageInstance) {
-      if(!$scope.previewData || !$scope.previewData.batchesOutput) {
+      if (!$scope.previewData || !$scope.previewData.batchesOutput) {
         return;
       }
 
-      var stageInstances = $scope.pipelineConfig.stages,
-        batchData = $scope.previewData.batchesOutput[0];
+      var stageInstances = $scope.stageInstances;
+      var batchData = $scope.previewData.batchesOutput[0];
 
       $scope.stagePreviewData = previewService.getPreviewDataForStage(batchData, stageInstance);
 
-      if(stageInstance.inputLanes && stageInstance.inputLanes.length) {
+      if (stageInstance.inputLanes && stageInstance.inputLanes.length) {
         $scope.previousStageInstances = _.filter(stageInstances, function(instance) {
           return (_.intersection(instance.outputLanes, stageInstance.inputLanes)).length > 0;
         });
@@ -339,7 +351,7 @@ angular
         $scope.previousStageInstances = [];
       }
 
-      if(stageInstance.outputLanes && stageInstance.outputLanes.length) {
+      if (stageInstance.outputLanes && stageInstance.outputLanes.length) {
         $scope.nextStageInstances = _.filter(stageInstances, function(instance) {
           return (_.intersection(instance.inputLanes, stageInstance.outputLanes)).length > 0;
         });
@@ -348,13 +360,13 @@ angular
       }
 
 
-      if(stageInstance.uiInfo.stageType === pipelineConstant.SOURCE_STAGE_TYPE &&
+      if (stageInstance.uiInfo.stageType === pipelineConstant.SOURCE_STAGE_TYPE &&
         stageInstance.stageName.indexOf('RawDataDSource') !== -1) {
         angular.forEach(stageInstance.configuration, function(configObj, index) {
-          if(configObj.name === 'rawData') {
+          if (configObj.name === 'rawData') {
             $scope.rawDataConfigIndex = index;
-          } else if(configObj.name === 'dataFormatConfig.dataFormat') {
-            if(configObj.value === 'XML') {
+          } else if (configObj.name === 'dataFormatConfig.dataFormat') {
+            if (configObj.value === 'XML') {
               $scope.rawDataCodemirrorOptions.mode.name = 'application/xml';
             } else {
               $scope.rawDataCodemirrorOptions.mode.name = 'application/json';
@@ -372,15 +384,15 @@ angular
       }
     };
 
-
     /**
      * Preview Pipeline.
-     *
      */
     var previewPipeline = function() {
-      var previewConfig = $scope.pipelineConfig.uiInfo.previewConfig,
-        stageOutputs = [],
-        deferList = [];
+      var previewConfig = $scope.pipelineConfig.uiInfo.previewConfig;
+      var stageOutputs = [];
+      var deferList = [];
+      var testOrigin = false;
+      var firstStageInstance = $scope.stageInstances[0];
 
       $scope.stepExecuted = false;
       $scope.showLoading = true;
@@ -391,27 +403,25 @@ angular
         case pipelineConstant.SNAPSHOT_SOURCE:
           var getSnapshotDefer = $q.defer();
 
-          if(previewConfig.snapshotInfo) {
+          if (previewConfig.snapshotInfo) {
             api.pipelineAgent.getSnapshot(previewConfig.snapshotInfo.name, 0, previewConfig.snapshotInfo.id)
               .then(function(response) {
                 var res = response.data;
-                if(res && res.snapshotBatches && res.snapshotBatches[0] && res.snapshotBatches[0].length) {
+                if (res && res.snapshotBatches && res.snapshotBatches[0] && res.snapshotBatches[0].length) {
                   var snapshotSourceOutputs = res.snapshotBatches[0][0].output;
 
                   stageOutputs = [{
-                    instanceName: $scope.pipelineConfig.stages[0].instanceName,
+                    instanceName: $scope.stageInstances[0].instanceName,
                     output: {}
                   }];
 
-
-                  stageOutputs[0].output[$scope.pipelineConfig.stages[0].outputLanes[0]] =
+                  stageOutputs[0].output[$scope.stageInstances[0].outputLanes[0]] =
                     snapshotSourceOutputs[Object.keys(snapshotSourceOutputs)[0]];
 
                   getSnapshotDefer.resolve();
                 } else {
                   getSnapshotDefer.reject('No Snapshot data available');
                 }
-
               })
               .catch(function(res) {
                 getSnapshotDefer.reject(res.data);
@@ -423,53 +433,61 @@ angular
 
           deferList.push(getSnapshotDefer.promise);
           break;
-        case pipelineConstant.USER_PROVIDED:
-          //TODO
+        case pipelineConstant.TEST_ORIGIN:
+          testOrigin = true;
+          firstStageInstance = $scope.pipelineConfig.testOriginStage;
           break;
       }
 
       $q.all(deferList).then(function() {
-        api.pipelineAgent.createPreview($scope.activeConfigInfo.pipelineId, $scope.previewSourceOffset,
-          previewConfig.batchSize, 0, !previewConfig.writeToDestinations, !previewConfig.executeLifecycleEvents,
-          stageOutputs, null, previewConfig.timeout)
-          .then(function (response) {
-            var res = response.data;
-            var defer = $q.defer();
-            currentPreviewerId = res.previewerId;
-            checkForPreviewStatus(res.previewerId, defer);
+        api.pipelineAgent.createPreview(
+          $scope.activeConfigInfo.pipelineId,
+          $scope.previewSourceOffset,
+          previewConfig.batchSize,
+          0,
+          !previewConfig.writeToDestinations,
+          !previewConfig.executeLifecycleEvents,
+          stageOutputs,
+          null,
+          previewConfig.timeout,
+          $scope.edgeHttpUrl,
+          testOrigin
+        ).then(function (response) {
+          var res = response.data;
+          var defer = $q.defer();
+          currentPreviewerId = res.previewerId;
+          checkForPreviewStatus($scope.activeConfigInfo.pipelineId, res.previewerId, defer);
 
-            defer.promise.then(function(previewData) {
-              var firstStageInstance;
+          defer.promise.then(function(previewData) {
+            //Clear Previous errors
+            $rootScope.common.errors = [];
 
-              //Clear Previous errors
-              $rootScope.common.errors = [];
+            previewDataBackup = angular.copy(previewData);
 
-              previewDataBackup = angular.copy(previewData);
+            $scope.previewData = previewData;
+            $scope.previewDataUpdated = false;
+            $scope.dirtyLanes = [];
 
-              $scope.previewData = previewData;
-              $scope.previewDataUpdated = false;
-              $scope.dirtyLanes = [];
+            if (!$scope.previewMultipleStages) {
 
-              if(!$scope.previewMultipleStages) {
-                firstStageInstance = $scope.pipelineConfig.stages[0];
-                $scope.changeStageSelection({
-                  selectedObject: firstStageInstance,
-                  type: pipelineConstant.STAGE_INSTANCE
-                });
-              }
+              $scope.changeStageSelection({
+                selectedObject: firstStageInstance,
+                type: pipelineConstant.STAGE_INSTANCE
+              });
+            }
 
-              $rootScope.$broadcast('updateErrorCount',
-                previewService.getPreviewStageErrorCounts($scope.previewData.batchesOutput[0]));
-              $rootScope.$broadcast('clearDirtyLaneConnector');
-              $scope.showLoading = false;
-            });
-
-          })
-          .catch(function(res) {
-            $rootScope.common.errors = [res.data];
-            $scope.closePreview();
+            $rootScope.$broadcast('updateErrorCount',
+              previewService.getPreviewStageErrorCounts($scope.previewData.batchesOutput[0]));
+            $rootScope.$broadcast('clearDirtyLaneConnector');
             $scope.showLoading = false;
           });
+
+        }).catch(function(res) {
+          $rootScope.common.errors = [res.data];
+          $scope.closePreview();
+          $scope.showLoading = false;
+        });
+
       }, function(data) {
         $rootScope.common.errors = [data];
         $scope.closePreview();
@@ -479,7 +497,7 @@ angular
 
     };
 
-    if($scope.previewMode) {
+    if ($scope.previewMode) {
       previewPipeline();
     }
 
@@ -488,7 +506,7 @@ angular
     });
 
     $scope.$on('onSelectionChange', function(event, options) {
-      if($scope.previewMode) {
+      if ($scope.previewMode) {
         if (options.type === pipelineConstant.STAGE_INSTANCE) {
           $scope.recordPagination = {
             inputRecords: $scope.recordMaxLimit,
@@ -497,12 +515,12 @@ angular
             eventRecords: $scope.recordMaxLimit,
             newRecords: $scope.recordMaxLimit
           };
-          if(options.selectedObject.uiInfo.stageType === pipelineConstant.PROCESSOR_STAGE_TYPE &&
+          if (options.selectedObject.uiInfo.stageType === pipelineConstant.PROCESSOR_STAGE_TYPE &&
             currentStage.instanceName !== options.selectedObject.instanceName &&
             currentStage.inputLanes && currentStage.inputLanes.length && options.selectedObject.inputLanes &&
             currentStage.inputLanes[0] === options.selectedObject.inputLanes[0]) {
 
-            //If coming same input lanes force preview view refresh by setting to empty and filling preview data
+            // If coming same input lanes force preview view refresh by setting to empty and filling preview data
             $scope.stagePreviewData = {
               input: [],
               output: [],
@@ -528,13 +546,13 @@ angular
     });
 
     $scope.$watch('previewMultipleStages', function(newValue) {
-      if($scope.previewData.batchesOutput) {
-        if(newValue === true) {
+      if ($scope.previewData.batchesOutput) {
+        if (newValue === true) {
           $scope.moveGraphToCenter();
         } else {
           $scope.clearStartAndEndStageInstance();
           $scope.changeStageSelection({
-            selectedObject: $scope.pipelineConfig.stages[0],
+            selectedObject: $scope.stageInstances[0],
             type: pipelineConstant.STAGE_INSTANCE
           });
         }
@@ -542,13 +560,12 @@ angular
     });
 
     var firstTime = true;
-    $scope.$watch('pipelineConfig.stages', function(newValue) {
-      if(!firstTime) {
+    $scope.$watch('pipelineConfig.stages', function() {
+      if (!firstTime) {
         $scope.pipelineConfigUpdated = true;
       } else {
         firstTime = false;
       }
-
     });
 
     $scope.$on('recordUpdated', function(event, recordUpdated, recordValue) {
@@ -557,25 +574,23 @@ angular
 
     /**
      * Check for Preview Status for every 1 seconds, once done open the snapshot view.
-     *
      */
-    var checkForPreviewStatus = function(previewerId, defer) {
-      previewStatusTimer = $timeout(
-        function() {
-        },
-        1000
-      );
+    var checkForPreviewStatus = function(pipelineId, previewerId, defer) {
+      previewStatusTimer = $timeout(function() {}, 1000);
 
       previewStatusTimer.then(
         function() {
-          api.pipelineAgent.getPreviewStatus(previewerId)
+          api.pipelineAgent.getPreviewStatus(pipelineId, previewerId, $scope.edgeHttpUrl)
             .then(function(res) {
               var data = res.data;
-              if(data && _.contains(['INVALID', 'START_ERROR', 'RUN_ERROR', 'CONNECT_ERROR', 'FINISHED', 'STOP_ERROR'], data.status)) {
-                fetchPreviewData(previewerId, defer);
+              if (data && _.contains(
+                ['INVALID', 'START_ERROR', 'RUN_ERROR', 'CONNECT_ERROR', 'FINISHED', 'STOP_ERROR', 'TIMED_OUT'],
+                data.status
+              )) {
+                fetchPreviewData(pipelineId, previewerId, defer);
                 currentPreviewerId = null;
               } else {
-                checkForPreviewStatus(previewerId, defer);
+                checkForPreviewStatus(pipelineId, previewerId, defer);
               }
             })
             .catch(function(res) {
@@ -588,15 +603,21 @@ angular
       );
     };
 
-    var fetchPreviewData = function(previewerId, defer) {
-      api.pipelineAgent.getPreviewData(previewerId)
+    var fetchPreviewData = function(pipelineId, previewerId, defer) {
+      api.pipelineAgent.getPreviewData(pipelineId, previewerId, $scope.edgeHttpUrl)
         .then(function(res) {
           var previewData = res.data;
-          if(previewData.status !== 'FINISHED') {
-            if(previewData.issues) {
+          if (previewData.status !== 'FINISHED') {
+            if (previewData.issues) {
               $rootScope.common.errors = [previewData.issues];
-            } else if(previewData.message) {
-              $rootScope.common.errors = [previewData.message];
+            } else if (previewData.message) {
+              $rootScope.common.errors = [{
+                RemoteException: {
+                  antennaDoctorMessages: previewData.antennaDoctorMessages,
+                  localizedMessage: previewData.message,
+                  stackTrace: previewData.errorStackTrace
+                }
+              }];
             }
 
             $scope.closePreview();
@@ -614,12 +635,13 @@ angular
         });
     };
 
-    if($scope.activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+    if ($scope.activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
         $scope.activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+        $scope.activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
         $scope.activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
         $scope.activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING) {
       api.pipelineAgent.getSnapshotsInfo().then(function(res) {
-        if(res && res.data && res.data.length) {
+        if (res && res.data && res.data.length) {
           $scope.snapshotsInfo = res.data;
           $scope.snapshotsInfo = _.chain(res.data)
             .filter(function(snapshotInfo) {
@@ -633,12 +655,10 @@ angular
       });
     }
 
-
     $scope.$on('$destroy', function() {
-      if(previewStatusTimer) {
+      if (previewStatusTimer) {
         $timeout.cancel(previewStatusTimer);
       }
     });
-
 
   });

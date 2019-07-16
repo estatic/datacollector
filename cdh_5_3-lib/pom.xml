@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-stage-lib-parent</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../stage-lib-parent</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-cdh_5_3-lib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector CDH 5.3.10 Lib</description>
   <name>StreamSets Data Collector CDH 5.3.10 Lib</name>
   <packaging>jar</packaging>
@@ -36,14 +36,25 @@
   <properties>
     <hadoop.version>2.5.0-cdh5.3.10</hadoop.version>
     <hbase.version>0.98.6-cdh5.3.10</hbase.version>
+    <hive.version>0.13.1-cdh5.3.10</hive.version>
     <solr.version>4.4.0-cdh5.3.10</solr.version>
     <solr.test.jetty.version>8.1.10.v20130312</solr.test.jetty.version>
     <flume.version>1.5.0-cdh5.3.10</flume.version>
     <thrift.version>0.9.0-cdh5-2</thrift.version>
     <avro.version>1.7.7</avro.version>
+    <parquet.version>1.8.1</parquet.version>
   </properties>
 
   <dependencies>
+    <!-- Parquet dependency must be here. Otherwise tests are run with incorrect parquet version taken from
+        MapReduce Protolib-->
+
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+    </dependency>
 
     <!--Dependency for Solr Unit Tests to override SDC Jetty Artifacts -->
     <dependency>
@@ -227,6 +238,12 @@
       <artifactId>streamsets-datacollector-hbase-protolib</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-sdc-hbase-0_98</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
       <exclusions>
         <exclusion>
           <groupId>org.apache.hbase</groupId>
@@ -307,6 +324,14 @@
       </exclusions>
     </dependency>
 
+    <!-- This MUST appear after hdfs-protolib as we override classes from hadoop-common
+    which is a transitive dependency of this one. -->
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-azure</artifactId>
+      <version>${hadoop.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-client</artifactId>
@@ -329,6 +354,12 @@
       <artifactId>hadoop-minicluster</artifactId>
       <version>${hadoop.version}</version>
       <scope>test</scope>
+      <exclusions>
+	<exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-common</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -419,11 +450,37 @@
     <!-- test dependencies-->
     <dependency>
       <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-stagesupport</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-commonlib</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-dir-spooler-protolib</artifactId>
+      <type>test-jar</type>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-hdfs-protolib</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-cluster-hdfs-protolib</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
 
@@ -442,11 +499,9 @@
             <configuration>
               <sources>
                 <source>${basedir}/../hbase-protolib/src/test/java</source>
-                <source>${basedir}/../hdfs-protolib/src/test/java</source>
                 <source>${basedir}/../mapreduce-protolib/src/test/java</source>
                 <source>${basedir}/../flume-protolib/src/test/java</source>
                 <source>${basedir}/../solr-protolib/src/test/java</source>
-                <source>${basedir}/../cluster-hdfs-protolib/src/test/java</source>
               </sources>
             </configuration>
           </execution>
@@ -462,9 +517,6 @@
                   <directory>${basedir}/../hbase-protolib/src/test/resources</directory>
                 </resource>
                 <resource>
-                  <directory>${basedir}/../hdfs-protolib/src/test/resources</directory>
-                </resource>
-                <resource>
                   <directory>${basedir}/../mapreduce-protolib/src/test/resources</directory>
                 </resource>
                 <resource>
@@ -472,9 +524,6 @@
                 </resource>
                 <resource>
                   <directory>${basedir}/../solr-protolib/src/test/resources</directory>
-                </resource>
-                <resource>
-                  <directory>${basedir}/../cluster-hdfs-protolib/src/test/resources</directory>
                 </resource>
               </resources>
             </configuration>
@@ -487,6 +536,18 @@
         <version>2.8.2</version>
         <configuration>
           <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>-Xmx4g -Djava.security.egd=file:/dev/./urandom</argLine>
+          <dependenciesToScan>
+            <dependency>com.streamsets:streamsets-datacollector-dir-spooler-protolib</dependency>
+            <dependency>com.streamsets:streamsets-datacollector-hdfs-protolib</dependency>
+            <dependency>com.streamsets:streamsets-datacollector-cluster-hdfs-protolib</dependency>
+          </dependenciesToScan>
         </configuration>
       </plugin>
     </plugins>

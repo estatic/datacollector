@@ -18,19 +18,23 @@ package com.streamsets.pipeline.stage.processor.kv.redis;
 import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
+import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 @StageDef(
     version = 1,
     label = "Redis Lookup Processor",
     description = "Performs key-value lookups in Redis.",
     icon = "redis.png",
-    onlineHelpRefUrl = "index.html#Processors/RedisLookup.html#task_gpv_npr_pv"
+    onlineHelpRefUrl ="index.html?contextID=task_gpv_npr_pv"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle
+@HideConfigs(
+  "conf.cache.retryOnCacheMiss"
+)
 public class RedisLookupDProcessor extends DProcessor {
 
   @ConfigDefBean(groups = {"LOOKUP", "REDIS"})

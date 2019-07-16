@@ -23,9 +23,10 @@ import com.streamsets.pipeline.api.FieldSelectorModel;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.lib.el.FieldEL;
 import com.streamsets.pipeline.lib.el.RecordEL;
 
@@ -36,13 +37,16 @@ import java.util.List;
     label="Field Remover",
     description="Removes fields from a record",
     icon="filter.png",
-    onlineHelpRefUrl = "index.html#Processors/FieldRemover.html#task_c1j_btr_wq",
+    onlineHelpRefUrl ="index.html?contextID=task_c1j_btr_wq",
+    flags = StageBehaviorFlags.PURE_FUNCTION,
     execution = {
         ExecutionMode.STANDALONE,
         ExecutionMode.CLUSTER_BATCH,
         ExecutionMode.CLUSTER_YARN_STREAMING,
         ExecutionMode.CLUSTER_MESOS_STREAMING,
-        ExecutionMode.EDGE
+        ExecutionMode.EDGE,
+        ExecutionMode.EMR_BATCH
+
     }
 )
 @ConfigGroups(Groups.class)
@@ -76,9 +80,22 @@ public class FieldFilterDProcessor extends DProcessor {
   @FieldSelectorModel
   public List<String> fields;
 
+  @ConfigDef(
+      required = true,
+      type = Type.STRING,
+      defaultValue = "",
+      label = "Constant",
+      description = "",
+      displayPosition = 30,
+      group = "FILTER",
+      dependsOn = "filterOperation",
+      triggeredByValue = "REMOVE_CONSTANT"
+  )
+  public String constant;
+
   @Override
   protected Processor createProcessor() {
-    return new FieldFilterProcessor(filterOperation, fields);
+    return new FieldFilterProcessor(filterOperation, fields, constant);
   }
 
 }

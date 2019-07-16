@@ -22,6 +22,8 @@ import com.streamsets.pipeline.lib.data.DataFormat;
 import com.streamsets.pipeline.lib.parser.avro.AvroDataParserFactory;
 import com.streamsets.pipeline.lib.parser.binary.BinaryDataParserFactory;
 import com.streamsets.pipeline.lib.parser.delimited.DelimitedDataParserFactory;
+import com.streamsets.pipeline.lib.parser.excel.WorkbookParserFactory;
+import com.streamsets.pipeline.lib.parser.flowfile.FlowFileParserFactory;
 import com.streamsets.pipeline.lib.parser.json.JsonDataParserFactory;
 import com.streamsets.pipeline.lib.parser.log.LogDataParserFactory;
 import com.streamsets.pipeline.lib.parser.net.netflow.NetflowDataParserFactory;
@@ -52,6 +54,8 @@ public enum DataParserFormat implements DataFormat<DataParserFactory> {
   WHOLE_FILE(WholeFileDataParserFactory.class, WholeFileDataParserFactory.MODES, WholeFileDataParserFactory.CONFIGS),
   SYSLOG(SyslogDataParserFactory.class, SyslogDataParserFactory.MODES, SyslogDataParserFactory.CONFIGS),
   NETFLOW(NetflowDataParserFactory.class, NetflowDataParserFactory.MODES, NetflowDataParserFactory.CONFIGS),
+  EXCEL(WorkbookParserFactory.class, WorkbookParserFactory.MODES, WorkbookParserFactory.CONFIGS),
+  FLOWFILE(FlowFileParserFactory.class, FlowFileParserFactory.MODES, FlowFileParserFactory.CONFIGS),
   ;
 
   private final Class<? extends DataParserFactory> klass;

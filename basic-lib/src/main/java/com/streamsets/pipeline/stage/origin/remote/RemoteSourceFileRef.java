@@ -18,6 +18,7 @@ package com.streamsets.pipeline.stage.origin.remote;
 import com.google.common.collect.ImmutableSet;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.lib.io.fileref.AbstractFileRef;
+import com.streamsets.pipeline.lib.remote.RemoteFile;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,13 +52,13 @@ final class RemoteSourceFileRef extends AbstractFileRef{
 
   @Override
   public String toString() {
-    return "Remote: URI='" + remoteUri + "', File ='" + remoteFile.filename + "'";
+    return "Remote: URI='" + remoteUri + "', File ='" + remoteFile.getFilePath() + "'";
   }
 
   @Override
   @SuppressWarnings("unchecked")
   protected <T extends AutoCloseable> T createInputStream(Class<T> streamClassType) throws IOException {
-    return (T) remoteFile.remoteObject.getContent().getInputStream();
+    return (T) remoteFile.createInputStream();
   }
 
 

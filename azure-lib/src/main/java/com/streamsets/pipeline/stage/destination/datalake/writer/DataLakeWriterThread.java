@@ -31,18 +31,35 @@ import java.util.concurrent.Callable;
 
 public class DataLakeWriterThread implements Callable<List<OnRecordErrorException>> {
   private static final Logger LOG = LoggerFactory.getLogger(DataLakeTarget.class);
+  private static final int MAX_RETRY = 3;
 
   private String tmpFilePath;
   private List<Record> records;
-  private RecordWriter writer;
+  private DataLakeGeneratorManager generatorManager;
   private final long threadId;
-  private final int MAX_RETRY = 3;
 
-  public DataLakeWriterThread(RecordWriter writer, String tmpFilePath, List<Record> records) {
-    this.writer = writer;
+  public DataLakeWriterThread(DataLakeGeneratorManager generatorManager, String tmpFilePath, List<Record> records) {
+    this.generatorManager = generatorManager;
     this.tmpFilePath = tmpFilePath;
     this.records = records;
     threadId = Thread.currentThread().getId();
+  }
+
+  private int flush(List<Record> records, List<OnRecordErrorException> errorRecords, int numErrorRecords) {
+    try {
+      handleError(() -> generatorManager.flush(tmpFilePath));
+    } catch (IOException | StageException ex) {
+      if (!(ex instanceof ADLException)) {
+        LOG.debug(Errors.ADLS_03.getMessage(), tmpFilePath, ex.toString(), ex);
+      }
+
+      for (Record record : records) {
+        // acutal throwing the error happening on the main thread
+        errorRecords.add(new OnRecordErrorException(record, Errors.ADLS_03, ex.toString()));
+        numErrorRecords++;
+      }
+    }
+    return numErrorRecords;
   }
 
   @Override
@@ -50,83 +67,59 @@ public class DataLakeWriterThread implements Callable<List<OnRecordErrorExceptio
     int numErrorRecords = 0;
     LOG.debug("Thread {} starts to write {} records to {}", threadId, records.size(), tmpFilePath);
     List<OnRecordErrorException> errorRecords = new ArrayList<>();
-    boolean isFlushed = false;
+    List<Record> currentRecordList = new ArrayList<>();
 
-    for (int i = 0; i < records.size(); i++) {
-      Record record = records.get(i);
-      String dirPath = tmpFilePath.substring(0, tmpFilePath.lastIndexOf("/"));
+    for (Record record : records) {
+      if (generatorManager.shouldRoll(record, tmpFilePath)) {
+        try {
+          // flush the temp file
+          flush(currentRecordList, errorRecords, numErrorRecords);
+          // close and rename the temp file
+          handleError(() -> generatorManager.close(tmpFilePath));
+        } catch (IOException | StageException ex) {
+          if (!(ex instanceof ADLException)) {
+            LOG.debug(Errors.ADLS_13.getMessage(), tmpFilePath, ex.toString(), ex);
+          }
+          // actual throwing the error happening on the main thread
+          errorRecords.add(new OnRecordErrorException(record, Errors.ADLS_13, ex.toString()));
+          numErrorRecords++;
+        } finally {
+          currentRecordList.clear();
+        }
+      }
 
       try {
-        handleError(() -> writer.write(tmpFilePath, record));
+        handleError(() -> generatorManager.write(tmpFilePath, record));
+        currentRecordList.add(record);
       } catch (IOException | StageException ex) {
-
         if (!(ex instanceof ADLException)) {
-          LOG.debug(Errors.ADLS_03.getMessage(), ex.toString(), ex);
+          LOG.debug(Errors.ADLS_03.getMessage(), tmpFilePath, ex.toString(), ex);
         }
-
-        // acutal throwing the error happening on the main thread
+        // actual throwing the error happening on the main thread
         errorRecords.add(new OnRecordErrorException(record, Errors.ADLS_03, ex.toString()));
         numErrorRecords++;
       }
-
-
-      try {
-        if (writer.shouldRoll(record, dirPath)) {
-          handleError(() -> writer.commitOldFile(tmpFilePath));
-          isFlushed = true;
-        } else {
-          isFlushed = false;
-        }
-      } catch (IOException | StageException ex) {
-
-        if (!(ex instanceof ADLException)) {
-          LOG.debug(Errors.ADLS_13.getMessage(), tmpFilePath, ex.toString(), ex);
-        }
-        // acutal throwing the error happening on the main thread
-        errorRecords.add(new OnRecordErrorException(record, Errors.ADLS_13, ex.toString()));
-        numErrorRecords++;
-      }
     }
 
+    flush(currentRecordList, errorRecords, numErrorRecords);
 
-    if (!isFlushed) {
-      try {
-        handleError(() -> writer.flush(tmpFilePath));
-        isFlushed = true;
-      } catch (IOException | StageException ex) {
-        // reset error records
-        errorRecords.clear();
-        numErrorRecords = 0;
-
-        if (!(ex instanceof ADLException)) {
-          LOG.debug(Errors.ADLS_03.getMessage(), ex.toString(), ex);
-        }
-
-        // send to error records
-        for (Record record : records) {
-          errorRecords.add(new OnRecordErrorException(record, Errors.ADLS_03, ex.toString()));
-          numErrorRecords++;
-        }
-      }
-    }
-
-    if (isFlushed) {
-      LOG.debug(
-          "Thread {} ends to write {} out of {} records to {}",
-          threadId,
-          records.size() - numErrorRecords,
-          records.size(),
-          tmpFilePath
-      );
-    }
+    LOG.debug(
+        "Thread {} ends to write {} out of {} records to {}",
+        threadId,
+        records.size() - numErrorRecords,
+        records.size(),
+        tmpFilePath
+    );
 
     return errorRecords;
   }
 
-  private void handleError(RetryFunctionHandler retryFunctionHandler) throws IOException, StageException{
+  private void handleError(RetryFunctionHandler retryFunctionHandler) throws IOException, StageException {
     int retry = 0;
+
     while (retry < MAX_RETRY) {
       try {
+        retry++;
         retryFunctionHandler.run();
         return;
       } catch (ADLException ex) {
@@ -145,11 +138,10 @@ public class DataLakeWriterThread implements Callable<List<OnRecordErrorExceptio
 
         if (httpResponseCode == 401 || httpResponseCode == 400) {
           try {
-            writer.updateToken();
+            generatorManager.updateToken();
             LOG.debug("Thread {} obtained a renewed access token", threadId);
           } catch (IOException ex1) {
             LOG.error("Thread {} obtained a renewed access token failed retrying..", threadId);
-            retry++;
           }
         } else {
           throw ex;

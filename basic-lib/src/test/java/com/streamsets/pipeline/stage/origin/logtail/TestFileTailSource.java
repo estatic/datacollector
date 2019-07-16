@@ -17,6 +17,7 @@ package com.streamsets.pipeline.stage.origin.logtail;
 
 import com.codahale.metrics.Counter;
 import com.google.common.collect.ImmutableList;
+import com.streamsets.pipeline.api.EventRecord;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.Stage;
@@ -264,7 +265,7 @@ public class TestFileTailSource {
       Assert.assertTrue(now.compareTo(metadata.get("/time").getValueAsDate()) < 0);
       Assert.assertTrue(metadata.has("/inode"));
 
-      List<Record> eventRecords = runner.getEventRecords();
+      List<EventRecord> eventRecords = runner.getEventRecords();
       Assert.assertNotNull(eventRecords);
       Assert.assertEquals(2, eventRecords.size());
 
@@ -944,7 +945,7 @@ public class TestFileTailSource {
 
       writeFileInDirectoryStructure(testDataDir, suffixDirPath, 3);
 
-      //Give about 10 secs for the directory watcher and FileFinder thread to detect the file appearance.
+      //Give about 10 secs for the directory findDirectoryPathCreationWatcher and FileFinder thread to detect the file appearance.
       Thread.sleep(10000);
 
       output = runner.runProduce(output.getNewOffset(), 10);

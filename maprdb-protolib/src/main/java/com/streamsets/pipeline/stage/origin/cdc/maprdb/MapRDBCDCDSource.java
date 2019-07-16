@@ -21,17 +21,17 @@ import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DPushSource;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 
 @StageDef(
     version = 1,
     label = "MapR DB CDC Consumer",
     description = "Reads MapR DB CDC data from MapR Streams",
     execution = ExecutionMode.STANDALONE,
-    icon = "mapr.png",
+    icon = "mapr_db.png",
     recordsByRef = true,
     upgrader = MapRDBCDCSourceUpgrader.class,
-    onlineHelpRefUrl = "dunno"
+    onlineHelpRefUrl = "index.html?contextID=task_mmx_zvm_pbb"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

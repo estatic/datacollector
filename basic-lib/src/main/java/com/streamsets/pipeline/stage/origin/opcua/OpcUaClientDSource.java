@@ -22,7 +22,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DPushSource;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 
 @StageDef(
     version = 3,
@@ -31,7 +31,7 @@ import com.streamsets.pipeline.configurablestage.DPushSource;
     icon = "opcua.png",
     execution = ExecutionMode.STANDALONE,
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/OPCUAClient.html#task_bqt_mx3_h1b",
+    onlineHelpRefUrl ="index.html?contextID=task_bqt_mx3_h1b",
     upgrader = OpcUaClientSourceUpgrader.class
 )
 @ConfigGroups(Groups.class)

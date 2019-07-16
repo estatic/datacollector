@@ -21,26 +21,27 @@ import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
-import com.streamsets.pipeline.lib.http.Groups;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 
 @StageDef(
-    version = 3,
+    version = 4,
     label = "HTTP Client",
     description = "Uses an HTTP client to write data.",
     icon = "httpclient.png",
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Destinations/HTTPClient.html#task_bdf_fk5_lz",
+    onlineHelpRefUrl ="index.html?contextID=task_bdf_fk5_lz",
     execution = {
         ExecutionMode.STANDALONE,
         ExecutionMode.CLUSTER_BATCH,
         ExecutionMode.CLUSTER_YARN_STREAMING,
         ExecutionMode.CLUSTER_MESOS_STREAMING,
-        ExecutionMode.EDGE
+        ExecutionMode.EDGE,
+        ExecutionMode.EMR_BATCH
+
     },
     upgrader = HttpClientTargetUpgrader.class
 )
-@ConfigGroups(Groups.class)
+@ConfigGroups(HttpClientTargetGroups.class)
 @GenerateResourceBundle
 public class HttpClientDTarget extends DTarget {
 

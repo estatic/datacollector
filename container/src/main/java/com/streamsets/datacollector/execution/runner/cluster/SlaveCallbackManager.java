@@ -18,6 +18,7 @@ package com.streamsets.datacollector.execution.runner.cluster;
 import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.streamsets.datacollector.callback.CallbackInfo;
 import com.streamsets.datacollector.callback.CallbackObjectType;
@@ -74,7 +75,7 @@ public class SlaveCallbackManager {
     return callbackInfoSet;
   }
 
-  public void updateSlaveCallbackInfo(CallbackInfo callbackInfo) {
+  public Map<String, Object> updateSlaveCallbackInfo(CallbackInfo callbackInfo) {
     String sdcToken = Strings.nullToEmpty(this.clusterToken);
     if (sdcToken.equals(callbackInfo.getSdcClusterToken()) &&
       !RuntimeInfo.UNDEF.equals(callbackInfo.getSdcURL())) {
@@ -88,10 +89,15 @@ public class SlaveCallbackManager {
     } else {
       LOG.warn("SDC Cluster token not matched");
     }
+    return null;
   }
 
   public void clearSlaveList() {
-    for (CallbackObjectType callbackObjectType : CallbackObjectType.values()) {
+    List<CallbackObjectType> slaveCallbackObjectTypes = ImmutableList.of(
+        CallbackObjectType.METRICS,
+        CallbackObjectType.ERROR
+    );
+    for (CallbackObjectType callbackObjectType : slaveCallbackObjectTypes) {
       ReentrantLock lock = getLock(callbackObjectType);
       lock.lock();
       try {

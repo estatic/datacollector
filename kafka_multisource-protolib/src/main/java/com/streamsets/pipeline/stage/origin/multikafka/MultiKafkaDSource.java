@@ -22,17 +22,17 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.RawSource;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DPushSource;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 
 @StageDef(
-    version = 1,
+    version = 2,
     label = "Kafka Multitopic Consumer",
     description = "Reads data from multiple topics of a Kafka Broker",
     execution = ExecutionMode.STANDALONE,
     icon = "kafka.png",
     recordsByRef = true,
     upgrader = MultiKafkaSourceUpgrader.class,
-    onlineHelpRefUrl = "index.html#Origins/KafkaMultiConsumer.html#task_ost_3n4_x1b"
+    onlineHelpRefUrl ="index.html?contextID=task_ost_3n4_x1b"
 )
 @RawSource(rawSourcePreviewer = MultiKafkaRawSourcePreviewer.class,  mimeType = "*/*")
 @ConfigGroups(Groups.class)

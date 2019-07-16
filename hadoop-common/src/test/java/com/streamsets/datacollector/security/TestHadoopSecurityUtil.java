@@ -20,6 +20,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.junit.Assert;
 import org.junit.Test;
+import org.mockito.Matchers;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +29,18 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.powermock.api.mockito.PowerMockito.mock;
 import static org.powermock.api.mockito.PowerMockito.when;
+
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.startsWith;
+import static org.hamcrest.Matchers.empty;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.collection.IsMapContaining.hasKey;
+import static com.streamsets.testing.Matchers.fieldWithValue;
 
 public class TestHadoopSecurityUtil {
 
@@ -43,6 +56,8 @@ public class TestHadoopSecurityUtil {
   public void testGetProxyUser() throws Exception {
     final UserGroupInformation fooUgi = UserGroupInformation.createUserForTesting("foo", new String[] { "all" });
     Stage.Context context = mock(Stage.Context.class);
+    com.streamsets.pipeline.api.Configuration configuration = mock(com.streamsets.pipeline.api.Configuration.class);
+    when(context.getConfiguration()).thenReturn(configuration);
     List<Stage.ConfigIssue> issues = new ArrayList<>();
 
     UserGroupInformation ugi = HadoopSecurityUtil.getProxyUser(
@@ -56,14 +71,25 @@ public class TestHadoopSecurityUtil {
     Assert.assertEquals("proxy", ugi.getUserName());
   }
 
+  Stage.UserContext userContext = new Stage.UserContext() {
+    public String getUser() {
+      return "FOO@bar";
+    }
+    public String getAliasName() {
+      return "FOO";
+    }
+  };
+
   @Test
   public void testGetProxyUserEnforceCurrentUser() throws Exception {
     final UserGroupInformation fooUgi = UserGroupInformation.createUserForTesting("foo", new String[] { "all" });
     Stage.Context context = mock(Stage.Context.class);
     List<Stage.ConfigIssue> issues = new ArrayList<>();
 
-    when(context.getConfig(eq(HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER))).thenReturn("true");
-    when(context.getUserContext()).thenReturn(() -> "test-user");
+    com.streamsets.pipeline.api.Configuration configuration = mock(com.streamsets.pipeline.api.Configuration.class);
+    when(configuration.get(eq(HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER), eq(false))).thenReturn(true);
+    when(context.getConfiguration()).thenReturn(configuration);
+    when(context.getUserContext()).thenReturn(userContext);
 
     UserGroupInformation ugi = HadoopSecurityUtil.getProxyUser(
       "",
@@ -73,19 +99,22 @@ public class TestHadoopSecurityUtil {
       "config",
       "userName"
     );
-    Assert.assertEquals("test-user", ugi.getUserName());
+    Assert.assertEquals("FOO", ugi.getUserName());
   }
 
   @Test
   public void testGetProxyUserCantSpecifyUserWhenEnforcingCurrentUser() throws Exception {
     final UserGroupInformation fooUgi = UserGroupInformation.createUserForTesting("foo", new String[] { "all" });
     Stage.Context context = mock(Stage.Context.class);
+
     List<Stage.ConfigIssue> issues = new ArrayList<>();
 
-    when(context.getConfig(anyString())).thenReturn("true");
-    when(context.getUserContext()).thenReturn(() -> "test-user");
+    com.streamsets.pipeline.api.Configuration configuration = mock(com.streamsets.pipeline.api.Configuration.class);
+    when(configuration.get(anyString(), eq(false))).thenReturn(true);
+    when(context.getConfiguration()).thenReturn(configuration);
+    when(context.getUserContext()).thenReturn(userContext);
 
-    UserGroupInformation ugi = HadoopSecurityUtil.getProxyUser(
+    HadoopSecurityUtil.getProxyUser(
       "employee-of-the-year",
       context,
       fooUgi,
@@ -103,9 +132,11 @@ public class TestHadoopSecurityUtil {
     Stage.Context context = mock(Stage.Context.class);
     List<Stage.ConfigIssue> issues = new ArrayList<>();
 
-    when(context.getConfig(eq(HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER))).thenReturn("true");
-    when(context.getConfig(eq(HadoopConfigConstants.LOWERCASE_USER))).thenReturn("true");
-    when(context.getUserContext()).thenReturn(() -> "REAL_BRYAN");
+    com.streamsets.pipeline.api.Configuration configuration = mock(com.streamsets.pipeline.api.Configuration.class);
+    when(configuration.get(eq(HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER), eq(false))).thenReturn(true);
+    when(configuration.get(eq(HadoopConfigConstants.LOWERCASE_USER), eq(false))).thenReturn(true);
+    when(context.getConfiguration()).thenReturn(configuration);
+    when(context.getUserContext()).thenReturn(userContext);
 
     UserGroupInformation ugi = HadoopSecurityUtil.getProxyUser(
       "",
@@ -115,6 +146,39 @@ public class TestHadoopSecurityUtil {
       "config",
       "userName"
     );
-    Assert.assertEquals("real_bryan", ugi.getUserName());
+    Assert.assertEquals("foo", ugi.getUserName());
+  }
+
+  @Test(expected = IllegalImpersonationException.class)
+  public void testIllegalImpersonation() throws Exception {
+    final UserGroupInformation fooUgi = UserGroupInformation.createUserForTesting("foo", new String[] { "all" });
+
+    com.streamsets.datacollector.util.Configuration sdcConf = new com.streamsets.datacollector.util.Configuration();
+    sdcConf.set(HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER, true);
+    HadoopSecurityUtil.getProxyUser(
+        "requested",
+        "current",
+        sdcConf,
+        fooUgi
+    );
+  }
+
+  @Test
+  public void testProxyUserNewOverload() throws Exception {
+    final UserGroupInformation fooUgi = UserGroupInformation.createUserForTesting("foo", new String[] { "all" });
+
+    com.streamsets.datacollector.util.Configuration sdcConf = new com.streamsets.datacollector.util.Configuration();
+    sdcConf.set(HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER, false);
+    sdcConf.set(HadoopConfigConstants.LOWERCASE_USER, true);
+    final String requestedUser = "Requested";
+    final UserGroupInformation proxyUgi = HadoopSecurityUtil.getProxyUser(
+        requestedUser,
+        "current",
+        sdcConf,
+        fooUgi
+    );
+
+    assertThat(proxyUgi, notNullValue());
+    assertThat(proxyUgi.getUserName(), equalTo(requestedUser.toLowerCase()));
   }
 }

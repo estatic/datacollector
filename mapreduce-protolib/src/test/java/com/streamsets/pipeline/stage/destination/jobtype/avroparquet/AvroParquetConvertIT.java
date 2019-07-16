@@ -24,8 +24,9 @@ import com.streamsets.pipeline.sdk.RecordCreator;
 import com.streamsets.pipeline.sdk.ExecutorRunner;
 import com.streamsets.pipeline.stage.destination.mapreduce.MapReduceDExecutor;
 import com.streamsets.pipeline.stage.destination.mapreduce.MapReduceExecutor;
-import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroparquet.AvroParquetConfig;
-import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroparquet.AvroParquetConstants;
+import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroconvert.AvroConversionCommonConfig;
+import com.streamsets.pipeline.lib.converter.AvroParquetConfig;
+import com.streamsets.pipeline.lib.converter.AvroParquetConstants;
 import org.apache.avro.Schema;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.fs.Path;
@@ -61,11 +62,12 @@ public class AvroParquetConvertIT extends BaseAvroParquetConvertIT {
 
     generateAvroFile(AVRO_SCHEMA, inputFile, data);
 
+    AvroConversionCommonConfig commonConfig = new AvroConversionCommonConfig();
     AvroParquetConfig conf = new AvroParquetConfig();
-    conf.inputFile = inputFile.getAbsolutePath();
-    conf.outputDirectory = getOutputDir();
+    commonConfig.inputFile = inputFile.getAbsolutePath();
+    commonConfig.outputDirectory = getOutputDir();
 
-    MapReduceExecutor executor = generateExecutor(conf, Collections.<String, String>emptyMap());
+    MapReduceExecutor executor = generateExecutor(commonConfig, conf, Collections.emptyMap());
 
     ExecutorRunner runner = new ExecutorRunner.Builder(MapReduceDExecutor.class, executor)
       .setOnRecordError(OnRecordError.TO_ERROR)
@@ -96,11 +98,12 @@ public class AvroParquetConvertIT extends BaseAvroParquetConvertIT {
 
     generateAvroFile(AVRO_SCHEMA, inputFile, data);
 
+    AvroConversionCommonConfig commonConfig = new AvroConversionCommonConfig();
     AvroParquetConfig conf = new AvroParquetConfig();
-    conf.inputFile = "${record:value('/input')}";
-    conf.outputDirectory = "${record:value('/output')}";
+    commonConfig.inputFile = "${record:value('/input')}";
+    commonConfig.outputDirectory = "${record:value('/output')}";
 
-    MapReduceExecutor executor = generateExecutor(conf, Collections.<String, String>emptyMap());
+    MapReduceExecutor executor = generateExecutor(commonConfig, conf, Collections.emptyMap());
 
     ExecutorRunner runner = new ExecutorRunner.Builder(MapReduceDExecutor.class, executor)
       .setOnRecordError(OnRecordError.TO_ERROR)
@@ -134,12 +137,13 @@ public class AvroParquetConvertIT extends BaseAvroParquetConvertIT {
 
     generateAvroFile(AVRO_SCHEMA, inputFile, data);
 
+    AvroConversionCommonConfig commonConfig = new AvroConversionCommonConfig();
     AvroParquetConfig conf = new AvroParquetConfig();
-    conf.inputFile = inputFile.getAbsolutePath();
-    conf.outputDirectory = getOutputDir();
-    conf.keepInputFile = true;
+    commonConfig.inputFile = inputFile.getAbsolutePath();
+    commonConfig.outputDirectory = getOutputDir();
+    commonConfig.keepInputFile = true;
 
-    MapReduceExecutor executor = generateExecutor(conf, Collections.<String, String>emptyMap());
+    MapReduceExecutor executor = generateExecutor(commonConfig, conf, Collections.emptyMap());
 
     ExecutorRunner runner = new ExecutorRunner.Builder(MapReduceDExecutor.class, executor)
       .setOnRecordError(OnRecordError.TO_ERROR)
@@ -175,12 +179,13 @@ public class AvroParquetConvertIT extends BaseAvroParquetConvertIT {
 
     generateAvroFile(AVRO_SCHEMA, inputFile, data);
 
+    AvroConversionCommonConfig commonConfig = new AvroConversionCommonConfig();
     AvroParquetConfig conf = new AvroParquetConfig();
-    conf.inputFile = inputFile.getAbsolutePath();
-    conf.outputDirectory = getOutputDir();
-    conf.overwriteTmpFile = false;
+    commonConfig.inputFile = inputFile.getAbsolutePath();
+    commonConfig.outputDirectory = getOutputDir();
+    commonConfig.overwriteTmpFile = false;
 
-    MapReduceExecutor executor = generateExecutor(conf, Collections.emptyMap());
+    MapReduceExecutor executor = generateExecutor(commonConfig, conf, Collections.emptyMap());
 
     ExecutorRunner runner = new ExecutorRunner.Builder(MapReduceDExecutor.class, executor)
       .setOnRecordError(OnRecordError.TO_ERROR)
@@ -217,12 +222,13 @@ public class AvroParquetConvertIT extends BaseAvroParquetConvertIT {
 
     generateAvroFile(AVRO_SCHEMA, inputFile, data);
 
+    AvroConversionCommonConfig commonConfig = new AvroConversionCommonConfig();
     AvroParquetConfig conf = new AvroParquetConfig();
-    conf.inputFile = inputFile.getAbsolutePath();
-    conf.outputDirectory = getOutputDir();
-    conf.overwriteTmpFile = true;
+    commonConfig.inputFile = inputFile.getAbsolutePath();
+    commonConfig.outputDirectory = getOutputDir();
+    commonConfig.overwriteTmpFile = true;
 
-    MapReduceExecutor executor = generateExecutor(conf, Collections.emptyMap());
+    MapReduceExecutor executor = generateExecutor(commonConfig, conf, Collections.emptyMap());
 
     ExecutorRunner runner = new ExecutorRunner.Builder(MapReduceDExecutor.class, executor)
       .setOnRecordError(OnRecordError.TO_ERROR)
@@ -239,6 +245,29 @@ public class AvroParquetConvertIT extends BaseAvroParquetConvertIT {
     // Temp file should be gone and input file should be properly converted
     Assert.assertFalse(tmpFile.exists());
     validateParquetFile(new Path(getOutputDir(), "input.parquet"), data);
+  }
+
+  @Test
+  public void testFailIfMissingOutputDir() throws Exception {
+    AvroConversionCommonConfig commonConfig = new AvroConversionCommonConfig();
+    AvroParquetConfig conf = new AvroParquetConfig();
+    commonConfig.inputFile = "";
+    commonConfig.outputDirectory = getOutputDir();
+    commonConfig.overwriteTmpFile = false;
+
+    MapReduceExecutor executor = generateExecutor(commonConfig, conf, Collections.emptyMap());
+
+    ExecutorRunner runner = new ExecutorRunner.Builder(MapReduceDExecutor.class, executor)
+      .setOnRecordError(OnRecordError.TO_ERROR)
+      .build();
+    runner.runInit();
+
+    Record record = RecordCreator.create();
+    record.set(Field.create(Collections.emptyMap()));
+
+    runner.runWrite(ImmutableList.of(record));
+    Assert.assertEquals(1, runner.getErrorRecords().size());
+    runner.runDestroy();
   }
 
 }

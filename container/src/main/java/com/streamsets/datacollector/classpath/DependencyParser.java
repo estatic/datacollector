@@ -38,12 +38,12 @@ public class DependencyParser {
   /**
    * Classifiers that are not interesting.
    */
-  private static String CLASSIFIERS = "(-hadoop2|-shaded-protobuf|-tests|-native|\\.Final(-linux-x86_64)?|-shaded)?";
+  private static String CLASSIFIERS = "(-hadoop2|-shaded-protobuf|-tests|-native|\\.Final(-linux-x86_64)?|-shaded|-bin|\\.jre[0-9]|-api)?";
 
   /**
    * Various version suffixes that we support.
    */
-  private static String VERSION_SUFFIXES = "-b[0-9]+|-M[0-9]+|-m[0-9]|-pre[0-9]+|\\.RELEASE|-incubating|-beta|-indy|-SNAPSHOT|-GA|\\.hwx|\\.cloudera\\.?[0-9]|-jhyde|a";
+  private static String VERSION_SUFFIXES = "-b[0-9]+|-M[0-9]+|-m[0-9]|_[0-9]|-pre[0-9]+|\\.RELEASE|-incubating|-beta|-indy|-SNAPSHOT|\\.GA|-GA|\\.hwx|[-\\.]cloudera\\.?[0-9]|-jhyde|a|-cubrid|\\.Fork[0-9]+|m|-jre|-spark[0-9]\\.[0-9]+|-patched";
 
   /**
    * Various supported version specifications
@@ -54,14 +54,18 @@ public class DependencyParser {
     // Hortonworks
     "-([0-9]+(\\.[0-9]+){4,}-[0-9]+)",
     // CDH
-    "-([0-9.]+-cdh[0-9.]+)",
+    "-([0-9.]+-cdh[0-9.]+(-beta1)?)",
     "-([0-9.]+-kafka-[0-9.]+)",
     // MapR
     "-([0-9.]+-mapr-beta)",
-    "-([0-9.]+-mapr-[0-9.]+(-beta)?)",
+    "-([0-9.]+-mapr-[0-9.]+(-beta|-standalone)?)",
     "-([0-9.]+-mapr)",
     // Time based (like '3.0.0.v201112011016')
     "-([0-9.]+\\.v[0-9.]+)",
+    // With commit id at the end (like '1.2.0-3f79e055')
+    "-([0-9.]+-[a-f0-9]{6,8})",
+    // PostgreSQL JDBC driver numbering scheme
+    "-([0-9.]+-[0-9]+)\\.jdbc[0-9]",
 
     // Most basic version specification
     "-([0-9.]+(" + VERSION_SUFFIXES + ")?)"
@@ -72,7 +76,8 @@ public class DependencyParser {
    */
   private static String[] PATTERN_PREFIXES = new String[] {
     // Libraries that ships multiple jars with different name, but all versions must match
-    "(antlr).*",
+    "(antlr)-.*",
+    "(antlr4)-.*",
     "(asm).*",
     "(atlas).*",
     "(avatica).*",
@@ -97,14 +102,25 @@ public class DependencyParser {
     "(netty(?!-tcnative-boringssl-static)).*",
     "(parquet).*",
     "(spark).*",
+    "(streamsets-datacollector-dataprotector).*",
     "(streamsets(?!-datacollector-spark-api)).*",
     "(swagger).*",
     "(tachyon).*",
     "(twill).*",
     "(websocket).*",
 
+    // Oracle cause Oracle is always special
+
     // Most basic name (last resort)
     "([A-Za-z_.0-9-]+)"
+  };
+
+  /**
+   * Whole patterns for some special libraries.
+   */
+  private static String[] SPECIAL_PATTERNS = new String[] {
+    // Oracle needs to be always special
+    "(ojdbc)([0-9]+)\\.jar"
   };
 
   /**
@@ -112,7 +128,17 @@ public class DependencyParser {
    */
   private static Map<String, Dependency> SPECIAL_CASES = new HashMap<>();
   static {
-    SPECIAL_CASES.put("jython.jar", new Dependency("jython.jar", "jython", ""));
+    // Jython
+    SPECIAL_CASES.put("jython.jar", new Dependency("jython", ""));
+    // MapR
+    SPECIAL_CASES.put("mail.jar", new Dependency("mail", ""));
+    // Various JDBC drivers from vendors who don't follow usual maven scheme
+    SPECIAL_CASES.put("db2jcc4.jar", new Dependency("db2jcc4", ""));
+    SPECIAL_CASES.put("nzjdbc3.jar", new Dependency("nzjdbc3", ""));
+    SPECIAL_CASES.put("sqljdbc4.jar", new Dependency("sqljdbc4", ""));
+    SPECIAL_CASES.put("tdgssconfig.jar", new Dependency("tdgssconfig", ""));
+    SPECIAL_CASES.put("terajdbc4.jar", new Dependency("terajdbc4", ""));
+    SPECIAL_CASES.put("xdb6.jar", new Dependency("xdb6", ""));
   }
 
   /**
@@ -122,6 +148,10 @@ public class DependencyParser {
    */
   private static List<Pattern> PATTERNS = new LinkedList<>();
   static {
+    for(String pattern: SPECIAL_PATTERNS) {
+
+      PATTERNS.add(Pattern.compile("^" + pattern + "$"));
+    }
     for(String prefix: PATTERN_PREFIXES) {
       for(String version: VERSION_PATTERNS) {
         PATTERNS.add(Pattern.compile("^" + prefix + version + CLASSIFIERS + "\\.jar$"));
@@ -133,11 +163,9 @@ public class DependencyParser {
    * Generate dependency from a jar file name.
    */
   public static Optional<Dependency> parseJarName(String sourceName, String jarName) {
-    // First scan special cases
-    for(Map.Entry<String, Dependency> entry: SPECIAL_CASES.entrySet()) {
-      if(entry.getKey().equals(jarName)) {
-        return Optional.of(entry.getValue());
-      }
+    if(SPECIAL_CASES.containsKey(jarName)) {
+      Dependency specialCase = SPECIAL_CASES.get(jarName);
+      return Optional.of(new Dependency(sourceName, specialCase.getName(), specialCase.getVersion()));
     }
 
     // Go over all known patterns

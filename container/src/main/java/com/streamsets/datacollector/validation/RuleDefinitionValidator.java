@@ -24,11 +24,14 @@ import com.streamsets.datacollector.config.ThresholdType;
 import com.streamsets.datacollector.configupgrade.RuleDefinitionsUpgrader;
 import com.streamsets.datacollector.creation.PipelineBeanCreator;
 import com.streamsets.datacollector.creation.RuleDefinitionsConfigBean;
+import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
 import com.streamsets.datacollector.el.ELEvaluator;
 import com.streamsets.datacollector.el.ELVariables;
 import com.streamsets.datacollector.el.RuleELRegistry;
 import com.streamsets.pipeline.api.Field;
+import com.streamsets.pipeline.api.FieldVisitor;
 import com.streamsets.pipeline.api.Record;
+import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.el.ELEvalException;
 import com.streamsets.pipeline.lib.el.RecordEL;
 import org.apache.commons.collections.CollectionUtils;
@@ -48,6 +51,7 @@ public class RuleDefinitionValidator {
   private static final String CONDITION = "condition";
   private static final String VAL = "value()";
   private static final String TIME_NOW = "time:now()";
+  private static final String START_TIME = "pipeline:startTime()";
   private static final String METRIC_ID = "metric id";
   private static final String DEFAULT_VALUE = "10";
   private static final String PROPERTY = "property";
@@ -72,7 +76,7 @@ public class RuleDefinitionValidator {
     this.ruleDefinitions = Preconditions.checkNotNull(ruleDefinitions, "ruleDefinitions cannot be null");
     this.pipelineParameters = pipelineParameters;
     variables = new ELVariables();
-    elEvaluator = new ELEvaluator("RuleDefinitionValidator", false, RuleELRegistry.getRuleELs(RuleELRegistry.GENERAL));
+    elEvaluator = new ELEvaluator("RuleDefinitionValidator", false, ConcreteELDefinitionExtractor.get(), RuleELRegistry.getRuleELs(RuleELRegistry.GENERAL));
   }
 
   public boolean validateRuleDefinition() {
@@ -191,7 +195,8 @@ public class RuleDefinitionValidator {
     }
     String predicateWithValue = condition
       .replace(VAL, DEFAULT_VALUE)
-      .replace(TIME_NOW, DEFAULT_VALUE);
+      .replace(TIME_NOW, DEFAULT_VALUE)
+      .replace(START_TIME, DEFAULT_VALUE);
     try {
       elEvaluator.eval(variables, predicateWithValue, Object.class);
     } catch (ELEvalException e) {
@@ -301,14 +306,26 @@ public class RuleDefinitionValidator {
           }
 
           @Override
+          public String getErrorJobId() {
+            return null;
+          }
+
+          /** To be removed */
           public Map<String, Object> getAllAttributes() {
             return null;
           }
 
-          @Override
-          public Map<String, Object> setAllAttributes(Map<String, Object> newAttrs) {
+          /** To be removed */
+          public Map<String, Object> overrideUserAndSystemAttributes(Map<String, Object> newAttrs) {
             return null;
           }
+
+          /** To be removed */
+          public Map<String, Object> getUserAttributes() {return null;}
+
+          /** To be removed */
+          public Map<String, Object> setUserAttributes(Map<String, Object> newAttributes) {return null;}
+
         };
       }
 
@@ -349,9 +366,19 @@ public class RuleDefinitionValidator {
       }
 
       @Override
+      public List<String> getEscapedFieldPathsOrdered() {
+        return null;
+      }
+
+      @Override
       public Field set(String fieldPath, Field newField) {
         return null;
       }
+
+      @Override
+      public void forEachField(FieldVisitor visitor) throws StageException {
+      }
+
     };
 
     RecordEL.setRecordInContext(variables, record);

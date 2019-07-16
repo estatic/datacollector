@@ -15,6 +15,8 @@
  */
 package com.streamsets.datacollector.el;
 
+import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
+import com.streamsets.datacollector.definition.ELDefinitionExtractor;
 import com.streamsets.datacollector.record.EventRecordImpl;
 import com.streamsets.datacollector.record.RecordImpl;
 import com.streamsets.pipeline.api.EventRecord;
@@ -26,6 +28,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -35,10 +38,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TestRecordEL {
+  private ELDefinitionExtractor elDefinitionExtractor = ConcreteELDefinitionExtractor.get();
 
   @Test
   public void testRecordFunctions() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testRecordFunctions", RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testRecordFunctions", elDefinitionExtractor, RecordEL.class);
     ELVariables variables = new ELVariables();
 
     Record.Header header = Mockito.mock(Record.Header.class);
@@ -73,9 +77,11 @@ public class TestRecordEL {
 
   @Test
   public void testErrorRecordFunctions() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testErrorRecordFunctions", RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testErrorRecordFunctions", elDefinitionExtractor, RecordEL.class);
 
     ELVariables variables = new ELVariables();
+
+    String stackTrace = new IOException("Error Record Function Stack Trace Test").toString();
 
     Record.Header header = Mockito.mock(Record.Header.class);
     Mockito.when(header.getErrorStage()).thenReturn("stage");
@@ -85,6 +91,7 @@ public class TestRecordEL {
     Mockito.when(header.getErrorDataCollectorId()).thenReturn("collector");
     Mockito.when(header.getErrorPipelineName()).thenReturn("pipeline");
     Mockito.when(header.getErrorTimestamp()).thenReturn(10L);
+    Mockito.when(header.getErrorStackTrace()).thenReturn(stackTrace);
     Record record = Mockito.mock(Record.class);
     Mockito.when(record.getHeader()).thenReturn(header);
 
@@ -94,6 +101,7 @@ public class TestRecordEL {
     Assert.assertEquals("label", eval.eval(variables, "${record:errorStageLabel()}", String.class));
     Assert.assertEquals("code", eval.eval(variables, "${record:errorCode()}", String.class));
     Assert.assertEquals("message", eval.eval(variables, "${record:errorMessage()}", String.class));
+    Assert.assertEquals(stackTrace, eval.eval(variables, "${record:errorStackTrace()}", String.class));
     Assert.assertEquals("collector", eval.eval(variables, "${record:errorCollectorId()}", String.class));
     Assert.assertEquals("pipeline", eval.eval(variables, "${record:errorPipeline()}", String.class));
     Assert.assertEquals(10L, (long)eval.eval(variables, "${record:errorTime()}", Long.class));
@@ -101,7 +109,7 @@ public class TestRecordEL {
 
   @Test
   public void testDFunctions() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testDFunctions", RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testDFunctions", elDefinitionExtractor, RecordEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -175,7 +183,7 @@ public class TestRecordEL {
 
   @Test
   public void testFieldAttributeFunctions() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testFieldAttributeFunctions", RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testFieldAttributeFunctions", elDefinitionExtractor, RecordEL.class);
 
     ELVariables vars = new ELVariables();
 
@@ -214,12 +222,12 @@ public class TestRecordEL {
     assertEquals(
         "default",
         eval.eval(vars, "${record:fieldAttributeOrDefault('/A/first', 'attr3', 'default')}",
-        String.class)
+            String.class)
     );
     assertEquals(
         "attrVal3",
         eval.eval(vars, "${record:fieldAttributeOrDefault('/A/second', 'attr3', 'default')}",
-        String.class)
+            String.class)
     );
     assertEquals("attrVal10", eval.eval(vars, "${record:fieldAttribute('/A', 'attr10')}", String.class));
     assertEquals("attrVal20", eval.eval(vars, "${record:fieldAttribute('/B', 'attr20')}", String.class));
@@ -227,13 +235,13 @@ public class TestRecordEL {
     assertEquals(
         "default2",
         eval.eval(vars, "${record:fieldAttributeOrDefault('/XYZ', 'attr21', 'default2')}",
-        String.class)
+            String.class)
     );
   }
 
   @Test
   public void testEventMethods() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testEventMethods", RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testEventMethods", elDefinitionExtractor, RecordEL.class);
     ELVariables vars = new ELVariables();
 
     EventRecord event = new EventRecordImpl("custom-type", 1, "stage", "id", null, null);

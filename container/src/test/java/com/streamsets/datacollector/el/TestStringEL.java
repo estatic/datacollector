@@ -15,11 +15,14 @@
  */
 package com.streamsets.datacollector.el;
 
+import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
+import com.streamsets.datacollector.definition.ELDefinitionExtractor;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.el.ELEvalException;
 import com.streamsets.pipeline.lib.el.RecordEL;
 import com.streamsets.pipeline.lib.el.StringEL;
+import com.streamsets.pipeline.lib.el.StringELConstants;
 import org.junit.Assert;
 import org.junit.Test;
 import org.testcontainers.shaded.com.google.common.collect.ImmutableMap;
@@ -35,10 +38,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestStringEL {
+  private ELDefinitionExtractor elDefinitionExtractor = ConcreteELDefinitionExtractor.get();
 
   @Test
   public void testSubstring() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testSubstring", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testSubstring", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -56,7 +60,7 @@ public class TestStringEL {
 
   @Test
   public void testSubstringNegative() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testSubstringNegative", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testSubstringNegative", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -80,7 +84,7 @@ public class TestStringEL {
 
   @Test
   public void testTrim() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testTrim", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testTrim", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -90,7 +94,7 @@ public class TestStringEL {
 
   @Test
   public void testIndexOf() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testIndexOf", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testIndexOf", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
     Assert.assertEquals(new Integer(1), eval.eval(variables,
@@ -99,7 +103,7 @@ public class TestStringEL {
 
   @Test
   public void testToUpper() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testToUpper", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testToUpper", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -109,7 +113,7 @@ public class TestStringEL {
 
   @Test
   public void testToLower() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testToLower", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testToLower", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -119,7 +123,7 @@ public class TestStringEL {
 
   @Test
   public void testReplace() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testReplace", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testReplace", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -132,7 +136,7 @@ public class TestStringEL {
 
   @Test
   public void testReplaceAll() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testReplaceAll", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testReplaceAll", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -142,7 +146,7 @@ public class TestStringEL {
 
   @Test
   public void testContains() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testContains", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testContains", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -152,7 +156,7 @@ public class TestStringEL {
 
   @Test
   public void testStartsWith() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testStartsWith", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testStartsWith", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -162,7 +166,7 @@ public class TestStringEL {
 
   @Test
   public void testEndsWith() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testEndsWith", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testEndsWith", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -172,7 +176,7 @@ public class TestStringEL {
 
   @Test
   public void testTruncate() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testTruncate", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testTruncate", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -211,7 +215,7 @@ public class TestStringEL {
   @Test
   public void testRegExCapture() throws Exception {
 
-    ELEvaluator eval = new ELEvaluator("testRegExCapture", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testRegExCapture", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
@@ -243,12 +247,12 @@ public class TestStringEL {
 
   @Test
   public void testRegexCaptureMemoization() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testRegExCaptureMemoization", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testRegExCaptureMemoization", elDefinitionExtractor, StringEL.class);
 
     ELVariables variables = new ELVariables();
 
     Map<String, Pattern> memoizedRegex = new HashMap<>();
-    variables.addContextVariable(StringEL.MEMOIZED, memoizedRegex);
+    variables.addContextVariable(StringELConstants.MEMOIZED, memoizedRegex);
 
     final String regex = ".*";
 
@@ -267,7 +271,7 @@ public class TestStringEL {
 
   @Test
   public void testConcat() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testConcat", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testConcat", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     String result = eval.eval(variables, "${str:concat(\"abc\", \"def\")}", String.class);
     Assert.assertEquals("abcdef", result);
@@ -281,7 +285,7 @@ public class TestStringEL {
 
   @Test
   public void testMatches() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testMatches", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testMatches", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
 
     Assert.assertTrue(eval.eval(variables, "${str:matches(\"abc\", \"[a-z]+\")}", Boolean.class));
@@ -297,7 +301,7 @@ public class TestStringEL {
 
   @Test
   public void testStringLength() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testStringLength", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testStringLength", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     Assert.assertTrue(eval.eval(variables, "${str:length(\"abc\")}", Integer.class) == 3);
     Assert.assertTrue(eval.eval(variables, "${str:length(\"\")}", Integer.class) == 0);
@@ -307,8 +311,17 @@ public class TestStringEL {
   }
 
   @Test
+  public void testStringLastIndexOf() throws Exception {
+    ELEvaluator eval = new ELEvaluator("testStringLastIndexOf", elDefinitionExtractor, StringEL.class);
+    ELVariables variables = new ELVariables();
+    Assert.assertTrue(eval.eval(variables, "${str:lastIndexOf('aabac', 'a')}", Integer.class) == 3);
+    Assert.assertTrue(eval.eval(variables, "${str:lastIndexOf('abcxyzabcxyz', 'xyz')}", Integer.class) == 9);
+    Assert.assertTrue(eval.eval(variables, "${str:lastIndexOf('abcd', 'e')}", Integer.class) == -1);
+  }
+
+  @Test
   public void testUrlEncode() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testUrlEncode", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testUrlEncode", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     Assert.assertEquals("", eval.eval(variables, "${str:urlEncode(\"\", \"UTF8\")}", String.class));
     Assert.assertEquals("Ahoj+tady+medusa", eval.eval(variables, "${str:urlEncode(\"Ahoj tady medusa\", \"UTF8\")}", String.class));
@@ -316,7 +329,7 @@ public class TestStringEL {
 
   @Test
   public void testUrlDecode() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testUrlDecode", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testUrlDecode", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     Assert.assertEquals("", eval.eval(variables, "${str:urlDecode(\"\", \"UTF8\")}", String.class));
     Assert.assertEquals("Ahoj tady medusa", eval.eval(variables, "${str:urlDecode(\"Ahoj+tady+medusa\", \"UTF8\")}", String.class));
@@ -324,7 +337,7 @@ public class TestStringEL {
 
   @Test
   public void testEscapeXml10() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testXmlEscape10", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testXmlEscape10", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     Assert.assertEquals("", eval.eval(variables, "${str:escapeXML10(\"\")}", String.class));
     Assert.assertEquals(
@@ -335,7 +348,7 @@ public class TestStringEL {
 
   @Test
   public void testEscapeXml11() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testXmlEscape10", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testXmlEscape10", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     Assert.assertEquals("", eval.eval(variables, "${str:escapeXML11(\"\")}", String.class));
     Assert.assertEquals(
@@ -346,7 +359,7 @@ public class TestStringEL {
 
   @Test
   public void testUnescapeXml() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testXmlEscape10", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testXmlEscape10", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     Assert.assertEquals("", eval.eval(variables, "${str:unescapeXML(\"\")}", String.class));
     Assert.assertEquals("< abc & def > \u0001",
@@ -360,14 +373,14 @@ public class TestStringEL {
 
   @Test
   public void testUnescapeJava() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testUnescapeJava", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testUnescapeJava", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
     Assert.assertEquals("\n", eval.eval(variables, "${str:unescapeJava(\"\\\\n\")}", String.class));
   }
 
   @Test
   public void testListJoiner() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testJoiner", StringEL.class, RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testJoiner", elDefinitionExtractor, StringEL.class, RecordEL.class);
     ELVariables variables = new ELVariables();
     Record record = mock(Record.class);
     List<Field> listField = IntStream.range(1, 5).mapToObj(Field::create).collect(Collectors.toList());
@@ -380,7 +393,7 @@ public class TestStringEL {
 
   @Test
   public void testListJoinerSkipNulls() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testJoiner", StringEL.class, RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testJoiner", elDefinitionExtractor, StringEL.class, RecordEL.class);
     ELVariables variables = new ELVariables();
     Record record = mock(Record.class);
     List<Field> listField = IntStream.range(1, 5).mapToObj(Field::create).collect(Collectors.toList());
@@ -393,7 +406,7 @@ public class TestStringEL {
 
   @Test
   public void testMapJoiner() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testJoiner", StringEL.class, RecordEL.class);
+    ELEvaluator eval = new ELEvaluator("testJoiner", elDefinitionExtractor, StringEL.class, RecordEL.class);
     ELVariables variables = new ELVariables();
     Record record = mock(Record.class);
     Map<String, Field> mapField = ImmutableMap.of(
@@ -417,7 +430,7 @@ public class TestStringEL {
   @Test
   public void testUuid() throws Exception {
     final String UUID_FORMAT = "^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$";
-    ELEvaluator eval = new ELEvaluator("testUuid", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testUuid", elDefinitionExtractor, StringEL.class);
     ELVariables variables = new ELVariables();
 
     String uuid = eval.eval(variables, "${uuid:uuid()}", String.class);
@@ -433,7 +446,7 @@ public class TestStringEL {
 
   @Test
   public void testEmptyStringFunctions() throws Exception {
-    ELEvaluator eval = new ELEvaluator("testEmptyStringFunctions", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("testEmptyStringFunctions", elDefinitionExtractor, StringEL.class);
     ELVariables vars = new ELVariables();
 
     Assert.assertTrue(eval.eval(vars, "${str:isNullOrEmpty('')}", Boolean.class));
@@ -442,7 +455,7 @@ public class TestStringEL {
 
   @Test
   public void testKVSplitter() throws Exception {
-    ELEvaluator eval = new ELEvaluator("kvSplitter", StringEL.class);
+    ELEvaluator eval = new ELEvaluator("kvSplitter", elDefinitionExtractor, StringEL.class);
     ELVariables vars = new ELVariables();
 
     Map<String, Field> result = eval.eval(vars, "${str:splitKV('key1=val1&key2=val2&key3=val3', '&', '=')}", Map.class);
@@ -452,6 +465,32 @@ public class TestStringEL {
       Assert.assertTrue(result.containsKey("key" + i));
       Assert.assertEquals("val" + i, result.get("key" + i).getValueAsString());
     }
+  }
+
+  @Test
+  public void testKVSplitterWithSeparatorInValue() throws Exception {
+    ELEvaluator eval = new ELEvaluator("kvSplitter", elDefinitionExtractor, StringEL.class);
+    ELVariables vars = new ELVariables();
+
+    Map<String, Field> result = eval.eval(vars, "${str:splitKV('key1=val1&key2=val=2', '&', '=')}", Map.class);
+
+    Assert.assertEquals(2, result.size());
+    Assert.assertTrue(result.containsKey("key1"));
+    Assert.assertEquals("val1", result.get("key1").getValueAsString());
+    Assert.assertTrue(result.containsKey("key2"));
+    Assert.assertEquals("val=2", result.get("key2").getValueAsString());
+  }
+
+  @Test
+  public void testSplitter() throws Exception {
+    ELEvaluator eval = new ELEvaluator("splitter", elDefinitionExtractor, StringEL.class);
+    ELVariables vars = new ELVariables();
+
+    List<Field> result = eval.eval(vars, "${str:split('a, b, c', ',')}", List.class);
+    Assert.assertEquals(3, result.size());
+    Assert.assertEquals("a", result.get(0).getValueAsString());
+    Assert.assertEquals("b", result.get(1).getValueAsString());
+    Assert.assertEquals("c", result.get(2).getValueAsString());
   }
 
 }

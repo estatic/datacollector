@@ -22,13 +22,13 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>com.streamsets</groupId>
-    <artifactId>streamsets-datacollector-stage-lib-parent</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
-    <relativePath>../stage-lib-parent</relativePath>
+    <artifactId>streamsets-datacollector-hdp-stagelib-base</artifactId>
+    <version>3.10.0-SNAPSHOT</version>
+    <relativePath>../hdp-stagelib-base</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-hdp_2_4-lib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector HDP 2.4.0 Lib</description>
   <name>StreamSets Data Collector HDP 2.4.0 Lib</name>
   <packaging>jar</packaging>
@@ -38,23 +38,70 @@
     <hadoop.version>2.7.1.2.4.2.0-258</hadoop.version>
     <hbase.version>1.1.2.2.4.2.0-258</hbase.version>
     <kafka.version>0.9.0.2.4.2.0-258</kafka.version>
-    <spark.version>1.6.1.2.4.2.0-258</spark.version>
     <thrift.version>0.9.0</thrift.version>
     <zk-client.version>0.5-1</zk-client.version>
     <avro.version>1.7.7</avro.version>
     <h2.version>1.4.187</h2.version>
     <httpclient.version>4.5.1</httpclient.version>
+    <aws.java.sdk.version>1.11.134</aws.java.sdk.version>
+    <parquet.version>1.8.1</parquet.version>
   </properties>
 
   <dependencies>
-
+    <!-- Parquet test dependency must be here. Otherwise tests are run with incorrect parquet version taken from
+            MapReduce Protolib-->
     <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-streaming-kafka_2.10</artifactId>
-      <version>${spark.version}</version>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
 
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-java-sdk-bundle</artifactId>
+      <scope>compile</scope>
+      <version>${aws.java.sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-aws</artifactId>
+      <version>${hadoop.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-annotations</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-common</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.amazonaws</groupId>
+          <artifactId>aws-java-sdk-s3</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.amazonaws</groupId>
+          <artifactId>aws-java-sdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.amazonaws</groupId>
+          <artifactId>aws-java-sdk-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.amazonaws</groupId>
+          <artifactId>aws-java-sdk-kms</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
     <!-- Provided Dependencies -->
     <dependency>
       <groupId>com.streamsets</groupId>
@@ -84,17 +131,8 @@
     <dependency>
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-sdk</artifactId>
+      <version>${project.version}</version>
       <scope>provided</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>com.google.guava</groupId>
-          <artifactId>guava</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-client</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.streamsets</groupId>
@@ -107,17 +145,6 @@
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-hdfs-protolib</artifactId>
       <version>${project.version}</version>
-      <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-client</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>com.google.guava</groupId>
-          <artifactId>guava</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <dependency>
@@ -137,14 +164,7 @@
       <groupId>org.apache.avro</groupId>
       <artifactId>avro-mapred</artifactId>
       <version>${avro.version}</version>
-      <scope>compile</scope>
       <classifier>hadoop2</classifier>
-      <exclusions>
-        <exclusion>
-          <groupId>org.mortbay.jetty</groupId>
-          <artifactId>servlet-api</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.avro</groupId>
@@ -220,6 +240,12 @@
     <dependency>
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-hbase-protolib</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-sdc-hbase-0_98</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
       <exclusions>
@@ -303,14 +329,7 @@
     </dependency>
     <dependency>
       <groupId>com.streamsets</groupId>
-      <artifactId>streamsets-datacollector-cluster-kafka-protolib</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-kafka_source-protolib</artifactId>
-      <version>${project.version}</version>
       <scope>compile</scope>
       <exclusions>
         <exclusion>
@@ -326,7 +345,6 @@
     <dependency>
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-kafka_target-protolib</artifactId>
-      <version>${project.version}</version>
       <scope>compile</scope>
       <exclusions>
         <exclusion>
@@ -401,16 +419,29 @@
     </dependency>
     <dependency>
       <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-stagesupport</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-commonlib</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-dir-spooler-protolib</artifactId>
+      <type>test-jar</type>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
       <version>${protobuf.version}</version>
-      <scope>test</scope>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.bouncycastle</groupId>
@@ -463,6 +494,31 @@
       <artifactId>streamsets-testing</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-kafka_source-protolib</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-kafka_target-protolib</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-hdfs-protolib</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-cluster-hdfs-protolib</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
   <build>
@@ -471,7 +527,15 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>${surefire.version}</version>
+        <configuration>
+          <dependenciesToScan>
+            <dependency>com.streamsets:streamsets-datacollector-dir-spooler-protolib</dependency>
+            <dependency>com.streamsets:streamsets-datacollector-hdfs-protolib</dependency>
+            <dependency>com.streamsets:streamsets-datacollector-cluster-hdfs-protolib</dependency>
+            <dependency>com.streamsets:streamsets-datacollector-kafka_source-protolib</dependency>
+            <dependency>com.streamsets:streamsets-datacollector-kafka_target-protolib</dependency>
+          </dependenciesToScan>
+        </configuration>
         <executions>
           <execution>
             <id>single-fork-unit-test</id>
@@ -494,13 +558,9 @@
             </goals>
             <configuration>
               <sources>
-                <source>${basedir}/../hdfs-protolib/src/test/java</source>
                 <source>${basedir}/../mapreduce-protolib/src/test/java</source>
                 <source>${basedir}/../hbase-protolib/src/test/java</source>
                 <source>${basedir}/../flume-protolib/src/test/java</source>
-                <source>${basedir}/../kafka_source-protolib/src/test/java</source>
-                <source>${basedir}/../kafka_target-protolib/src/test/java</source>
-                <source>${basedir}/../cluster-hdfs-protolib/src/test/java</source>
               </sources>
             </configuration>
           </execution>
@@ -513,9 +573,6 @@
             <configuration>
               <resources>
                 <resource>
-                  <directory>${basedir}/../hdfs-protolib/src/test/resources</directory>
-                </resource>
-                <resource>
                   <directory>${basedir}/../mapreduce-protolib/src/test/resources</directory>
                 </resource>
                 <resource>
@@ -523,15 +580,6 @@
                 </resource>
                 <resource>
                   <directory>${basedir}/../flume-protolib/src/test/resources</directory>
-                </resource>
-                <resource>
-                  <directory>${basedir}/../kafka_source-protolib/src/test/resources</directory>
-                </resource>
-                <resource>
-                  <directory>${basedir}/../kafka_target-protolib/src/test/resources</directory>
-                </resource>
-                <resource>
-                  <directory>${basedir}/../cluster-hdfs-protolib/src/test/resources</directory>
                 </resource>
               </resources>
             </configuration>

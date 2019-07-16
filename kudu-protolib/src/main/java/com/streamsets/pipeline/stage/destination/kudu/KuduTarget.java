@@ -15,6 +15,7 @@
  */
 package com.streamsets.pipeline.stage.destination.kudu;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.cache.CacheBuilder;
@@ -36,16 +37,15 @@ import com.streamsets.pipeline.api.lineage.LineageEventType;
 import com.streamsets.pipeline.api.lineage.LineageSpecificAttribute;
 import com.streamsets.pipeline.lib.cache.CacheCleaner;
 import com.streamsets.pipeline.lib.el.ELUtils;
-import com.streamsets.pipeline.lib.operation.OperationType;
 import com.streamsets.pipeline.lib.operation.ChangeLogFormat;
 import com.streamsets.pipeline.lib.operation.FieldPathConverter;
 import com.streamsets.pipeline.lib.operation.MongoDBOpLogFieldConverter;
 import com.streamsets.pipeline.lib.operation.MySQLBinLogFieldConverter;
+import com.streamsets.pipeline.lib.operation.OperationType;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
 import com.streamsets.pipeline.stage.lib.kudu.Errors;
 import com.streamsets.pipeline.stage.lib.kudu.KuduFieldMappingConfig;
-import org.apache.commons.lang.StringUtils;
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Schema;
 import org.apache.kudu.Type;
@@ -59,9 +59,12 @@ import org.apache.kudu.client.OperationResponse;
 import org.apache.kudu.client.PartialRow;
 import org.apache.kudu.client.RowError;
 import org.apache.kudu.client.SessionConfiguration;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -75,18 +78,28 @@ import java.util.concurrent.TimeUnit;
 public class KuduTarget extends BaseTarget {
   private static final Logger LOG = LoggerFactory.getLogger(KuduTarget.class);
 
-  private static final Map<Type, Field.Type> TYPE_MAP = ImmutableMap.<Type, Field.Type> builder()
-    .put(Type.INT8, Field.Type.BYTE)
-    .put(Type.INT16, Field.Type.SHORT)
-    .put(Type.INT32, Field.Type.INTEGER)
-    .put(Type.INT64, Field.Type.LONG)
-    .put(Type.FLOAT, Field.Type.FLOAT)
-    .put(Type.DOUBLE, Field.Type.DOUBLE)
-    .put(Type.BINARY, Field.Type.BYTE_ARRAY)
-    .put(Type.STRING, Field.Type.STRING)
-    .put(Type.BOOL, Field.Type.BOOLEAN)
-    .put(Type.UNIXTIME_MICROS, Field.Type.LONG)
-    .build();
+  private static final Map<Type, Field.Type> TYPE_MAP;
+  static {
+    ImmutableMap.Builder<Type, Field.Type> builder = ImmutableMap.<Type, Field.Type>builder()
+      .put(Type.INT8, Field.Type.BYTE)
+      .put(Type.INT16, Field.Type.SHORT)
+      .put(Type.INT32, Field.Type.INTEGER)
+      .put(Type.INT64, Field.Type.LONG)
+      .put(Type.FLOAT, Field.Type.FLOAT)
+      .put(Type.DOUBLE, Field.Type.DOUBLE)
+      .put(Type.BINARY, Field.Type.BYTE_ARRAY)
+      .put(Type.STRING, Field.Type.STRING)
+      .put(Type.BOOL, Field.Type.BOOLEAN)
+      .put(Type.UNIXTIME_MICROS, Field.Type.LONG);
+
+    try {
+      builder.put(Type.valueOf("DECIMAL"), Field.Type.DECIMAL);
+    } catch (IllegalArgumentException e) {
+      // Ignore, we're on version of Kudu that doesn't support Decimal type
+    }
+
+    TYPE_MAP = builder.build();
+  }
 
   private static final String EL_PREFIX = "${";
   private static final String KUDU_MASTER = "kuduMaster";
@@ -94,6 +107,9 @@ public class KuduTarget extends BaseTarget {
   private static final String CONSISTENCY_MODE = "consistencyMode";
   private static final String TABLE_NAME_TEMPLATE = "tableNameTemplate";
   private static final String FIELD_MAPPING_CONFIGS = "fieldMappingConfigs";
+  private static final String OPERATION_TIMEOUT = "operationTimeout";
+  private static final String ADMIN_OPERATION_TIMEOUT = "adminOperationTimeout";
+
 
   private final String kuduMaster;
   private final String tableNameTemplate;
@@ -114,6 +130,7 @@ public class KuduTarget extends BaseTarget {
 
   private KuduOperationType defaultOperation;
   private Set<String> accessedTables;
+  private long CACHE_EXPIRATION_PERIOD = 60;
 
   public KuduTarget(KuduConfigBean configBean) {
     this.configBean = configBean;
@@ -126,10 +143,20 @@ public class KuduTarget extends BaseTarget {
 
     CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
         .maximumSize(tableCacheSize)
-        .expireAfterAccess(1, TimeUnit.HOURS);
+        .expireAfterAccess(CACHE_EXPIRATION_PERIOD, TimeUnit.MINUTES);
 
     if(LOG.isDebugEnabled()) {
-      cacheBuilder.recordStats();
+      // recordStats is available only in Guava 12.0 and above, but
+      // CDH still uses guava 11.0. Hence the reflection.
+      try {
+        Method m = CacheBuilder.class.getMethod("recordStats");
+        if (m != null) {
+          m.invoke(cacheBuilder);
+        }
+      } catch (NoSuchMethodException|IllegalAccessException|InvocationTargetException e) {
+        // We're intentionally ignoring any reflection errors as we might be running
+        // with old guava on class path.
+      }
     }
 
     kuduTables = cacheBuilder.build(new CacheLoader<String, KuduTable>() {
@@ -184,37 +211,54 @@ public class KuduTarget extends BaseTarget {
       );
     }
 
-    kuduClient = new KuduClient.KuduClientBuilder(kuduMaster).defaultOperationTimeoutMs(configBean.operationTimeout).build();
-    if (issues.isEmpty()) {
-      kuduSession = openKuduSession(issues);
-    }
-
-    // Check if SDC can reach the Kudu Master
-    try {
-      kuduClient.getTablesList();
-    } catch (KuduException ex) {
+    if (configBean.operationTimeout < 0) {
       issues.add(
           getContext().createConfigIssue(
-              Groups.KUDU.name(),
-              KuduConfigBean.CONF_PREFIX + KUDU_MASTER,
-              Errors.KUDU_00,
-              ex.toString(),
-              ex
+              Groups.ADVANCED.name(),
+              KuduConfigBean.CONF_PREFIX + OPERATION_TIMEOUT,
+              Errors.KUDU_02
           )
       );
     }
 
+    if (configBean.adminOperationTimeout < 0) {
+      issues.add(
+          getContext().createConfigIssue(
+              Groups.ADVANCED.name(),
+              KuduConfigBean.CONF_PREFIX + ADMIN_OPERATION_TIMEOUT,
+              Errors.KUDU_02
+          )
+      );
+    }
+
+    if (issues.isEmpty()) {
+      kuduClient = buildKuduClient();
+      kuduSession = openKuduSession(issues);
+    }
+
+    if (issues.isEmpty()) {
+      try {
+        // Check if SDC can reach the Kudu Master
+        kuduClient.getTablesList();
+      } catch (KuduException ex) {
+        issues.add(
+            getContext().createConfigIssue(
+                Groups.KUDU.name(),
+                KuduConfigBean.CONF_PREFIX + KUDU_MASTER,
+                Errors.KUDU_00,
+                ex.toString(),
+                ex
+            )
+        );
+      }
+    }
+
     if (tableNameTemplate.contains(EL_PREFIX)) {
-      ELUtils.validateExpression(
-          tableNameEval,
-          tableNameVars,
-          tableNameTemplate,
+      ELUtils.validateExpression(tableNameTemplate,
           getContext(),
           Groups.KUDU.getLabel(),
           TABLE_NAME_TEMPLATE,
-          Errors.KUDU_12,
-          String.class,
-          issues
+          Errors.KUDU_12, issues
       );
     } else {
       KuduTable table = null;
@@ -249,6 +293,21 @@ public class KuduTarget extends BaseTarget {
         createKuduRecordConverter(issues, table);
       }
     }
+  }
+
+  @NotNull
+  @VisibleForTesting
+  KuduClient buildKuduClient() {
+    KuduClient.KuduClientBuilder builder = new KuduClient.KuduClientBuilder(kuduMaster)
+      .defaultOperationTimeoutMs(configBean.operationTimeout)
+      .defaultAdminOperationTimeoutMs(configBean.adminOperationTimeout);
+
+    // Caution: if number of worker thread is not configured, Kudu client may start a massive amount of worker threads.
+    // The formula is "2 x available cores"
+    if (configBean.numWorkers > 0) {
+      builder.workerCount(configBean.numWorkers);
+    }
+    return builder.build();
   }
 
   private KuduSession openKuduSession(List<ConfigIssue> issues) {
@@ -355,7 +414,7 @@ public class KuduTarget extends BaseTarget {
     for (String tableName : partitions.keySet()) {
 
       // Send one LineageEvent per table that is accessed.
-      if(!StringUtils.isEmpty(tableName)) {
+      if(tableName != null && !tableName.isEmpty()) {
         if (!accessedTables.contains(tableName)) {
           accessedTables.add(tableName);
           sendLineageEvent(tableName);
@@ -373,7 +432,7 @@ public class KuduTarget extends BaseTarget {
       } catch (ExecutionException ex) {
         // if table doesn't exist, send records to the error handler and continue
         while (it.hasNext()) {
-          errorRecordHandler.onError(new OnRecordErrorException(it.next(), Errors.KUDU_01, tableName));
+          errorRecordHandler.onError(new OnRecordErrorException(it.next(), Errors.KUDU_03, ex.getMessage(), ex));
         }
         continue;
       }
@@ -428,6 +487,8 @@ public class KuduTarget extends BaseTarget {
               errorRecordHandler.onError(new OnRecordErrorException(record, Errors.KUDU_03, ex.getMessage(), ex));
             }
           }
+        } catch (OnRecordErrorException e) {
+          errorRecordHandler.onError(e);
         } catch (KuduException ex) {
           LOG.error(Errors.KUDU_03.getMessage(), ex.toString(), ex);
           errorRecordHandler.onError(new OnRecordErrorException(record, Errors.KUDU_03, ex.getMessage(), ex));
@@ -499,6 +560,13 @@ public class KuduTarget extends BaseTarget {
 
   @Override
   public void destroy() {
+    if (kuduSession != null) {
+      try {
+        kuduSession.close();
+      } catch (Exception ex) {
+        LOG.warn("Error closing Kudu session: {}", ex.toString(), ex);
+      }
+    }
     if (kuduClient != null) {
       try {
         kuduClient.close();

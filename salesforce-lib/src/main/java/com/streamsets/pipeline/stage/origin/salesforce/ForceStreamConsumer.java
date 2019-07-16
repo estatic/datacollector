@@ -19,7 +19,9 @@ import com.sforce.soap.partner.PartnerConnection;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.lib.salesforce.Errors;
 import com.streamsets.pipeline.lib.salesforce.ForceSourceConfigBean;
+import com.streamsets.pipeline.lib.salesforce.ForceUtils;
 import com.streamsets.pipeline.lib.salesforce.SubscriptionType;
+import org.apache.commons.lang3.StringUtils;
 import org.cometd.bayeux.Channel;
 import org.cometd.bayeux.Message;
 import org.cometd.bayeux.client.ClientSession;
@@ -28,16 +30,12 @@ import org.cometd.client.BayeuxClient;
 import org.cometd.client.transport.ClientTransport;
 import org.cometd.client.transport.LongPollingTransport;
 import org.eclipse.jetty.client.HttpClient;
-import org.eclipse.jetty.client.HttpProxy;
 import org.eclipse.jetty.client.api.Request;
-import org.eclipse.jetty.client.util.BasicAuthentication;
 import org.eclipse.jetty.http.HttpHeader;
-import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
@@ -52,6 +50,9 @@ public class ForceStreamConsumer {
       + "Please provide a valid ID, -2 to replay all events, or -1 to replay only new events.";
   private static final String TOPIC_PATH = "/topic/";
   private static final String EVENT_PATH = "/event/";
+  private static final String CDC_PATH = "/data/";
+  public static final String CHANGE_EVENTS = "ChangeEvents";
+  public static final String CHANGE_EVENT = "ChangeEvent";
   private final BlockingQueue<Message> messageQueue;
 
   // The long poll duration.
@@ -79,9 +80,26 @@ public class ForceStreamConsumer {
     this.conf = conf;
     this.messageQueue = messageQueue;
     this.connection = connection;
-    this.bayeuxChannel = (conf.subscriptionType == SubscriptionType.PUSH_TOPIC)
-      ? TOPIC_PATH + conf.pushTopic
-      : EVENT_PATH + conf.platformEvent;
+    switch (conf.subscriptionType) {
+      case PUSH_TOPIC:
+        this.bayeuxChannel = TOPIC_PATH + conf.pushTopic;
+        break;
+      case PLATFORM_EVENT:
+        this.bayeuxChannel = EVENT_PATH + conf.platformEvent;
+        break;
+      case CDC:
+        if (StringUtils.isEmpty(conf.cdcObject)) { // All change events
+          this.bayeuxChannel = CDC_PATH + CHANGE_EVENTS;
+        } else if (conf.cdcObject.endsWith("__c")) { // Custom object
+          this.bayeuxChannel = CDC_PATH + conf.cdcObject.substring(0, conf.cdcObject.length() - 3) + "__" + CHANGE_EVENT;
+        } else { // Standard object
+          this.bayeuxChannel = CDC_PATH + conf.cdcObject + CHANGE_EVENT;
+        }
+        break;
+      default:
+        this.bayeuxChannel = null;
+        break;
+    }
     String streamingEndpointPrefix = conf.apiVersion.equals("36.0") ? "/cometd/replay/" : "/cometd/";
     this.streamingEndpointPath = streamingEndpointPrefix + conf.apiVersion;
   }
@@ -132,88 +150,88 @@ public class ForceStreamConsumer {
     try {
       client = makeClient();
 
-      client.getChannel(Channel.META_HANDSHAKE).addListener(new ClientSessionChannel.MessageListener() {
-
-        public void onMessage(ClientSessionChannel channel, Message message) {
-          LOG.info("[CHANNEL:META_HANDSHAKE]: " + message);
-
-          // Pass these back to the source as we need to resubscribe or propagate the error
-          try {
-            messageQueue.put(message);
-          } catch (InterruptedException e) {
-            LOG.error(Errors.FORCE_10.getMessage(), e);
-            Thread.currentThread().interrupt();
-          }
-        }
-
-      });
-
-      client.getChannel(Channel.META_CONNECT).addListener(new ClientSessionChannel.MessageListener() {
-        public void onMessage(ClientSessionChannel channel, Message message) {
-          // Just log for troubleshooting - Bayeux client will rehandshake
-          LOG.info("[CHANNEL:META_CONNECT]: " + message);
-        }
-
-      });
-
-      client.getChannel(Channel.META_SUBSCRIBE).addListener(new ClientSessionChannel.MessageListener() {
-
-        public void onMessage(ClientSessionChannel channel, Message message) {
-          LOG.info("[CHANNEL:META_SUBSCRIBE]: " + message);
-          if (!message.isSuccessful()) {
-            String error = (String) message.get("error");
-            if (error != null) {
-              try {
-                if (isReplayIdExpired(error)) {
-                  // Retry subscription for all available events
-                  LOG.info("Event ID was not available. Subscribing for available events.");
-                  subscribeForNotifications(ForceSource.READ_EVENTS_FROM_START);
-                  return;
-                } else {
-                  messageQueue.put(message);
-                }
-              } catch (InterruptedException e) {
-                LOG.error(Errors.FORCE_10.getMessage(), e);
-                Thread.currentThread().interrupt();
-              }
-            }
-          }
-          subscribed.set(true);
-        }
-      });
-
-
-      client.handshake();
-      LOG.info("Waiting for handshake");
-
-      boolean handshaken = client.waitFor(10 * 1000, BayeuxClient.State.CONNECTED);
-      if (!handshaken) {
-        LOG.error("Failed to handshake: " + client);
-        throw new StageException(Errors.FORCE_09, "Timed out waiting for handshake");
-      }
+      connect();
     } catch (Exception e) {
       LOG.error("Exception making client", e.toString(), e);
       throw new StageException(Errors.FORCE_09, e);
     }
   }
 
+  private void connect() throws StageException {
+    client.getChannel(Channel.META_HANDSHAKE).addListener(new ClientSessionChannel.MessageListener() {
+
+      public void onMessage(ClientSessionChannel channel, Message message) {
+        LOG.info("[CHANNEL:META_HANDSHAKE]: " + message);
+
+        // Pass these back to the source as we need to resubscribe or propagate the error
+        try {
+          messageQueue.put(message);
+        } catch (InterruptedException e) {
+          LOG.error(Errors.FORCE_10.getMessage(), e);
+          Thread.currentThread().interrupt();
+        }
+      }
+
+    });
+
+    client.getChannel(Channel.META_CONNECT).addListener(new ClientSessionChannel.MessageListener() {
+      public void onMessage(ClientSessionChannel channel, Message message) {
+        // Log for troubleshooting
+        LOG.info("[CHANNEL:META_CONNECT]: " + message);
+
+        // Pass these back to the source as we may need to reconnect
+        try {
+          messageQueue.put(message);
+        } catch (InterruptedException e) {
+          LOG.error(Errors.FORCE_10.getMessage(), e);
+          Thread.currentThread().interrupt();
+        }
+      }
+    });
+
+    client.getChannel(Channel.META_SUBSCRIBE).addListener(new ClientSessionChannel.MessageListener() {
+
+      public void onMessage(ClientSessionChannel channel, Message message) {
+        LOG.info("[CHANNEL:META_SUBSCRIBE]: " + message);
+        if (!message.isSuccessful()) {
+          String error = (String) message.get("error");
+          if (error != null) {
+            try {
+              if (isReplayIdExpired(error)) {
+                // Retry subscription for all available events
+                LOG.info("Event ID was not available. Subscribing for available events.");
+                subscribeForNotifications(ForceSource.READ_EVENTS_FROM_START);
+                return;
+              } else {
+                messageQueue.put(message);
+              }
+            } catch (InterruptedException e) {
+              LOG.error(Errors.FORCE_10.getMessage(), e);
+              Thread.currentThread().interrupt();
+            }
+          }
+        }
+        subscribed.set(true);
+      }
+    });
+
+
+    client.handshake();
+    LOG.info("Waiting for handshake");
+
+    boolean handshaken = client.waitFor(10 * 1000, BayeuxClient.State.CONNECTED);
+    if (!handshaken) {
+      LOG.error("Failed to handshake: " + client);
+      throw new StageException(Errors.FORCE_09, "Timed out waiting for handshake");
+    }
+  }
+
   private BayeuxClient makeClient() throws Exception {
-    httpClient = new HttpClient(new SslContextFactory());
+    httpClient = new HttpClient(ForceUtils.makeSslContextFactory(conf));
     httpClient.setConnectTimeout(CONNECTION_TIMEOUT);
     httpClient.setIdleTimeout(READ_TIMEOUT);
     if (conf.useProxy) {
-      httpClient.getProxyConfiguration().getProxies().add(
-          new HttpProxy(conf.proxyHostname, conf.proxyPort));
-      if (conf.useProxyCredentials) {
-        URI proxyURI = new URI("http", null, conf.proxyHostname,
-            conf.proxyPort, null, null, null);
-        httpClient.getAuthenticationStore().addAuthentication(new BasicAuthentication(
-              proxyURI,
-              conf.proxyRealm.get(),
-              conf.proxyUsername.get(),
-              conf.proxyPassword.get()
-        ));
-      }
+      ForceUtils.setProxy(httpClient, conf);
     }
     httpClient.start();
 
@@ -242,14 +260,23 @@ public class ForceStreamConsumer {
   }
 
   public void stop() throws Exception {
+    disconnect();
+
+    httpClient.stop();
+  }
+
+  private void disconnect() {
     client.getChannel(bayeuxChannel).unsubscribe();
 
     client.disconnect();
     boolean disconnected = client.waitFor(10 * 1000, BayeuxClient.State.DISCONNECTED);
 
     LOG.info("Bayeux client disconnected: {}", disconnected);
+  }
 
-    httpClient.stop();
+  public void restart() throws StageException {
+    disconnect();
+    connect();
   }
 
   private String salesforceStreamingEndpoint(String endpoint) throws MalformedURLException {

@@ -16,7 +16,7 @@
 package com.streamsets.datacollector.execution.runner.common;
 
 import com.codahale.metrics.MetricRegistry;
-import com.streamsets.datacollector.config.MemoryLimitConfiguration;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.execution.Manager;
 import com.streamsets.datacollector.execution.PipelineStateStore;
 import com.streamsets.datacollector.execution.PipelineStatus;
@@ -31,6 +31,7 @@ import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.main.RuntimeModule;
 import com.streamsets.datacollector.runner.MockStages;
 import com.streamsets.datacollector.runner.SourceOffsetTracker;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.util.PipelineException;
 import com.streamsets.datacollector.util.TestUtil;
@@ -86,7 +87,7 @@ public class TestProdPipelineRunnable {
     ProductionPipeline pipeline = createProductionPipeline(DeliveryGuarantee.AT_MOST_ONCE, true);
     pipeline.registerStatusListener(new MyStateListener());
     ProductionPipelineRunnable runnable =
-      new ProductionPipelineRunnable(null, (StandaloneRunner) ((AsyncRunner)runner).getRunner(), pipeline, TestUtil.MY_PIPELINE, "0",
+      new ProductionPipelineRunnable(null, runner.getRunner(StandaloneRunner.class), pipeline, TestUtil.MY_PIPELINE, "0",
         Collections.<Future<?>> emptyList());
     pipelineStateStore.saveState("admin", TestUtil.MY_PIPELINE, "0", PipelineStatus.RUNNING, null, null, null, null, 0, 0);
     runnable.run();
@@ -99,7 +100,7 @@ public class TestProdPipelineRunnable {
     TestUtil.captureMockStages();
     ProductionPipeline pipeline = createProductionPipeline(DeliveryGuarantee.AT_MOST_ONCE, false);
     ProductionPipelineRunnable runnable = new ProductionPipelineRunnable
-      (null, (StandaloneRunner) ((AsyncRunner)runner).getRunner(), pipeline, TestUtil.MY_PIPELINE, "0",
+      (null, runner.getRunner(StandaloneRunner.class), pipeline, TestUtil.MY_PIPELINE, "0",
       Collections.<Future<?>>emptyList());
     pipelineStateStore.saveState("admin", TestUtil.MY_PIPELINE, "0", PipelineStatus.RUNNING, null, null, null, null, 0, 0);
     //Stops after the first batch
@@ -119,14 +120,13 @@ public class TestProdPipelineRunnable {
 
     Mockito.when(snapshotStore.getInfo(TestUtil.MY_PIPELINE, "0", SNAPSHOT_NAME)).
       thenReturn(new SnapshotInfoImpl("user", SNAPSHOT_NAME, "SNAPSHOT LABEL", TestUtil.MY_PIPELINE, "0",
-          System.currentTimeMillis(), false, 0));
+          System.currentTimeMillis(), false, 0, false));
     BlockingQueue<Object> productionObserveRequests = new ArrayBlockingQueue<>(100, true /*FIFO*/);
     Configuration conf = new Configuration();
     ProductionPipelineRunner runner =
-      new ProductionPipelineRunner(TestUtil.MY_PIPELINE, "0", conf, runtimeInfo, new MetricRegistry(), snapshotStore,
-        null);
+      new ProductionPipelineRunner(TestUtil.MY_PIPELINE, "0", null, conf, runtimeInfo, new MetricRegistry(), snapshotStore,
+        null, null);
     runner.setDeliveryGuarantee(deliveryGuarantee);
-    runner.setMemoryLimitConfiguration(new MemoryLimitConfiguration());
     runner.setObserveRequests(productionObserveRequests);
     runner.setOffsetTracker(tracker);
 
@@ -138,7 +138,9 @@ public class TestProdPipelineRunnable {
       MockStages.createStageLibrary(),
       runner,
       null,
-      Mockito.mock(LineagePublisherTask.class)
+      Mockito.mock(BlobStoreTask.class),
+      Mockito.mock(LineagePublisherTask.class),
+      Mockito.mock(StatsCollector.class)
     ).build(
       MockStages.userContext(),
       MockStages.createPipelineConfigurationSourceProcessorTarget(),

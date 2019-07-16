@@ -16,7 +16,7 @@
         <select class="form-control"
                 name="libraryId"
                 ng-model="libraryInfo.library"
-                ng-options="stageLibrary.label for stageLibrary in installedLibraries track by stageLibrary.id">
+                ng-options="stageLibrary.stageLibraryManifest.stageLibLabel for stageLibrary in installedLibraries track by stageLibrary.stageLibraryManifest.stageLibId">
         </select>
       </div>
 
@@ -57,6 +57,5 @@
     <button ng-click="restart()" class="btn btn-primary"
             ng-if="operationStatus === 'complete'"
             translate="global.form.restart">Restart</button>
-
   </div>
 </form>

@@ -18,8 +18,13 @@ package com.streamsets.pipeline.kafka.impl;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.kafka.api.KafkaOriginGroups;
+import com.streamsets.pipeline.kafka.api.MessageAndOffset;
+import com.streamsets.pipeline.lib.kafka.KafkaAutoOffsetReset;
+import com.streamsets.pipeline.lib.kafka.KafkaConstants;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,14 +36,13 @@ import java.util.Properties;
 public class MapRStreamsConsumer09 extends BaseKafkaConsumer09 {
 
   private static final boolean AUTO_COMMIT_ENABLED_DEFAULT = false;
-  private static final String AUTO_OFFSET_RESET_KEY = "auto.offset.reset";
-  private static final String AUTO_OFFSET_RESET_PREVIEW = "earliest";
   private static final String KEY_DESERIALIZER_DEFAULT = "org.apache.kafka.common.serialization.StringDeserializer";
   private static final String VALUE_DESERIALIZER_DEFAULT = "org.apache.kafka.common.serialization.ByteArrayDeserializer";
 
   private final Stage.Context context;
   private final String consumerGroup;
   private final Map<String, Object> kafkaConsumerConfigs;
+  private final String kafkaAutoOffsetReset;
 
   private static final Logger LOG = LoggerFactory.getLogger(MapRStreamsConsumer09.class);
 
@@ -47,12 +51,30 @@ public class MapRStreamsConsumer09 extends BaseKafkaConsumer09 {
     String consumerGroup,
     Map<String, Object> kafkaConsumerConfigs,
     Source.Context context,
-    int batchSize
+    int batchSize,
+    String kafkaAutoOffsetReset
   ) {
     super(topic, context, batchSize);
     this.consumerGroup = consumerGroup;
     this.context = context;
     this.kafkaConsumerConfigs = kafkaConsumerConfigs;
+    this.kafkaAutoOffsetReset = kafkaAutoOffsetReset;
+  }
+
+  @Override
+  MessageAndOffset getMessageAndOffset(ConsumerRecord message, boolean isEnabled) {
+    return new MessageAndOffset(message.value(), message.offset(), message.partition());
+  }
+
+  @Override
+  protected void validateAutoOffsetReset(List<Stage.ConfigIssue> issues) throws StageException {
+    if(KafkaAutoOffsetReset.TIMESTAMP.name().equals(kafkaAutoOffsetReset)) {
+      issues.add(context.createConfigIssue(
+          KafkaOriginGroups.KAFKA.name(),
+          KAFKA_CONFIG_BEAN_PREFIX + KAFKA_AUTO_OFFSET_RESET,
+          KafkaErrors.KAFKA_76
+      ));
+    }
   }
 
   @Override
@@ -78,9 +100,10 @@ public class MapRStreamsConsumer09 extends BaseKafkaConsumer09 {
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, AUTO_COMMIT_ENABLED_DEFAULT);
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KEY_DESERIALIZER_DEFAULT);
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, VALUE_DESERIALIZER_DEFAULT);
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, kafkaAutoOffsetReset.toLowerCase());
 
     if (this.context.isPreview()) {
-      props.put(AUTO_OFFSET_RESET_KEY, AUTO_OFFSET_RESET_PREVIEW);
+      props.setProperty(KafkaConstants.AUTO_OFFSET_RESET_CONFIG, KafkaConstants.AUTO_OFFSET_RESET_PREVIEW_VALUE);
     }
 
     addUserConfiguredProperties(props);
@@ -108,6 +131,7 @@ public class MapRStreamsConsumer09 extends BaseKafkaConsumer09 {
       kafkaConsumerConfigs.remove(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
       kafkaConsumerConfigs.remove(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
       kafkaConsumerConfigs.remove(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+      kafkaConsumerConfigs.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
 
       for (Map.Entry<String, Object> producerConfig : kafkaConsumerConfigs.entrySet()) {
         props.put(producerConfig.getKey(), producerConfig.getValue());

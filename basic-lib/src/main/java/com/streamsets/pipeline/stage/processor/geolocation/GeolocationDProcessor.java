@@ -22,7 +22,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 import java.util.List;
 
@@ -31,7 +31,7 @@ import java.util.List;
     label="Geo IP",
     description = "IP address geolocation using a Maxmind GeoIP2 database file",
     icon="globe.png",
-    onlineHelpRefUrl = "index.html#Processors/GeoIP.html#task_wpz_nhs_ns",
+    onlineHelpRefUrl ="index.html?contextID=task_wpz_nhs_ns",
     upgrader = GeolocationProcessorUpgrader.class
 )
 @ConfigGroups(Groups.class)

@@ -15,22 +15,30 @@
  */
 package com.streamsets.datacollector.config;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.ImmutableSet;
 import com.streamsets.datacollector.creation.StageConfigBean;
+import com.streamsets.pipeline.SDCClassLoader;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.Label;
 import com.streamsets.pipeline.api.Stage;
+import com.streamsets.pipeline.api.StageDef;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.StageUpgrader;
 import com.streamsets.pipeline.api.impl.LocalizableMessage;
 import com.streamsets.pipeline.api.impl.Utils;
 
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Captures the configuration options for a {@link com.streamsets.pipeline.api.Stage}.
@@ -69,9 +77,20 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
   private final boolean offsetCommitTrigger;
   private final boolean producesEvents;
   private final List<ServiceDependencyDefinition> services;
+  private final List<HideStage.Type> hideStage;
+  private final StageDef stageDef;
+  private final boolean sendsResponse;
+  private final boolean beta;
+  private final int inputStreams;
+  private final String inputStreamLabelProviderClass;
+  private List<String> inputStreamLabels;
+  private List<Class> eventDefs;
+  private final boolean bisectable;
+  private String yamlUpgrader;
 
   // localized version
   private StageDefinition(
+      StageDef stageDef,
       StageLibraryDefinition libraryDefinition,
       boolean privateClassLoader,
       ClassLoader classLoader,
@@ -101,8 +120,18 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
       boolean pipelineLifecycleStage,
       boolean offsetCommitTrigger,
       boolean producesEvents,
-      List<ServiceDependencyDefinition> services
+      List<ServiceDependencyDefinition> services,
+      List<HideStage.Type> hideStage,
+      boolean sendsResponse,
+      boolean beta,
+      int inputStreams,
+      String inputStreamLabelProviderClass,
+      List<String> inputStreamLabels,
+      boolean bisectable,
+      List<Class> eventDefs,
+      String yamlUpgrader
   ) {
+    this.stageDef = stageDef;
     this.libraryDefinition = libraryDefinition;
     this.privateClassLoader = privateClassLoader;
     this.classLoader = classLoader;
@@ -147,10 +176,20 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     this.offsetCommitTrigger = offsetCommitTrigger;
     this.producesEvents = producesEvents;
     this.services = Collections.unmodifiableList(services);
+    this.hideStage = Collections.unmodifiableList(hideStage);
+    this.sendsResponse = sendsResponse;
+    this.beta = beta;
+    this.inputStreams = inputStreams;
+    this.inputStreamLabelProviderClass = inputStreamLabelProviderClass;
+    this.inputStreamLabels = inputStreamLabels;
+    this.bisectable = bisectable;
+    this.eventDefs = eventDefs;
+    this.yamlUpgrader = yamlUpgrader;
   }
 
   @SuppressWarnings("unchecked")
   public StageDefinition(StageDefinition def, ClassLoader classLoader) {
+    stageDef = def.stageDef;
     libraryDefinition = def.libraryDefinition;
     privateClassLoader = def.privateClassLoader;
     this.classLoader = classLoader;
@@ -187,9 +226,18 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     producesEvents = def.producesEvents;
     pipelineLifecycleStage = def.pipelineLifecycleStage;
     services = def.services;
+    hideStage = def.hideStage;
+    sendsResponse = def.sendsResponse;
+    beta = def.beta;
+    inputStreams = def.inputStreams;
+    inputStreamLabelProviderClass = def.inputStreamLabelProviderClass;
+    inputStreamLabels = def.inputStreamLabels;
+    bisectable = def.bisectable;
+    yamlUpgrader = (def.yamlUpgrader.isEmpty()) ? null : def.yamlUpgrader;
   }
 
   public StageDefinition(
+      StageDef stageDef,
       StageLibraryDefinition libraryDefinition,
       boolean privateClassLoader,
       Class<? extends Stage> klass,
@@ -218,8 +266,17 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
       boolean pipelineLifecycleStage,
       boolean offsetCommitTrigger,
       boolean producesEvents,
-      List<ServiceDependencyDefinition> services
+      List<ServiceDependencyDefinition> services,
+      List<HideStage.Type> hideStage,
+      boolean sendsResponse,
+      boolean beta,
+      int inputStreams,
+      String inputStreamLabelProviderClass,
+      boolean bisectable,
+      List<Class> eventDefs,
+      String yamlUpgrader
   ) {
+    this.stageDef = stageDef;
     this.libraryDefinition = libraryDefinition;
     this.privateClassLoader = privateClassLoader;
     this.onlineHelpRefUrl = onlineHelpRefUrl;
@@ -263,6 +320,14 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     this.offsetCommitTrigger = offsetCommitTrigger;
     this.producesEvents = producesEvents;
     this.services = Collections.unmodifiableList(services);
+    this.hideStage = Collections.unmodifiableList(hideStage);
+    this.sendsResponse = sendsResponse;
+    this.beta = beta;
+    this.inputStreams = inputStreams;
+    this.inputStreamLabelProviderClass = inputStreamLabelProviderClass;
+    this.bisectable = bisectable;
+    this.eventDefs = eventDefs;
+    this.yamlUpgrader = yamlUpgrader;
   }
 
   public List<ExecutionMode> getLibraryExecutionModes() {
@@ -281,6 +346,7 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     return libraryDefinition.getLabel();
   }
 
+  @JsonIgnore
   @Override
   public ClassLoader getStageClassLoader() {
     return classLoader;
@@ -295,6 +361,7 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     return klass.getName();
   }
 
+  @JsonIgnore
   public Class<? extends Stage> getStageClass() {
     return klass;
   }
@@ -373,6 +440,7 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     return hideConfigSet;
   }
 
+  @JsonIgnore
   // This method returns not only main configs, but also all complex ones!
   public Map<String, ConfigDefinition> getConfigDefinitionsMap() {
     return configDefinitionsMap;
@@ -420,6 +488,7 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     return recordsByRef;
   }
 
+  @JsonIgnore
   public StageUpgrader getUpgrader() {
     return upgrader;
   }
@@ -510,12 +579,19 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     ConfigGroupDefinition groupDefs = localizeConfigGroupDefinition(classLoader, getConfigGroupDefinition());
 
     // output stream labels
-    List<String> streamLabels = getOutputStreamLabels();
+    List<String> outputStreamLabels = getOutputStreamLabels();
     if (!isVariableOutputStreams() && getOutputStreams() > 0) {
-      streamLabels = getLocalizedOutputStreamLabels(classLoader);
+      outputStreamLabels = getStreamLabels(classLoader, getOutputStreamLabelProviderClass(), true);
+    }
+
+    // input stream labels
+    List<String> inputStreamLabels = getInputStreamLabels();
+    if (getInputStreams() > 0) {
+      inputStreamLabels = getStreamLabels(classLoader, getInputStreamLabelProviderClass(), true);
     }
 
     return new StageDefinition(
+        stageDef,
         libraryDefinition,
         privateClassLoader,
         getStageClassLoader(),
@@ -534,7 +610,7 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
         groupDefs,
         isVariableOutputStreams(),
         getOutputStreams(),
-        streamLabels,
+        outputStreamLabels,
         executionModes,
         recordsByRef,
         upgrader,
@@ -545,16 +621,25 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
         pipelineLifecycleStage,
         offsetCommitTrigger,
         producesEvents,
-        services
+        services,
+        hideStage,
+        sendsResponse,
+        beta,
+        inputStreams,
+        inputStreamLabelProviderClass,
+        inputStreamLabels,
+        bisectable,
+        eventDefs,
+        yamlUpgrader
     );
   }
 
-  private List<String> _getOutputStreamLabels(ClassLoader classLoader, boolean localized) {
+  private List<String> getStreamLabels(ClassLoader classLoader, String streamsLabelProviderClass, boolean localized) {
     List<String> list = new ArrayList<>();
-    if (getOutputStreamLabelProviderClass() != null) {
+    if (streamsLabelProviderClass != null) {
       try {
-        String rbName = (localized) ? getOutputStreamLabelProviderClass() + "-bundle" : null;
-        Class klass = classLoader.loadClass(getOutputStreamLabelProviderClass());
+        String rbName = (localized) ? streamsLabelProviderClass + "-bundle" : null;
+        Class klass = classLoader.loadClass(streamsLabelProviderClass);
         boolean isLabel = Label.class.isAssignableFrom(klass);
         for (Object e : klass.getEnumConstants()) {
 
@@ -571,10 +656,6 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
     return list;
   }
 
-  private List<String> getLocalizedOutputStreamLabels(ClassLoader classLoader) {
-    return _getOutputStreamLabels(classLoader, true);
-  }
-
   public String getOnlineHelpRefUrl() {
     return onlineHelpRefUrl;
   }
@@ -586,6 +667,57 @@ public class StageDefinition implements PrivateClassLoaderDefinition {
   public List<ServiceDependencyDefinition> getServices() {
     return services;
   }
+
+  public List<HideStage.Type> getHideStage() {
+    return hideStage;
+  }
+
+  public String getOutputStreamsDrivenByConfig() {
+    return stageDef != null ? stageDef.outputStreamsDrivenByConfig(): null;
+  }
+
+  @JsonIgnore
+  public StageDef getStageDef() {
+    return stageDef;
+  }
+
+  public boolean getSendsResponse() {
+    return sendsResponse;
+  }
+
+  public boolean isBeta() {
+    return beta;
+  }
+
+  public int getInputStreams() {
+    return inputStreams;
+  }
+
+  public String getInputStreamLabelProviderClass() {
+    return inputStreamLabelProviderClass;
+  }
+
+  public List<String> getInputStreamLabels() {
+    return inputStreamLabels;
+  }
+
+  public boolean isBisectable() {
+    return bisectable;
+  }
+
+  public List<Class> getEventDefs() {
+    return eventDefs;
+  }
+
+  public List<String> getClassPath() {
+    SDCClassLoader classLoader = (SDCClassLoader)getStageClassLoader();
+    return Arrays.stream(classLoader.getURLs()).map(URL::getFile).collect(Collectors.toList());
+  }
+
+  public String getYamlUpgrader() {
+    return yamlUpgrader;
+  }
+
 }
 
 

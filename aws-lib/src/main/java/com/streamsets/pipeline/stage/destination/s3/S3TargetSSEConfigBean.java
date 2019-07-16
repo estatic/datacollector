@@ -15,15 +15,19 @@
  */
 package com.streamsets.pipeline.stage.destination.s3;
 
+import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ListBeanModel;
 import com.streamsets.pipeline.api.StageException;
-import com.streamsets.pipeline.api.credential.CredentialValue;
-import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
-import com.streamsets.pipeline.stage.lib.aws.SSEChooserValues;
-import com.streamsets.pipeline.stage.lib.aws.SSEOption;
+import com.streamsets.pipeline.api.credential.CredentialValue;
+import com.streamsets.pipeline.lib.aws.SseOption;
+import com.streamsets.pipeline.lib.aws.SseOptionChooserValues;
+import org.codehaus.jackson.map.ObjectMapper;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +56,8 @@ public class S3TargetSSEConfigBean {
       triggeredByValue = "true",
       group = "#0"
   )
-  @ValueChooserModel(SSEChooserValues.class)
-  public SSEOption encryption;
+  @ValueChooserModel(SseOptionChooserValues.class)
+  public SseOption encryption;
 
   @ConfigDef(
       required = false,
@@ -105,11 +109,25 @@ public class S3TargetSSEConfigBean {
   )
   public CredentialValue customerKeyMd5;
 
-  public Map<String, String> resolveEncryptionContext() throws StageException {
-    Map<String, String> encryptionContext = new HashMap<>();
-    for(EncryptionContextBean bean : this.encryptionContext) {
-      encryptionContext.put(bean.key, bean.value.get());
+  public String resolveAndEncodeEncryptionContext() throws StageException {
+    if (encryptionContext != null && !encryptionContext.isEmpty()) {
+      Map<String, String> plainEncryptionContext = new HashMap<>();
+      for (EncryptionContextBean entry : encryptionContext) {
+        // Don't include items with empty keys
+        if (entry.key != null && !entry.key.isEmpty()) {
+          plainEncryptionContext.put(entry.key, entry.value.get());
+        }
+      }
+      // Don't bother if all of the items had empty keys
+      if (!plainEncryptionContext.isEmpty()) {
+        try {
+          String json = new ObjectMapper().writeValueAsString(plainEncryptionContext);
+          return Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+          throw new StageException(Errors.S3_10, e);
+        }
+      }
     }
-    return encryptionContext;
+    return null;
   }
 }

@@ -17,22 +17,25 @@ package com.streamsets.pipeline.stage.destination.maprstreams;
 
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.StatsAggregatorStage;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.stage.destination.kafka.KafkaTarget;
 import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
+import com.streamsets.pipeline.stage.destination.lib.ToOriginResponseConfig;
 
 @StageDef(
     version = 3,
     label = "Write to MapR Streams",
     description = "Writes Pipeline Statistic records to MapR Streams",
-    icon = "mapr.png",
+    icon = "mapr_es.png",
     upgrader = MapRStreamsTargetUpgrader.class,
     onlineHelpRefUrl = ""
 )
 @StatsAggregatorStage
+@HideStage(HideStage.Type.STATS_AGGREGATOR_STAGE)
 @HideConfigs(
     preconditions = true,
     onErrorRecord = true,
@@ -48,7 +51,7 @@ public class StatsMapRStreamsDTarget extends MapRStreamsDTarget {
   protected Target createTarget() {
     KafkaTargetConfig kafkaTargetConfig = convertToKafkaConfigBean(maprStreamsTargetConfigBean);
     kafkaTargetConfig.dataFormat = DataFormat.SDC_JSON;
-    return new KafkaTarget(kafkaTargetConfig);
+    return new KafkaTarget(kafkaTargetConfig, new ToOriginResponseConfig());
   }
 
 }

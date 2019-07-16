@@ -21,7 +21,7 @@ import com.streamsets.pipeline.api.Executor;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.PipelineLifecycleStage;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DExecutor;
+import com.streamsets.pipeline.api.base.configurablestage.DExecutor;
 
 @StageDef(
   version = 1,
@@ -29,7 +29,7 @@ import com.streamsets.pipeline.configurablestage.DExecutor;
   description = "Changes HDFS file metadata such as renaming files or changing permissions.",
   icon = "hdfs-executor.png",
   privateClassLoader = true,
-  onlineHelpRefUrl = "index.html#Executors/HDFSMetadata.html#task_m3v_5lk_fx",
+  onlineHelpRefUrl ="index.html?contextID=task_m3v_5lk_fx",
   producesEvents = true
 )
 @ConfigGroups(value = Groups.class)

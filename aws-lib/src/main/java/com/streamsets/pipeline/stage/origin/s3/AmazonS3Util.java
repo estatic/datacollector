@@ -27,11 +27,14 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.SSECustomerKey;
+import com.google.common.annotations.VisibleForTesting;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.credential.CredentialValue;
 import com.streamsets.pipeline.common.InterfaceAudience;
 import com.streamsets.pipeline.common.InterfaceStability;
 import com.streamsets.pipeline.lib.util.AntPathMatcher;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -62,7 +65,7 @@ public class AmazonS3Util {
       AmazonS3 s3Client,
       S3ConfigBean s3ConfigBean,
       AntPathMatcher pathMatcher,
-      AmazonS3Source.S3Offset s3Offset,
+      S3Offset s3Offset,
       int fetchSize
   ) {
     // Incrementally scan objects after the marker (s3Offset).
@@ -72,7 +75,19 @@ public class AmazonS3Util {
     listObjectsRequest.setBucketName(s3ConfigBean.s3Config.bucket);
     listObjectsRequest.setPrefix(s3ConfigBean.s3Config.commonPrefix);
     listObjectsRequest.setMaxKeys(BATCH_SIZE);
+
     if (s3Offset.getKey() != null) {
+      if (!s3Offset.getKey().isEmpty() && parseOffset(s3Offset) != -1) {
+        S3Object currentObject = s3Client.getObject(s3ConfigBean.s3Config.bucket, s3Offset.getKey());
+        S3ObjectSummary currentObjectSummary = new S3ObjectSummary();
+        currentObjectSummary.setBucketName(currentObject.getBucketName());
+        currentObjectSummary.setKey(currentObject.getKey());
+        currentObjectSummary.setETag(currentObject.getObjectMetadata().getETag());
+        currentObjectSummary.setSize(currentObject.getObjectMetadata().getContentLength());
+        currentObjectSummary.setLastModified(currentObject.getObjectMetadata().getLastModified());
+        currentObjectSummary.setStorageClass(currentObject.getObjectMetadata().getStorageClass());
+        list.add(currentObjectSummary);
+      }
       listObjectsRequest.setMarker(s3Offset.getKey());
     }
 
@@ -118,7 +133,7 @@ public class AmazonS3Util {
       AmazonS3 s3Client,
       S3ConfigBean s3ConfigBean,
       AntPathMatcher pathMatcher,
-      AmazonS3Source.S3Offset s3Offset,
+      S3Offset s3Offset,
       int fetchSize
   ) {
 
@@ -135,8 +150,9 @@ public class AmazonS3Util {
     });
 
     S3Objects s3ObjectSummaries = S3Objects
-      .withPrefix(s3Client, s3ConfigBean.s3Config.bucket, s3ConfigBean.s3Config.commonPrefix)
-      .withBatchSize(BATCH_SIZE);
+      .withPrefix(s3Client, s3ConfigBean.s3Config.bucket, s3ConfigBean.s3Config.commonPrefix);
+
+    // SDC-9413: since the s3ObjectSummaries is in lexical order, we should get all list of files in one api call
     for (S3ObjectSummary s : s3ObjectSummaries) {
       String fullPrefix = s.getKey();
       String remainingPrefix = fullPrefix.substring(s3ConfigBean.s3Config.commonPrefix.length(), fullPrefix.length());
@@ -161,7 +177,7 @@ public class AmazonS3Util {
     return new ArrayList<>(treeSet);
   }
 
-  private static boolean isEligible(S3ObjectSummary s, AmazonS3Source.S3Offset s3Offset) {
+  private static boolean isEligible(S3ObjectSummary s, S3Offset s3Offset) {
 
     //The object is eligible if
     //1. The timestamp is greater than that of the current object in offset
@@ -176,7 +192,7 @@ public class AmazonS3Util {
       //compare names
       if(s.getKey().compareTo(s3Offset.getKey()) > 0) {
         isEligible = true;
-      } else if (s.getKey().compareTo(s3Offset.getKey()) == 0 && !"-1".equals(s3Offset.getOffset())) {
+      } else if (s.getKey().compareTo(s3Offset.getKey()) == 0 && !S3Constants.MINUS_ONE.equals(s3Offset.getOffset())) {
         //same time stamp, same name
         //If the current offset is not -1, return the file. It means the previous file was partially processed.
         isEligible = true;
@@ -272,5 +288,41 @@ public class AmazonS3Util {
       }
     }
     return s3ObjectSummary;
+  }
+
+  /*
+   * Regular file: Parse the offset Integer
+   * Zipped files: The offset is a json containing fileName + fileOffset
+   * Excel files: Offset contains multiple separators
+   */
+  static Integer parseOffset(S3Offset s3Offset) {
+    Integer offset;
+    if (s3Offset != null && s3Offset.getOffset().contains(S3Offset.OFFSET_SEPARATOR)) {
+      offset = Integer.valueOf(s3Offset.getOffset().split(S3Offset.OFFSET_SEPARATOR)[1]);
+    } else if (isJSONOffset(s3Offset)) {
+      offset = getFileName(s3Offset.getOffset()).equals(getFileName(s3Offset.getOffset()))
+          ? getFileOffset(s3Offset.getOffset())
+          : 0;
+    } else {
+      offset = Integer.valueOf(s3Offset.getOffset());
+    }
+    return offset;
+  }
+
+  @VisibleForTesting
+  static boolean isJSONOffset(S3Offset s3Offset) {
+    return s3Offset.getOffset().contains("fileName") && s3Offset.getOffset().contains("fileOffset");
+  }
+
+  @VisibleForTesting
+  static String getFileName(String offset) {
+    JSONObject object = new JSONObject(offset);
+    return object.get("fileName").toString();
+  }
+
+  @VisibleForTesting
+  static int getFileOffset(String offset) {
+    JSONObject object = new JSONObject(offset);
+    return Integer.valueOf(object.get("fileOffset").toString());
   }
 }

@@ -16,6 +16,8 @@
 package com.streamsets.datacollector.runner;
 
 import com.streamsets.pipeline.api.Record;
+import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.interceptor.Interceptor;
 
 import java.util.List;
 import java.util.Map;
@@ -27,7 +29,15 @@ public interface PipeBatch {
 
   void setNewOffset(String offset);
 
-  BatchImpl getBatch(Pipe pipe);
+  /**
+   * Start processing stage pipe.
+   */
+  BatchMakerImpl startStage(StagePipe pipe);
+
+  /**
+   * Create batch for given pipe (stage).
+   */
+  BatchImpl getBatch(Pipe pipe) throws StageException;
 
   /**
    * During destroy() phase, rather then running this stage, simply skip it (but still propagate empty output).
@@ -35,19 +45,14 @@ public interface PipeBatch {
   void skipStage(Pipe pipe);
 
   /**
-   * Start processing stage
-   */
-  BatchMakerImpl startStage(StagePipe pipe);
-
-  /**
    * Complete stage on normal execution (while pipeline is running)
    */
-  void completeStage(BatchMakerImpl batchMaker);
+  void completeStage(BatchMakerImpl batchMaker) throws StageException;
 
   /**
    * Complete stage on during destroy() phase.
    */
-  void completeStage(StagePipe pipe);
+  void completeStage(StagePipe pipe) throws StageException;
 
   Map<String, List<Record>> getLaneOutputRecords(List<String> pipeLanes);
 
@@ -58,6 +63,10 @@ public interface PipeBatch {
   ErrorSink getErrorSink();
 
   EventSink getEventSink();
+
+  ProcessedSink getProcessedSink();
+
+  SourceResponseSink getSourceResponseSink();
 
   void moveLane(String inputLane, String outputLane);
 

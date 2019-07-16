@@ -73,7 +73,7 @@ public abstract class BaseHttpTargetTest extends JerseyTest {
   @Test
   public void testHttpTarget() throws StageException, IOException {
     HttpTarget httpTarget = createHttpTarget();
-    TargetRunner targetRunner = new TargetRunner.Builder(HttpTarget.class, httpTarget)
+    TargetRunner targetRunner = new TargetRunner.Builder(HttpDTarget.class, httpTarget)
       .build();
     targetRunner.runInit();
     targetRunner.runWrite(createRecords());
@@ -89,12 +89,21 @@ public abstract class BaseHttpTargetTest extends JerseyTest {
       Assert.assertTrue(record.isAggregated());
     }
   }
+
   private List<Record> createRecords() throws IOException {
     List<Record> list = new ArrayList<>();
     for (int i = 0; i < 20; i++) {
       Map<String, Object> m = new HashMap<>();
       m.put("a", "b");
-      Record record = AggregatorUtil.createMetricJsonRecord(String.valueOf(i), "masterSDC", m, true, "{}");
+      Record record = AggregatorUtil.createMetricJsonRecord(
+          String.valueOf(i),
+          "masterSDC",
+          m,
+          true,
+          true,
+          false,
+          "{}"
+      );
       list.add(record);
     }
     return list;

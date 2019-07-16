@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 StreamSets Inc.
+ * Copyright 2019 StreamSets Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,14 +22,15 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PipelineLifecycleStage;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DExecutor;
+import com.streamsets.pipeline.api.base.configurablestage.DExecutor;
 
 @StageDef(
-    version = 1,
-    label = "Spark Executor",
+    version = 2,
+    label = "Spark",
     description = "Run Spark Applications",
     icon = "spark-logo-hd.png",
-    onlineHelpRefUrl = "index.html#Executors/Spark.html#task_cdw_wxb_1z",
+    upgrader = SparkExecutorUpgrader.class,
+    onlineHelpRefUrl ="index.html?contextID=task_cdw_wxb_1z",
     producesEvents = true
 )
 @ConfigGroups(Groups.class)

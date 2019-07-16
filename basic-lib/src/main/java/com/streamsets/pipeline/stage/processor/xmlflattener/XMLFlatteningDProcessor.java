@@ -21,7 +21,7 @@ import com.streamsets.pipeline.api.FieldSelectorModel;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 @StageDef(
     version = 3,
@@ -29,7 +29,7 @@ import com.streamsets.pipeline.configurablestage.DProcessor;
     description = "Flatten XML data into fields of a record",
     upgrader = XMLFlatteningProcessorUpgrader.class,
     icon = "xmlparser.png",
-    onlineHelpRefUrl = "index.html#Processors/XMLFlattener.html#task_pmb_l55_sv"
+    onlineHelpRefUrl ="index.html?contextID=task_pmb_l55_sv"
 )
 @ConfigGroups(value = Groups.class)
 @GenerateResourceBundle

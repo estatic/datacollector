@@ -17,6 +17,7 @@ package com.streamsets.pipeline.stage.bigquery.destination;
 
 import com.google.auth.Credentials;
 import com.google.cloud.bigquery.BigQuery;
+import com.google.cloud.bigquery.BigQueryError;
 import com.google.cloud.bigquery.InsertAllRequest;
 import com.google.cloud.bigquery.InsertAllResponse;
 import com.google.cloud.bigquery.Table;
@@ -26,6 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.FileRef;
 import com.streamsets.pipeline.api.OnRecordError;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.Target;
@@ -51,6 +53,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -64,10 +67,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static com.streamsets.pipeline.stage.bigquery.destination.BigQueryTarget.DATE_FORMAT;
-import static com.streamsets.pipeline.stage.bigquery.destination.BigQueryTarget.DATE_TIME_FORMAT;
-import static com.streamsets.pipeline.stage.bigquery.destination.BigQueryTarget.TIME_FORMAT;
-
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({
@@ -75,6 +74,7 @@ import static com.streamsets.pipeline.stage.bigquery.destination.BigQueryTarget.
     BigQueryTarget.class,
     InsertAllResponse.class,
     BigQueryDelegate.class,
+    BigQueryError.class,
     Table.class,
     Credentials.class,
     GoogleCloudCredentialsConfig.class
@@ -82,6 +82,10 @@ import static com.streamsets.pipeline.stage.bigquery.destination.BigQueryTarget.
 public class TestBigQueryTarget {
 
   private BigQuery bigQuery = PowerMockito.mock(BigQuery.class);
+
+  private static final SimpleDateFormat DATE_FORMAT = BigQueryTarget.createSimpleDateFormat(BigQueryTarget.YYYY_MM_DD);
+  private static final SimpleDateFormat TIME_FORMAT  = BigQueryTarget.createSimpleDateFormat(BigQueryTarget.HH_MM_SS_SSSSSS);
+  private static final SimpleDateFormat  DATE_TIME_FORMAT = BigQueryTarget.createSimpleDateFormat(BigQueryTarget.YYYY_MM_DD_T_HH_MM_SS_SSSSSS);
 
   @Before
   public void setup() {
@@ -427,7 +431,7 @@ public class TestBigQueryTarget {
 
               @Override
               @SuppressWarnings("unchecked")
-              public <T extends AutoCloseable> T createInputStream(Stage.Context context, Class<T> streamClassType) throws IOException {
+              public <T extends AutoCloseable> T createInputStream(ProtoConfigurableEntity.Context context, Class<T> streamClassType) throws IOException {
                 return (T)new ByteArrayInputStream("abc".getBytes());
               }
             })
@@ -505,5 +509,57 @@ public class TestBigQueryTarget {
       String errorCode = errorRecord.getHeader().getErrorCode();
       Assert.assertEquals(Errors.BIGQUERY_17.getCode(), errorCode);
     }
+  }
+
+  @Test
+  public void testErrorInIngestingMultipleTables() throws Exception {
+    List<Record> records = new ArrayList<>();
+
+    Record record1 = createRecord(ImmutableMap.of("a", 1));
+    Record record2 = createRecord(ImmutableMap.of("a",  2));
+    Record record3 = createRecord(ImmutableMap.of("a",  3));
+
+    record1.getHeader().setAttribute("table", "table1");
+    record2.getHeader().setAttribute("table", "table2");
+    record3.getHeader().setAttribute("table", "table3");
+
+    records.add(record1);
+    records.add(record2);
+    records.add(record3);
+
+    Answer<InsertAllResponse> insertAllResponseAnswer = invocationOnMock -> {
+      InsertAllRequest request = (InsertAllRequest) (invocationOnMock.getArguments()[0]);
+      InsertAllResponse response = PowerMockito.mock(InsertAllResponse.class);
+      if (request.getTable().getTable().equals("table2")) {
+        BigQueryError bigQueryError = PowerMockito.mock(BigQueryError.class);
+        Mockito.doReturn("Error in bigquery").when(bigQueryError).getMessage();
+        Mockito.doReturn("Error in bigquery").when(bigQueryError).getReason();
+        Mockito.doReturn(
+            ImmutableMap.of(0L, Collections.singletonList(bigQueryError))
+        ).when(response).getInsertErrors();
+        Mockito.doReturn(true).when(response).hasErrors();
+      } else {
+        Mockito.doReturn(Collections.emptyMap()).when(response).getInsertErrors();
+        Mockito.doReturn(false).when(response).hasErrors();
+      }
+      return response;
+    };
+
+    PowerMockito.doAnswer(insertAllResponseAnswer).when(bigQuery).insertAll(Mockito.any(InsertAllRequest.class));
+    PowerMockito.doAnswer((Answer<Table>) invocationOnMock -> Mockito.mock(Table.class))
+        .when(bigQuery).getTable(Mockito.any(TableId.class));
+
+    BigQueryTargetConfigBuilder configBuilder = new BigQueryTargetConfigBuilder();
+    configBuilder.datasetEL("sample");
+    configBuilder.tableNameEL("${record:attribute('table')}");
+    TargetRunner targetRunner = createAndRunner(configBuilder.build(), records);
+
+    Assert.assertEquals(1, targetRunner.getErrorRecords().size());
+    for (Record errorRecord : targetRunner.getErrorRecords()) {
+      String errorCode = errorRecord.getHeader().getErrorCode();
+      Assert.assertNotNull(errorCode);
+      Assert.assertEquals("table2", errorRecord.getHeader().getAttribute("table"));
+    }
+
   }
 }

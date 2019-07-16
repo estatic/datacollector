@@ -19,24 +19,12 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.Stage;
-import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.common.InterfaceAudience;
 import com.streamsets.pipeline.common.InterfaceStability;
-import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.PostProcessingOptions;
 import com.streamsets.pipeline.stage.lib.aws.AWSUtil;
 import com.streamsets.pipeline.stage.lib.aws.ProxyConfig;
 import com.streamsets.pipeline.stage.origin.lib.BasicConfig;
-import com.streamsets.pipeline.stage.origin.lib.DataParserFormatConfig;
-import com.streamsets.pipeline.stage.origin.s3.DataFormatChooserValues;
-import com.streamsets.pipeline.stage.origin.s3.Errors;
-import com.streamsets.pipeline.stage.origin.s3.Groups;
-import com.streamsets.pipeline.stage.origin.s3.S3ArchivingOption;
-import com.streamsets.pipeline.stage.origin.s3.S3ConnectionSourceConfig;
-import com.streamsets.pipeline.stage.origin.s3.S3ErrorConfig;
-import com.streamsets.pipeline.stage.origin.s3.S3FileConfig;
-import com.streamsets.pipeline.stage.origin.s3.S3PostProcessingConfig;
-import com.streamsets.pipeline.stage.origin.s3.S3SSEConfigBean;
 
 import java.util.List;
 
@@ -61,19 +49,6 @@ public class S3ConfigBean {
   @ConfigDefBean(groups = "ADVANCED")
   public ProxyConfig proxyConfig;
 
-  @ConfigDef(
-    required = true,
-    type = ConfigDef.Type.MODEL,
-    label = "Data Format",
-    displayPosition = 1,
-    group = "DATA_FORMAT"
-  )
-  @ValueChooserModel(DataFormatChooserValues.class)
-  public DataFormat dataFormat;
-
-  @ConfigDefBean(groups = {"S3"})
-  public DataParserFormatConfig dataFormatConfig;
-
   @ConfigDefBean(groups = {"ERROR_HANDLING"})
   public S3ErrorConfig errorConfig;
 
@@ -97,23 +72,20 @@ public class S3ConfigBean {
   )
   public boolean enableMetaData = false;
 
-  public void init(Stage.Context context, List<Stage.ConfigIssue> issues) {
-    dataFormatConfig.checkForInvalidAvroSchemaLookupMode(
-        dataFormat,
-        S3_DATA_FORMAT_CONFIG_PREFIX,
-        context,
-        issues
-    );
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.NUMBER,
+      defaultValue = "1",
+      label = "Number of Threads",
+      description = "Number of parallel threads to read data",
+      displayPosition = 60,
+      group = "ADVANCED",
+      min = 1
+  )
+  public int numberOfThreads = 1;
 
+  public void init(Stage.Context context, List<Stage.ConfigIssue> issues) {
     s3FileConfig.init(context, issues);
-    dataFormatConfig.init(
-        context,
-        dataFormat,
-        Groups.S3.name(),
-        S3_DATA_FORMAT_CONFIG_PREFIX,
-        s3FileConfig.overrunLimit,
-        issues
-    );
     basicConfig.init(context, Groups.S3.name(), BASIC_CONFIG_PREFIX, issues);
 
     //S3 source specific validation

@@ -31,8 +31,8 @@ public class JavaKeystoreCredentialStoreCli {
   }
 
   boolean doMain(String[] args) {
-    Cli.CliBuilder<Runnable> builder = Cli.<Runnable>builder("streamsets jks-cs")
-        .withDescription("StreamSets Data Collector Java Keystore Credentials Store CLI")
+    Cli.CliBuilder<Runnable> builder = Cli.<Runnable>builder("streamsets stagelib-cli jks-credentialstore")
+        .withDescription("StreamSets Data Collector Java Keystore Credential Store CLI")
         .withDefaultCommand(Help.class)
         .withCommands(
             Help.class,

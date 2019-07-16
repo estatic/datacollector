@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-httpcommonlib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector HTTP CommonLib</description>
   <name>StreamSets Data Collector HTTP CommonLib</name>
   <packaging>jar</packaging>
@@ -37,7 +37,7 @@
     <commons-io.version>2.4</commons-io.version>
     <xz.version>1.5</xz.version>
     <snappy.version>0.4</snappy.version>
-    <jetty.version>9.4.2.v20170220</jetty.version>
+    <jetty.version>9.4.12.v20180830</jetty.version>
     <tape.version>1.2.3</tape.version>
   </properties>
 

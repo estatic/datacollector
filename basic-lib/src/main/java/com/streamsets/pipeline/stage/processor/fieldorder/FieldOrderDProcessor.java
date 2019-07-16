@@ -19,8 +19,9 @@ import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.stage.processor.fieldorder.config.Groups;
 import com.streamsets.pipeline.stage.processor.fieldorder.config.OrderConfigBean;
 
@@ -29,7 +30,8 @@ import com.streamsets.pipeline.stage.processor.fieldorder.config.OrderConfigBean
   label = "Field Order",
   description = "Order MAP or LIST_MAP fields into LIST_MAP or LIST.",
   icon = "order.png",
-  onlineHelpRefUrl =  "index.html#Processors/FieldOrder.html#task_myf_wfv_vy"
+  flags = StageBehaviorFlags.PURE_FUNCTION,
+  onlineHelpRefUrl = "index.html?contextID=task_myf_wfv_vy"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

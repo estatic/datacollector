@@ -21,7 +21,8 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
+import com.streamsets.pipeline.lib.event.WholeFileProcessedEvent;
 
 @StageDef(
     version = 4,
@@ -31,7 +32,8 @@ import com.streamsets.pipeline.configurablestage.DTarget;
     privateClassLoader = true,
     upgrader = HdfsTargetUpgrader.class,
     producesEvents = true,
-    onlineHelpRefUrl = "index.html#Destinations/HadoopFS-destination.html#task_m2m_skm_zq"
+    eventDefs = {WholeFileProcessedEvent.class},
+    onlineHelpRefUrl ="index.html?contextID=task_m2m_skm_zq"
 )
 @ConfigGroups(Groups.class)
 @HideConfigs(value = {"hdfsTargetConfigBean.dataGeneratorFormatConfig.includeSchema"})

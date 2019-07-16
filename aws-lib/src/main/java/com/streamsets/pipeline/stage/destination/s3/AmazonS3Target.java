@@ -32,7 +32,7 @@ import com.streamsets.pipeline.api.base.OnRecordErrorException;
 import com.streamsets.pipeline.api.el.ELEval;
 import com.streamsets.pipeline.api.el.ELEvalException;
 import com.streamsets.pipeline.api.el.ELVars;
-import com.streamsets.pipeline.config.DataFormat;
+import com.streamsets.pipeline.api.service.dataformats.DataFormatGeneratorService;
 import com.streamsets.pipeline.lib.el.ELUtils;
 import com.streamsets.pipeline.lib.el.RecordEL;
 import com.streamsets.pipeline.lib.el.TimeEL;
@@ -106,33 +106,23 @@ public class AmazonS3Target extends BaseTarget {
     TimeNowEL.setTimeNowInContext(elVars, new Date());
 
     if (partitionTemplate.contains(EL_PREFIX)) {
-      ELUtils.validateExpression(
-          partitionEval,
-          elVars,
-          partitionTemplate,
+      ELUtils.validateExpression(partitionTemplate,
           getContext(),
           Groups.S3.getLabel(),
           S3TargetConfigBean.S3_TARGET_CONFIG_BEAN_PREFIX + PARTITION_TEMPLATE,
-          Errors.S3_03,
-          String.class,
-          issues
+          Errors.S3_03, issues
       );
     }
 
     if (timeDriverTemplate.contains(EL_PREFIX)) {
-      ELUtils.validateExpression(
-          timeDriverEval,
-          elVars,
-          timeDriverTemplate,
+      ELUtils.validateExpression(timeDriverTemplate,
           getContext(),
           Groups.S3.getLabel(),
           S3TargetConfigBean.S3_TARGET_CONFIG_BEAN_PREFIX + TIME_DRIVER_TEMPLATE,
-          Errors.S3_04,
-          Date.class,
-          issues
+          Errors.S3_04, issues
       );
     }
-    if (s3TargetConfigBean.dataFormat == DataFormat.WHOLE_FILE) {
+    if (getContext().getService(DataFormatGeneratorService.class).isWholeFileFormat()) {
       fileHelper = new WholeFileHelper(getContext(), s3TargetConfigBean, transferManager, issues);
     } else {
       fileHelper = new DefaultFileHelper(getContext(), s3TargetConfigBean, transferManager);

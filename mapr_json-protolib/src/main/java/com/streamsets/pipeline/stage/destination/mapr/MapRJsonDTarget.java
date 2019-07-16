@@ -20,16 +20,16 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 
 @StageDef(
     version = 1,
     label = "MapR DB JSON",
     description = "Writes to MapR DB JSON Document Database",
-    icon = "mapr.png",
+    icon = "mapr_db.png",
     privateClassLoader = true,
     upgrader = MapRJsonTargetUpgrader.class,
-    onlineHelpRefUrl = "docs/index.html#Destinations/MapRDBJSON.html#task_wq3_wkj_dy"
+    onlineHelpRefUrl ="index.html?contextID=task_wq3_wkj_dy"
 )
 
 @GenerateResourceBundle

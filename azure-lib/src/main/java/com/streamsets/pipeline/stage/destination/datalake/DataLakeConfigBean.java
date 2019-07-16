@@ -30,7 +30,7 @@ import com.streamsets.pipeline.stage.destination.lib.DataGeneratorFormatConfig;
 
 import java.util.List;
 
-
+@Deprecated
 public class DataLakeConfigBean {
   public static final String ADLS_CONFIG_BEAN_PREFIX = "dataLakeConfig.";
   public static final String ADLS_CONFIG_ACCOUNT_FQDN = ADLS_CONFIG_BEAN_PREFIX + "accountFQDN";
@@ -245,14 +245,14 @@ public class DataLakeConfigBean {
       type = ConfigDef.Type.MODEL,
       defaultValue = "JSON",
       label = "Data Format",
-      description = "Data format to use when writing records to Azure Data Lake Store",
+      description = "Data format to use when writing records to Azure Data Lake Storage",
       displayPosition = 200,
       group = "DATA_FORMAT"
   )
   @ValueChooserModel(DataFormatChooserValues.class)
   public DataFormat dataFormat;
 
-  @ConfigDefBean(groups = {"DATALAKE"})
+  @ConfigDefBean(groups = {"DATA_FORMAT"})
   public DataGeneratorFormatConfig dataFormatConfig = new DataGeneratorFormatConfig();
 
   public void init(Stage.Context context, List<Stage.ConfigIssue> issues) {

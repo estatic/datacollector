@@ -20,9 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.streamsets.pipeline.api.impl.Utils;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Paths;
@@ -31,16 +34,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
 
-public class Configuration {
+public class Configuration implements com.streamsets.pipeline.api.Configuration {
   private static File fileRefsBaseDir;
+
+  private static final String SENSITIVE_PROPERTIES = "sensitive.properties";
+  private static final String SENSITIVE_PROPERTIES_DEFAULT = ".*password.*";
+  static final String SENSITIVE_MASK = "-- MASKED --";
 
   // Only RuntimeModules should be calling this
   public static void setFileRefsBaseDir(File dir) {
     fileRefsBaseDir = dir;
   }
 
-  private abstract static class Ref {
+  public abstract static class Ref {
     private String unresolvedValue;
 
     protected Ref(String unresolvedValue) {
@@ -118,6 +126,21 @@ public class Configuration {
 
   }
 
+  static class ConfigurationException extends RuntimeException {
+
+    public ConfigurationException(String message) {
+      super(message);
+    }
+
+    public ConfigurationException(Throwable cause) {
+      super(cause);
+    }
+
+    public ConfigurationException(String message, Throwable cause) {
+      super(message, cause);
+    }
+
+  }
 
   public static class FileRef extends Ref {
     @Deprecated
@@ -167,7 +190,98 @@ public class Configuration {
         }
         return sb.toString();
       } catch (IOException ex) {
-        throw new RuntimeException(ex);
+        throw new ConfigurationException(ex);
+      }
+    }
+
+  }
+
+  private static final int EXECUTABLE_MAX_OUTPUT_SIZE = 10 * 1000; // 10KB
+
+  public static class ExecRef extends Ref {
+    @Deprecated
+    public static final String DELIMITER = null;
+    public static final String PREFIX = "${exec(";
+    public static final String SUFFIX = ")}";
+
+    public ExecRef(String unresolvedValue) {
+      super(unresolvedValue);
+      Preconditions.checkState(fileRefsBaseDir != null, "fileRefsBaseDir has not been set");
+    }
+
+    public static boolean isValueMyRef(String value) {
+      return isValueMyRef(PREFIX, SUFFIX, value);
+    }
+
+    @Override
+    public String getPrefix() {
+      return PREFIX;
+    }
+
+    @Override
+    public String getSuffix() {
+      return SUFFIX;
+    }
+
+    @Override
+    public String getDelimiter() {
+      return DELIMITER;
+    }
+
+    @Override
+    public String getValue() {
+      File script;
+      String configFileName = getUnresolvedValueWithoutDelimiter();
+      if (Paths.get(configFileName).isAbsolute()) {
+        script = new File(configFileName);
+      } else {
+        script = new File(fileRefsBaseDir, configFileName);
+      }
+      if (script.exists()) {
+        if (script.canExecute()) {
+          StringBuilder sb = new StringBuilder();
+          try {
+            Process p = new ProcessBuilder(script.getAbsolutePath()).start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+              int counter = 0;
+              int ch = reader.read();
+              while (ch > -1) {
+                sb.append((char) ch);
+                counter++;
+                if (counter > EXECUTABLE_MAX_OUTPUT_SIZE) {
+                  throw new ConfigurationException(Utils.format(
+                      "Executable '{}' output exceeded limit '{}' characters",
+                      script,
+                      EXECUTABLE_MAX_OUTPUT_SIZE
+                  ));
+                }
+                ch = reader.read();
+              }
+            }
+            try (InputStream is = p.getErrorStream()) {
+              while (is.read() > -1) {
+                ;
+              }
+            }
+            int exit = p.waitFor();
+            if (exit != 0) {
+              throw new ConfigurationException(Utils.format("Executable '{}' exit code '{}'", script, exit));
+            }
+          } catch (InterruptedException ex) {
+            throw new ConfigurationException(Utils.format("Executable '{}' interrupted: {}", script, ex), ex);
+          } catch (IOException ex) {
+            throw new ConfigurationException(Utils.format(
+                "Executable '{}' error reading script output: {}",
+                script,
+                ex
+            ), ex);
+          }
+          return sb.toString();
+        } else {
+          throw new ConfigurationException(Utils.format("Executable '{}' is not an executable", script));
+        }
+      } else {
+        throw new ConfigurationException(Utils.format("Executable '{}' not found", script));
       }
     }
 
@@ -206,12 +320,14 @@ public class Configuration {
     }
   }
 
-  private static Ref createRef(String value) {
+  public static Ref createRef(String value) {
     Ref ref;
     if (FileRef.isValueMyRef(value)) {
       ref = new FileRef(value);
     } else if (EnvRef.isValueMyRef(value)) {
       ref = new EnvRef(value);
+    } else if (ExecRef.isValueMyRef(value)) {
+      ref = new ExecRef(value);
     } else {
       ref = new StringRef(value);
     }
@@ -236,12 +352,38 @@ public class Configuration {
     return new Configuration(subSetMap);
   }
 
+  public Configuration maskSensitiveConfigs() {
+    Pattern sensitiveProperties = Pattern.compile(
+      get(SENSITIVE_PROPERTIES, SENSITIVE_PROPERTIES_DEFAULT),
+      Pattern.CASE_INSENSITIVE
+    );
+
+    Map<String, Ref> subSetMap = new LinkedHashMap<>();
+    for (Map.Entry<String, Ref> entry : map.entrySet()) {
+      String key = entry.getKey();
+      Ref value = new StringRef(
+        sensitiveProperties.matcher(key).matches() ? SENSITIVE_MASK : entry.getValue().getUnresolvedValue()
+      );
+
+      subSetMap.put(key, value);
+    }
+    return new Configuration(subSetMap);
+  }
+
   public Configuration getSubSetConfiguration(String namePrefix) {
+    return getSubSetConfiguration(namePrefix, false);
+  }
+
+  public Configuration getSubSetConfiguration(String namePrefix, boolean dropPrefix) {
     Preconditions.checkNotNull(namePrefix, "namePrefix cannot be null");
     Map<String, Ref> subSetMap = new LinkedHashMap<>();
     for (Map.Entry<String, Ref> entry : map.entrySet()) {
       if (entry.getKey().startsWith(namePrefix)) {
-        subSetMap.put(entry.getKey(), entry.getValue());
+        String key = entry.getKey();
+        if(dropPrefix) {
+          key = key.substring(namePrefix.length());
+        }
+        subSetMap.put(key, entry.getValue());
       }
     }
     return new Configuration(subSetMap);
@@ -267,7 +409,7 @@ public class Configuration {
 
   public void set(String name, String value) {
     Preconditions.checkNotNull(name, "name cannot be null");
-    Preconditions.checkNotNull(value, "value cannot be null, use unset");
+    Preconditions.checkNotNull(value, Utils.format("value cannot be null for key {}, use unset", name));
     map.put(name, createRef(value));
   }
 
@@ -293,21 +435,25 @@ public class Configuration {
     return map.containsKey(name) ? map.get(name).getValue() : null;
   }
 
+  @Override
   public String get(String name, String defaultValue) {
     String value = get(name);
     return (value != null) ? value : defaultValue;
   }
 
+  @Override
   public long get(String name, long defaultValue) {
     String value = get(name);
     return (value != null) ? Long.parseLong(value) : defaultValue;
   }
 
+  @Override
   public int get(String name, int defaultValue) {
     String value = get(name);
     return (value != null) ? Integer.parseInt(value) : defaultValue;
   }
 
+  @Override
   public boolean get(String name, boolean defaultValue) {
     String value = get(name);
     return (value != null) ? Boolean.parseBoolean(value) : defaultValue;
@@ -370,4 +516,18 @@ public class Configuration {
     return Utils.format("Configuration['{}']", map);
   }
 
+  /**
+   * Set multiple configs at once.
+   *
+   * If a value of given config is 'null', then this config key will be un-set.
+   */
+  public void set(Map<String, String> newConfiguration) {
+    for(Map.Entry<String, String> entry : newConfiguration.entrySet()) {
+      if(entry.getValue() == null) {
+        this.unset(entry.getKey());
+      } else {
+        this.set(entry.getKey(), entry.getValue());
+      }
+    }
+  }
 }

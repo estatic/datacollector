@@ -19,11 +19,16 @@ import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.BigQueryError;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.FieldValue;
+import com.google.cloud.bigquery.FieldValueList;
+import com.google.cloud.bigquery.Job;
 import com.google.cloud.bigquery.JobId;
-import com.google.cloud.bigquery.QueryRequest;
+import com.google.cloud.bigquery.JobInfo;
+import com.google.cloud.bigquery.JobStatus;
+import com.google.cloud.bigquery.LegacySQLTypeName;
+import com.google.cloud.bigquery.QueryJobConfiguration;
 import com.google.cloud.bigquery.QueryResponse;
-import com.google.cloud.bigquery.QueryResult;
 import com.google.cloud.bigquery.Schema;
+import com.google.cloud.bigquery.TableResult;
 import com.google.common.collect.ImmutableList;
 import com.streamsets.pipeline.api.ErrorCode;
 import com.streamsets.pipeline.api.StageException;
@@ -32,6 +37,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.text.SimpleDateFormat;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Arrays;
@@ -46,6 +52,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.runners.Parameterized.Parameter;
 import static org.junit.runners.Parameterized.Parameters;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -73,66 +80,70 @@ public class TestBigQueryDelegate {
 
   @Test
   public void runQuery() throws Exception {
-    QueryRequest queryRequest = QueryRequest.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
-        .setPageSize(1000L)
+    QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
         .setUseQueryCache(true)
         .setUseLegacySql(useLegacySql)
         .build();
 
-    QueryResponse mockQueryResponse = mock(QueryResponse.class);
+    TableResult mockQueryResponse = mock(TableResult.class);
+    Job mockJob = mock(Job.class);
+    JobStatus mockJobStatus = mock(JobStatus.class);
+
     // First pretend we haven't finished running the query, second time around its completed.
-    when(mockQueryResponse.jobCompleted()).thenReturn(false).thenReturn(true);
-    when(mockQueryResponse.getJobId()).thenReturn(jobId);
-    when(mockQueryResponse.hasErrors()).thenReturn(false);
+    when(mockJob.isDone()).thenReturn(false).thenReturn(true);
+    when(mockJob.getJobId()).thenReturn(jobId);
+    when(mockJobStatus.getError()).thenReturn(null);
+    when(mockJob.getStatus()).thenReturn(mockJobStatus);
 
-    when(mockBigquery.query(queryRequest)).thenReturn(mockQueryResponse);
-    when(mockBigquery.getQueryResults(jobId)).thenReturn(mockQueryResponse);
-
-    QueryResult mockQueryResult = mock(QueryResult.class);
-    when(mockQueryResponse.getResult()).thenReturn(mockQueryResult);
+    when(mockBigquery.create((JobInfo)any())).thenReturn(mockJob);
+    when(mockBigquery.cancel(jobId)).thenReturn(true);
+    when(mockJob.getQueryResults()).thenReturn(mockQueryResponse);
 
     BigQueryDelegate delegate = new BigQueryDelegate(mockBigquery, useLegacySql);
-    delegate.runQuery(queryRequest, 1000);
+    delegate.runQuery(queryConfig, 1000, 1000);
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void runQueryInvalidTimeout() throws Exception {
-    QueryRequest queryRequest = QueryRequest.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
-        .setPageSize(1000L)
+    QueryJobConfiguration queryRequest = QueryJobConfiguration.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
         .setUseQueryCache(true)
         .setUseLegacySql(useLegacySql)
         .build();
 
     BigQueryDelegate delegate = new BigQueryDelegate(mockBigquery, useLegacySql);
-    delegate.runQuery(queryRequest, 500);
+    delegate.runQuery(queryRequest, 500, 1000);
   }
 
   @Test(expected = StageException.class)
   public void runQueryTimeout() throws Exception {
-    QueryRequest queryRequest = QueryRequest.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
-        .setPageSize(1000L)
+    QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
         .setUseQueryCache(true)
         .setUseLegacySql(useLegacySql)
         .build();
 
-    QueryResponse mockQueryResponse = mock(QueryResponse.class);
-    when(mockQueryResponse.jobCompleted()).thenReturn(false);
-    when(mockQueryResponse.getJobId()).thenReturn(jobId);
-    when(mockQueryResponse.hasErrors()).thenReturn(false);
+    TableResult mockQueryResponse = mock(TableResult.class);
+    Job mockJob = mock(Job.class);
+    JobStatus mockJobStatus = mock(JobStatus.class);
 
-    when(mockBigquery.query(queryRequest)).thenReturn(mockQueryResponse);
+    // First pretend we haven't finished running the query, second time around its completed.
+    when(mockJob.isDone()).thenReturn(false).thenReturn(true);
+    when(mockJob.getJobId()).thenReturn(jobId);
+    when(mockJobStatus.getError()).thenReturn(null);
+    when(mockJob.getStatus()).thenReturn(mockJobStatus);
+
+    when(mockBigquery.create((JobInfo)any())).thenReturn(mockJob);
     when(mockBigquery.cancel(jobId)).thenReturn(true);
-    when(mockBigquery.getQueryResults(jobId)).thenReturn(mockQueryResponse);
+    when(mockJob.getQueryResults()).thenReturn(mockQueryResponse);
 
     BigQueryDelegate delegate = new BigQueryDelegate(
         mockBigquery,
         useLegacySql,
-        Clock.offset(Clock.systemDefaultZone(), Duration.ofSeconds(1))
+        Clock.offset(Clock.systemDefaultZone(), Duration.ofSeconds(2))
     );
 
     ErrorCode code = null;
     try {
-      delegate.runQuery(queryRequest, 1000);
+      delegate.runQuery(queryConfig, 1000, 1000);
     } catch (StageException e) {
       code = e.getErrorCode();
       throw e;
@@ -143,31 +154,35 @@ public class TestBigQueryDelegate {
 
   @Test(expected = StageException.class)
   public void runQueryHasErrors() throws Exception {
-    QueryRequest queryRequest = QueryRequest.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
-        .setPageSize(1000L)
+    QueryJobConfiguration queryRequest = QueryJobConfiguration.newBuilder("SELECT * FROM [sample:table] LIMIT 1000")
         .setUseQueryCache(true)
         .setUseLegacySql(useLegacySql)
         .build();
 
-    QueryResponse mockQueryResponse = mock(QueryResponse.class);
+    TableResult mockQueryResponse = mock(TableResult.class);
+    Job mockJob = mock(Job.class);
+    JobStatus mockJobStatus = mock(JobStatus.class);
+
     // First pretend we haven't finished running the query, second time around its completed.
-    when(mockQueryResponse.jobCompleted()).thenReturn(true);
-    when(mockQueryResponse.getJobId()).thenReturn(jobId);
-    when(mockQueryResponse.hasErrors()).thenReturn(true);
-    when(mockQueryResponse.getExecutionErrors()).thenReturn(ImmutableList.of(new BigQueryError(
+    when(mockJob.isDone()).thenReturn(true);
+    when(mockJob.getJobId()).thenReturn(jobId);
+
+    when(mockJob.getQueryResults()).thenReturn(mockQueryResponse);
+    when(mockJobStatus.getError()).thenReturn(new BigQueryError(
         "Some Error",
         "Some Location",
         "Some Error Message"
-    )));
+    ));
+    when(mockJob.getStatus()).thenReturn(mockJobStatus);
 
-    when(mockBigquery.query(queryRequest)).thenReturn(mockQueryResponse);
-    when(mockBigquery.getQueryResults(jobId)).thenReturn(mockQueryResponse);
+    when(mockBigquery.create((JobInfo)any())).thenReturn(mockJob);
+    when(mockBigquery.cancel(jobId)).thenReturn(true);
 
     BigQueryDelegate delegate = new BigQueryDelegate(mockBigquery, useLegacySql);
 
     ErrorCode code = null;
     try {
-      delegate.runQuery(queryRequest, 1000);
+      delegate.runQuery(queryRequest, 1000, 1000);
     } catch (StageException e) {
       code = e.getErrorCode();
       throw e;
@@ -193,9 +208,9 @@ public class TestBigQueryDelegate {
     assertEquals(2.0d, map.get("d").getValueAsDouble(), 1e-15);
     assertEquals(true, map.get("e").getValueAsBoolean());
     assertEquals(new Date(1351700038292L), map.get("f").getValueAsDatetime());
-    assertEquals(new Date(1351700038292L), map.get("g").getValueAsDatetime());
-    assertEquals(new Date(1351700038292L), map.get("h").getValueAsDatetime());
-    assertEquals(new Date(1351700038292L), map.get("i").getValueAsDate());
+    assertEquals((new SimpleDateFormat("HH:mm:ss.SSS")).parse("08:39:01.123"), map.get("g").getValueAsDatetime());
+    assertEquals((new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")).parse("2019-02-05T23:59:59.123"), map.get("h").getValueAsDatetime());
+    assertEquals((new SimpleDateFormat("yyy-MM-dd")).parse("2019-02-05"), map.get("i").getValueAsDate());
     Map<String, com.streamsets.pipeline.api.Field> j = map.get("j").getValueAsListMap();
     assertEquals("nested string", j.get("x").getValueAsString());
     Map<String, com.streamsets.pipeline.api.Field> y = j.get("y").getValueAsListMap();
@@ -203,26 +218,27 @@ public class TestBigQueryDelegate {
   }
 
   public static Schema createTestSchema() {
-    return Schema.newBuilder()
-        .addField(Field.of("a", Field.Type.string()))
-        .addField(Field.of("b", Field.Type.bytes()))
-        .addField(Field.newBuilder("c", Field.Type.integer()).setMode(Field.Mode.REPEATED).build())
-        .addField(Field.of("d", Field.Type.floatingPoint()))
-        .addField(Field.of("e", Field.Type.bool()))
-        .addField(Field.of("f", Field.Type.timestamp()))
-        .addField(Field.of("g", Field.Type.time()))
-        .addField(Field.of("h", Field.Type.datetime()))
-        .addField(Field.of("i", Field.Type.date()))
-        .addField(Field.of("j",
-            Field.Type.record(
-                Field.of("x", Field.Type.string()),
-                Field.of("y", Field.Type.record(Field.of("z", Field.Type.string())))
-            )
-        )).build();
+    return Schema.of(
+        Field.of("a", LegacySQLTypeName.STRING),
+        Field.of("b", LegacySQLTypeName.BYTES),
+        Field.newBuilder("c", LegacySQLTypeName.INTEGER).setMode(Field.Mode.REPEATED).build(),
+        Field.of("d", LegacySQLTypeName.FLOAT),
+        Field.of("e", LegacySQLTypeName.BOOLEAN),
+        Field.of("f", LegacySQLTypeName.TIMESTAMP),
+        Field.of("g", LegacySQLTypeName.TIME),
+        Field.of("h", LegacySQLTypeName.DATETIME),
+        Field.of("i", LegacySQLTypeName.DATE),
+        Field.of("j",
+            LegacySQLTypeName.RECORD,
+                Field.of("x", LegacySQLTypeName.STRING),
+                Field.of("y",
+                    LegacySQLTypeName.RECORD, Field.of("z", LegacySQLTypeName.STRING))
+                )
+    );
   }
 
-  public static List<FieldValue> createTestValues() {
-    return ImmutableList.<FieldValue>builder()
+  public static FieldValueList createTestValues() {
+    return FieldValueList.of(ImmutableList.<FieldValue>builder()
         .add(createFieldValue("a string"))
         .add(createFieldValue("bytes".getBytes()))
         .add(createFieldValue(
@@ -236,9 +252,9 @@ public class TestBigQueryDelegate {
         .add(createFieldValue(2.0d))
         .add(createFieldValue(true))
         .add(createFieldValue(1351700038292387L))
-        .add(createFieldValue(1351700038292387L))
-        .add(createFieldValue(1351700038292387L))
-        .add(createFieldValue(1351700038292387L))
+        .add(createFieldValue("08:39:01.123"))
+        .add(createFieldValue("2019-02-05T23:59:59.123"))
+        .add(createFieldValue("2019-02-05"))
         .add(createFieldValue(
             ImmutableList.of(
                 createFieldValue("nested string"),
@@ -246,7 +262,7 @@ public class TestBigQueryDelegate {
             ),
             FieldValue.Attribute.RECORD
         ))
-        .build();
+        .build());
   }
 
   @SuppressWarnings("unchecked")
@@ -258,9 +274,17 @@ public class TestBigQueryDelegate {
     if (value instanceof Long) {
       when(fieldValue.getTimestampValue()).thenReturn((long) value);
     }
+    if (value instanceof byte[]) {
+      when(fieldValue.getBytesValue()).thenReturn((byte[]) value);
+    }
+
+
+    if (! (attribute.equals(FieldValue.Attribute.RECORD) || attribute.equals(FieldValue.Attribute.REPEATED))) {
+      when(fieldValue.getStringValue()).thenReturn(value.toString());
+    }
 
     if (attribute.equals(FieldValue.Attribute.RECORD)) {
-      when(fieldValue.getRecordValue()).thenReturn((List<FieldValue>) value);
+      when(fieldValue.getRecordValue()).thenReturn(FieldValueList.of((List<FieldValue>) value));
     }
     if (attribute.equals(FieldValue.Attribute.REPEATED)) {
       when(fieldValue.getRepeatedValue()).thenReturn((List<FieldValue>) value);

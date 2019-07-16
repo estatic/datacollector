@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 StreamSets Inc.
+ * Copyright 2018 StreamSets Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import java.util.Properties;
 public class TestSparkStreamingBinding {
 
   @Test
-  public void testClusterKafka_0_9_AutoOffsetReset() {
+  public void testClusterKafka_0_10_AutoOffsetReset() {
     Assert.assertEquals("largest", SparkStreamingBinding.getConfigurableAutoOffsetResetIfNonEmpty("latest"));
     Assert.assertEquals("smallest", SparkStreamingBinding.getConfigurableAutoOffsetResetIfNonEmpty("earliest"));
   }
@@ -37,11 +37,11 @@ public class TestSparkStreamingBinding {
     String topic = "topic";
     String consumerGroup = "consumerGroup";
     properties.put(ClusterModeConstants.CLUSTER_PIPELINE_NAME, "p:n");
-    properties.put(AbstractStreamingBinding.SDC_ID, "uuid1234");
-    SparkStreamingBinding sparkStreamingBinding = new SparkStreamingBinding(properties);
+    properties.put(SparkStreamingBinding.SDC_ID, "uuid1234");
+    SparkStreamingBinding sparkStreamingBinding = new Kafka010SparkStreamingBinding(properties);
     CheckpointPath checkpointPath = sparkStreamingBinding.getCheckPointPath(topic, consumerGroup);
     StringBuilder expected = new StringBuilder();
-    expected.append(AbstractStreamingBinding.CHECKPOINT_BASE_DIR).
+    expected.append(SparkStreamingBinding.CHECKPOINT_BASE_DIR).
          append("/")
         .append("uuid1234")
         .append("/")
@@ -58,7 +58,7 @@ public class TestSparkStreamingBinding {
     Properties properties = new Properties();
     properties.put(Utils.KAFKA_CONFIG_BEAN_PREFIX + "topic", "topic");
     properties.put(Utils.KAFKA_CONFIG_BEAN_PREFIX + "consumerGroup", "consumerGroup");
-    SparkStreamingBinding sparkStreamingBinding = new SparkStreamingBinding(properties);
+    SparkStreamingBinding sparkStreamingBinding = new Kafka010SparkStreamingBinding(properties);
     Assert.assertEquals("topic", sparkStreamingBinding.getTopic());
     Assert.assertEquals("consumerGroup", sparkStreamingBinding.getConsumerGroup());
   }

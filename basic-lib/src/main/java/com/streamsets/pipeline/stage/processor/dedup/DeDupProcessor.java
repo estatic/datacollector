@@ -38,7 +38,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class DeDupProcessor extends RecordProcessor {
-  private static final long MEMORY_USAGE_PER_HASH = 85;
   private static final String CACHE_KEY = "cache";
   private static final Logger LOG = LoggerFactory.getLogger(DeDupProcessor.class);
 
@@ -83,18 +82,15 @@ public class DeDupProcessor extends RecordProcessor {
       issues.add(getContext().createConfigIssue(Groups.DE_DUP.name(), "compareFields", Errors.DEDUP_02));
     }
 
-    long estimatedMemory = MEMORY_USAGE_PER_HASH * recordCountWindow;
-    long maxPipelineMemoryBytes = getContext().getPipelineMaxMemory() * 1000 * 1000;
-    if (estimatedMemory > maxPipelineMemoryBytes) {
-      issues.add(getContext().createConfigIssue(Groups.DE_DUP.name(), "recordCountWindow", Errors.DEDUP_03,
-        recordCountWindow, estimatedMemory / (1000 * 1000), getContext().getPipelineMaxMemory()));
-        //MiB to bytes conversion, use  1000 * 1000 instead of 1024 * 1024
-    }
     if (issues.isEmpty()) {
       hasher = HashingUtil.getHasher(HashingUtil.HashType.MURMUR3_128);
 
-      funnel = (compareFields == SelectFields.ALL_FIELDS) ? HashingUtil.getRecordFunnel(Collections.EMPTY_LIST, false, true) :
-          HashingUtil.getRecordFunnel(fieldsToCompare, false, true);
+      funnel = (compareFields == SelectFields.ALL_FIELDS) ? HashingUtil.getRecordFunnel(
+          Collections.EMPTY_LIST,
+          false,
+          true,
+          '\u0000'
+      ) : HashingUtil.getRecordFunnel(fieldsToCompare, false, true, '\u0000');
 
       Map<String, Object> runnerSharedMap = getContext().getStageRunnerSharedMap();
       synchronized (runnerSharedMap) {

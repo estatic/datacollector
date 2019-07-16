@@ -15,12 +15,19 @@
  */
 package com.streamsets.datacollector.stagelibrary;
 
+import com.streamsets.datacollector.classpath.ClasspathValidatorResult;
 import com.streamsets.datacollector.config.CredentialStoreDefinition;
+import com.streamsets.datacollector.config.InterceptorDefinition;
 import com.streamsets.datacollector.config.LineagePublisherDefinition;
 import com.streamsets.datacollector.config.PipelineDefinition;
+import com.streamsets.datacollector.config.PipelineFragmentDefinition;
 import com.streamsets.datacollector.config.PipelineRulesDefinition;
 import com.streamsets.datacollector.config.ServiceDefinition;
 import com.streamsets.datacollector.config.StageDefinition;
+import com.streamsets.datacollector.config.StageLibraryDefinition;
+import com.streamsets.datacollector.config.StageLibraryDelegateDefinitition;
+import com.streamsets.datacollector.restapi.bean.EventDefinitionJson;
+import com.streamsets.datacollector.restapi.bean.RepositoryManifestJson;
 import com.streamsets.datacollector.task.Task;
 import com.streamsets.pipeline.api.impl.annotationsprocessor.PipelineAnnotationsProcessor;
 
@@ -29,36 +36,59 @@ import java.util.Map;
 
 public interface StageLibraryTask extends Task, ClassLoaderReleaser {
 
-  public static final String STAGES_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.STAGES_FILE;
+  String STAGES_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.STAGES_FILE;
 
-  public static final String EL_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.ELDEFS_FILE;
+  String EL_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.ELDEFS_FILE;
 
-  public static final String LINEAGE_PUBLISHERS_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.LINEAGE_PUBLISHERS_FILE;
+  String LINEAGE_PUBLISHERS_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.LINEAGE_PUBLISHERS_FILE;
 
-  public static final String CREDENTIAL_STORE_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.CREDENTIAL_STORE_FILE;
+  String CREDENTIAL_STORE_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.CREDENTIAL_STORE_FILE;
 
-  public static final String SERVICE_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.SERVICES_FILE;
+  String SERVICE_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.SERVICES_FILE;
 
-  public PipelineDefinition getPipeline();
+  String INTERCEPTOR_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.INTERCEPTORS_FILE;
 
-  public PipelineRulesDefinition getPipelineRules();
+  String DELEGATE_DEFINITION_RESOURCE = PipelineAnnotationsProcessor.DELEGATE_LIST_FILE;
 
-  public List<StageDefinition> getStages();
+  PipelineDefinition getPipeline();
 
-  public List<LineagePublisherDefinition> getLineagePublisherDefinitions();
+  PipelineFragmentDefinition getPipelineFragment();
 
-  public LineagePublisherDefinition getLineagePublisherDefinition(String library, String name);
+  PipelineRulesDefinition getPipelineRules();
 
-  public List<CredentialStoreDefinition> getCredentialStoreDefinitions();
+  List<StageDefinition> getStages();
 
-  public List<ServiceDefinition> getServiceDefinitions();
+  List<LineagePublisherDefinition> getLineagePublisherDefinitions();
 
-  public ServiceDefinition getServiceDefinition(Class serviceInterface, boolean forExecution);
+  LineagePublisherDefinition getLineagePublisherDefinition(String library, String name);
 
-  public StageDefinition getStage(String library, String name, boolean forExecution);
+  List<CredentialStoreDefinition> getCredentialStoreDefinitions();
 
-  public Map<String, String> getLibraryNameAliases();
+  List<ServiceDefinition> getServiceDefinitions();
 
-  public Map<String, String> getStageNameAliases();
+  ServiceDefinition getServiceDefinition(Class serviceInterface, boolean forExecution);
 
+  List<InterceptorDefinition> getInterceptorDefinitions();
+
+  StageDefinition getStage(String library, String name, boolean forExecution);
+
+  Map<String, String> getLibraryNameAliases();
+
+  Map<String, String> getStageNameAliases();
+
+  List<ClasspathValidatorResult> validateStageLibClasspath();
+
+  List<StageLibraryDelegateDefinitition> getStageLibraryDelegateDefinitions();
+
+  StageLibraryDelegateDefinitition getStageLibraryDelegateDefinition(String  stageLibrary, Class exportedInterface);
+
+  List<StageLibraryDefinition> getLoadedStageLibraries();
+
+  List<RepositoryManifestJson> getRepositoryManifestList();
+
+  boolean isMultipleOriginSupported();
+
+  List<String> getLegacyStageLibs();
+
+  Map<String, EventDefinitionJson> getEventDefinitions();
 }

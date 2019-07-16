@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 StreamSets Inc.
+ * Copyright 2018 StreamSets Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,10 @@
  */
 package com.streamsets.pipeline.spark;
 
-import kafka.common.TopicAndPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.rdd.RDD;
-import org.apache.spark.streaming.kafka.HasOffsetRanges;
-import org.apache.spark.streaming.kafka.OffsetRange;
+import org.apache.spark.streaming.kafka010.HasOffsetRanges;
+import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +54,12 @@ public final class KafkaOffsetManagerImpl implements KafkaOffsetManager {
   @Override
   @SuppressWarnings("unchecked")
   public void saveOffsets(RDD<?> rdd) {
-    SparkStreamingBinding.offsetHelper.saveOffsets(getOffsetToSave(((HasOffsetRanges) rdd).offsetRanges()));
+    Map<Integer, Long> offset = getOffsetToSave(((HasOffsetRanges) rdd).offsetRanges());
+    if (!offset.isEmpty()) {
+      SparkStreamingBinding.offsetHelper.saveOffsets(offset);
+    } else {
+      LOG.trace("Offset is empty");
+    }
   }
 
   private Map<Integer, Long> readOffsets(int numberOfPartitions) {
@@ -62,13 +67,12 @@ public final class KafkaOffsetManagerImpl implements KafkaOffsetManager {
   }
 
   @Override
-  public Map<TopicAndPartition, Long> getOffsetForDStream(String topic, int numberOfPartitions) {
-    Map<TopicAndPartition, Long> offsetForDStream = new HashMap<>();
+  public Map<TopicPartition, Long> getOffsetForDStream(String topic, int numberOfPartitions) {
+    Map<TopicPartition, Long> offsetForDStream = new HashMap<>();
     Map<Integer, Long> partitionsToOffset = readOffsets(numberOfPartitions);
     for (Map.Entry<Integer, Long> partitionAndOffset : partitionsToOffset.entrySet()) {
-      offsetForDStream.put(new TopicAndPartition(topic, partitionAndOffset.getKey()), partitionAndOffset.getValue());
+      offsetForDStream.put(new TopicPartition(topic, partitionAndOffset.getKey()), partitionAndOffset.getValue());
     }
     return offsetForDStream;
   }
-
 }

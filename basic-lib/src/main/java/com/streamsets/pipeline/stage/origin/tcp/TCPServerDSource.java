@@ -22,18 +22,18 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 import com.streamsets.pipeline.api.impl.Utils;
-import com.streamsets.pipeline.configurablestage.DPushSource;
 
 @StageDef(
-    version = 2,
+    version = 4,
     label = "TCP Server",
     description = "Listens for TCP messages on one or more ports",
     icon = "ethernet_multithreaded.png",
     execution = ExecutionMode.STANDALONE,
     recordsByRef = true,
     upgrader = TCPServerSourceUpgrader.class,
-    onlineHelpRefUrl = "index.html#Origins/TCPServer.html#task_w2y_yb1_4z"
+    onlineHelpRefUrl ="index.html?contextID=task_w2y_yb1_4z"
 )
 
 @ConfigGroups(Groups.class)

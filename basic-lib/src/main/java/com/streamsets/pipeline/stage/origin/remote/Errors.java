@@ -20,27 +20,15 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 
 @GenerateResourceBundle
 public enum Errors implements ErrorCode {
-  REMOTE_01("Given URI is invalid {}"),
-  REMOTE_02("Failed to process file '{}' at position '{}': {}"),
+  REMOTE_DOWNLOAD_01("Failed to process file '{}' at position '{}': {}"),
+  REMOTE_DOWNLOAD_02("Failed to read data from file '{}' at position '{}' due to: {}"),
+  REMOTE_DOWNLOAD_03("Failed to read data due to: {}"),
 
-  REMOTE_03("Object in file '{}' at offset '{}' exceeds maximum length"),
-  REMOTE_04("Failed to read data from file '{}' at position '{}' due to: {}"),
-  REMOTE_05("Failed to read data due to: {}"),
-
-  REMOTE_06("known_hosts file: {} does not exist or is not accessible"),
-  REMOTE_07("Strict Host Checking is enabled and known_hosts file not specified"),
-  REMOTE_08("Unable to download files from remote host: {} with given credentials. " +
-      "Please verify if the host is reachable, and the credentials are valid."),
-
-  REMOTE_09("Poll Interval must be positive"),
-  REMOTE_10("Private Key file: {} does not exist or is not accessible"),
-  REMOTE_11("Private Key authentication is supported only with SFTP"),
-  REMOTE_12("Strict Host Checking is supported only with SFTP"),
-  REMOTE_13("File Pattern cannot be empty"),
-  REMOTE_14("Invalid GLOB file pattern '{}': {}"),
-  REMOTE_15("URI: '{}' is invalid. Must begin with 'ftp://' or 'sftp://'"),
-  REMOTE_16("Initial file '{}' is invalid: {}"),
-  REMOTE_17("Can't resolve credential: {}"),
+  REMOTE_DOWNLOAD_04("File Pattern cannot be empty"),
+  REMOTE_DOWNLOAD_05("Invalid {} file pattern '{}': {}"),
+  REMOTE_DOWNLOAD_06("Initial file '{}' is invalid: {}"),
+  REMOTE_DOWNLOAD_07("Archive directory cannot be empty"),
+  REMOTE_DOWNLOAD_08("Problem setting archive directory: {}"),
   ;
 
   private final String msg;

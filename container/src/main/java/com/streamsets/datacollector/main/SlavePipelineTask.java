@@ -15,6 +15,8 @@
  */
 package com.streamsets.datacollector.main;
 
+import com.streamsets.datacollector.antennadoctor.AntennaDoctor;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
 import com.streamsets.datacollector.bundles.SupportBundleManager;
 import com.streamsets.datacollector.credential.CredentialStoresTask;
 import com.streamsets.datacollector.event.handler.EventHandlerTask;
@@ -23,6 +25,7 @@ import com.streamsets.datacollector.http.SlaveWebServerTask;
 import com.streamsets.datacollector.lineage.LineagePublisherTask;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
 import com.streamsets.datacollector.store.PipelineStoreTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 
 import javax.inject.Inject;
 
@@ -37,7 +40,10 @@ public class SlavePipelineTask extends PipelineTask {
     EventHandlerTask eventHandlerTask,
     LineagePublisherTask lineagePublisherTask,
     SupportBundleManager supportBundleManager,
-    CredentialStoresTask credentialStoresTask
+    BlobStoreTask blobStoreTask,
+    CredentialStoresTask credentialStoresTask,
+    StatsCollector statsCollector,
+    AntennaDoctor antennaDoctor
   ) {
     super(
       library,
@@ -47,7 +53,10 @@ public class SlavePipelineTask extends PipelineTask {
       eventHandlerTask,
       lineagePublisherTask,
       supportBundleManager,
-      credentialStoresTask
+      blobStoreTask,
+      credentialStoresTask,
+      statsCollector,
+      antennaDoctor
     );
   }
 }

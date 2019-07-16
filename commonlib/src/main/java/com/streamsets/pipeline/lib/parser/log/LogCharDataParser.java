@@ -16,8 +16,8 @@
 package com.streamsets.pipeline.lib.parser.log;
 
 import com.streamsets.pipeline.api.Field;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.api.ext.io.OverrunReader;
 import com.streamsets.pipeline.lib.parser.AbstractDataParser;
@@ -38,8 +38,9 @@ public abstract class LogCharDataParser extends AbstractDataParser {
 
   static final String TEXT_FIELD_NAME = "originalLine";
   static final String TRUNCATED_FIELD_NAME = "truncated";
+  static final String PARSED_FIELD_NAME = "parsedLine";
 
-  private final Stage.Context context;
+  private final ProtoConfigurableEntity.Context context;
   private final String readerId;
   private final OverrunReader reader;
   private final int maxObjectLen;
@@ -53,15 +54,16 @@ public abstract class LogCharDataParser extends AbstractDataParser {
   private final GenericObjectPool<StringBuilder> currentLineBuilderPool;
   private final GenericObjectPool<StringBuilder> previousLineBuilderPool;
 
-  public LogCharDataParser(Stage.Context context,
-                           String readerId,
-                           OverrunReader reader,
-                           long readerOffset,
-                           int maxObjectLen,
-                           boolean retainOriginalText,
-                           int maxStackTraceLines,
-                           GenericObjectPool<StringBuilder> currentLineBuilderPool,
-                           GenericObjectPool<StringBuilder> previousLineBuilderPool
+  public LogCharDataParser(
+      ProtoConfigurableEntity.Context context,
+      String readerId,
+      OverrunReader reader,
+      long readerOffset,
+      int maxObjectLen,
+      boolean retainOriginalText,
+      int maxStackTraceLines,
+      GenericObjectPool<StringBuilder> currentLineBuilderPool,
+      GenericObjectPool<StringBuilder> previousLineBuilderPool
   ) throws IOException {
     this.context = context;
     this.readerId = readerId;
@@ -155,7 +157,7 @@ public abstract class LogCharDataParser extends AbstractDataParser {
     int read = readAhead(fieldsFromLogLine, stackTrace);
 
     //Use the data from the read line if there is no saved data from the previous round.
-    if(record == null && !fieldsFromLogLine.isEmpty()) {
+    if(record == null) {
       record = context.createRecord(readerId + "::" + currentOffset);
       //create field for the record
       Map<String, Field> map = new HashMap<>();
@@ -165,7 +167,14 @@ public abstract class LogCharDataParser extends AbstractDataParser {
       if (isTruncated(read)) {
         map.put(TRUNCATED_FIELD_NAME, Field.create(true));
       }
-      map.putAll(fieldsFromLogLine);
+
+      // If parsed line returned and empty map this means the line was already parsed before trying to parse it
+      if (fieldsFromLogLine.isEmpty()) {
+        map.put(PARSED_FIELD_NAME, Field.create(currentLine.toString()));
+      } else {
+        map.putAll(fieldsFromLogLine);
+      }
+
       record.set(Field.create(map));
       //Since there was no previously saved line, the current offset must be updated to the current reader position
       currentOffset = reader.getPos();

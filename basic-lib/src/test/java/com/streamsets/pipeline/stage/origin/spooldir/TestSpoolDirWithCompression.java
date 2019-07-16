@@ -17,7 +17,6 @@ package com.streamsets.pipeline.stage.origin.spooldir;
 
 import com.google.common.io.Resources;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.config.Compression;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.OnParseError;
@@ -25,6 +24,7 @@ import com.streamsets.pipeline.config.PostProcessingOptions;
 import com.streamsets.pipeline.lib.dirspooler.PathMatcherMode;
 import com.streamsets.pipeline.sdk.DataCollectorServicesUtils;
 import com.streamsets.pipeline.sdk.PushSourceRunner;
+import com.streamsets.pipeline.lib.dirspooler.SpoolDirConfigBean;
 import org.apache.commons.compress.compressors.CompressorException;
 import org.apache.commons.compress.compressors.CompressorOutputStream;
 import org.apache.commons.compress.compressors.CompressorStreamFactory;
@@ -111,6 +111,7 @@ public class TestSpoolDirWithCompression {
 
       TestOffsetUtil.compare("logArchive2.zip::-1", runner.getOffsets());
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -141,6 +142,7 @@ public class TestSpoolDirWithCompression {
       Assert.assertEquals(37044, records.size());
       TestOffsetUtil.compare("logArchive2.tar.gz::-1", runner.getOffsets());
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -171,6 +173,7 @@ public class TestSpoolDirWithCompression {
       Assert.assertEquals(48000, records.size());
       TestOffsetUtil.compare("testAvro2.tar.gz::-1", runner.getOffsets());
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }
@@ -201,6 +204,7 @@ public class TestSpoolDirWithCompression {
       Assert.assertEquals(4, records.size());
       TestOffsetUtil.compare("testFile2.bz2::-1", runner.getOffsets());
     } finally {
+      source.destroy();
       runner.runDestroy();
     }
   }

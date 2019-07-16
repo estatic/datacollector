@@ -21,7 +21,7 @@ import com.streamsets.pipeline.api.Executor;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.PipelineLifecycleStage;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DExecutor;
+import com.streamsets.pipeline.api.base.configurablestage.DExecutor;
 import com.streamsets.pipeline.stage.executor.shell.config.ShellConfig;
 
 @StageDef(
@@ -29,7 +29,7 @@ import com.streamsets.pipeline.stage.executor.shell.config.ShellConfig;
     label = "Shell",
     description = "Executor allowing execution of a custom shell script.",
     icon = "shell.png",
-    onlineHelpRefUrl = "index.html#Executors/Shell.html#task_kl1_kfy_pz"
+    onlineHelpRefUrl ="index.html?contextID=task_kl1_kfy_pz"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

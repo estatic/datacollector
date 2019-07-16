@@ -36,6 +36,18 @@ public class TCPServerSourceUpgrader implements StageUpgrader {
     switch (fromVersion) {
       case 1:
         upgradeV1ToV2(configs);
+        if (toVersion == 2) {
+          break;
+        }
+        // fall through
+      case 2:
+        upgradeV2ToV3(configs);
+        if (toVersion == 3) {
+          break;
+        }
+        // fall through
+      case 3:
+        upgradeV3ToV4(configs);
         break;
       default:
         throw new IllegalStateException(Utils.format("Unexpected fromVersion {}", fromVersion));
@@ -46,6 +58,17 @@ public class TCPServerSourceUpgrader implements StageUpgrader {
 
   private void upgradeV1ToV2(List<Config> configs) {
     configs.add(new Config("conf.lengthFieldCharset", Charsets.UTF_8.name()));
+  }
+
+  private void upgradeV2ToV3(List<Config> configs) {
+    configs.add(new Config("conf.readTimeout", 300));
+  }
+
+  private void upgradeV3ToV4(List<Config> configs) {
+    if (configs.removeIf(config -> "conf.readTimeout".equals(config.getName()) &&
+        ((int) config.getValue() <= 0 || (int) config.getValue() > 3600))) {
+      configs.add(new Config("conf.readTimeout", 3600));
+    }
   }
 
 }

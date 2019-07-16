@@ -21,11 +21,12 @@ import com.streamsets.pipeline.api.ConfigDef.Type;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.config.OnStagePreConditionFailure;
 import com.streamsets.pipeline.config.OnStagePreConditionFailureChooserValues;
-import com.streamsets.pipeline.configurablestage.DProcessor;
 
 import java.util.List;
 
@@ -34,7 +35,8 @@ import java.util.List;
     label="Field Merger",
     description = "Merge fields of like types",
     icon="merge.png",
-    onlineHelpRefUrl = "index.html#Processors/FieldMerger.html#task_ghx_5vl_gt"
+    flags = StageBehaviorFlags.PURE_FUNCTION,
+    onlineHelpRefUrl ="index.html?contextID=task_ghx_5vl_gt"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

@@ -27,7 +27,6 @@ import com.streamsets.pipeline.api.el.ELEvalException;
 import com.streamsets.pipeline.api.el.ELVars;
 import com.streamsets.pipeline.lib.el.ELUtils;
 import com.streamsets.pipeline.lib.el.RecordEL;
-import com.streamsets.pipeline.lib.el.StringEL;
 import com.streamsets.pipeline.lib.el.TimeEL;
 import com.streamsets.pipeline.lib.el.TimeNowEL;
 import com.streamsets.pipeline.stage.lib.hive.Errors;
@@ -75,7 +74,7 @@ public class HMSTargetConfigBean {
       group = "ADVANCED",
       defaultValue = ".schemas",
       evaluation = ConfigDef.Evaluation.EXPLICIT,
-      elDefs = {RecordEL.class, StringEL.class, TimeEL.class},
+      elDefs = {RecordEL.class, TimeEL.class},
       dependsOn = "storedAsAvro",
       triggeredByValue = "false"
   )
@@ -183,26 +182,16 @@ public class HMSTargetConfigBean {
         String attributeNameExpression = entry.getKey();
         String attributeValueExpression = entry.getValue();
 
-        ELUtils.validateExpression(
-                headerAttributeConfigsEL,
-                context.createELVars(),
-                attributeNameExpression,
+        ELUtils.validateExpression(attributeNameExpression,
                 context,
                 Groups.ADVANCED.getLabel(),
                 "headerAttributeConfigs",
-                Errors.HIVE_39,
-                Object.class,
-                issues);
-        ELUtils.validateExpression(
-                headerAttributeConfigsEL,
-                context.createELVars(),
-                attributeValueExpression,
+                Errors.HIVE_39, issues);
+        ELUtils.validateExpression(attributeValueExpression,
                 context,
                 Groups.ADVANCED.getLabel(),
                 "headerAttributeConfigs",
-                Errors.HIVE_39,
-                Object.class,
-                issues);
+                Errors.HIVE_39, issues);
       }
     } else {
       headersEmpty = true;

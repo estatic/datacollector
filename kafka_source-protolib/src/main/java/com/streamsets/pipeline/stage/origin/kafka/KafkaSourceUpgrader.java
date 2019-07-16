@@ -21,9 +21,11 @@ import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.StageUpgrader;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.config.upgrade.DataFormatUpgradeHelper;
+import com.streamsets.pipeline.lib.kafka.KafkaAutoOffsetReset;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class KafkaSourceUpgrader implements StageUpgrader {
 
@@ -58,6 +60,18 @@ public class KafkaSourceUpgrader implements StageUpgrader {
         // fall through
       case 4:
         upgradeV4ToV5(configs);
+        if (toVersion == 5) {
+          break;
+        }
+        // fall through
+      case 5:
+        upgradeV5ToV6(configs);
+        if (toVersion == 6) {
+          break;
+        }
+        // fall through
+      case 6:
+        upgradeV6ToV7(configs);
         break;
       default:
         throw new IllegalStateException(Utils.format("Unexpected fromVersion {}", fromVersion));
@@ -140,5 +154,36 @@ public class KafkaSourceUpgrader implements StageUpgrader {
 
     DataFormatUpgradeHelper.ensureAvroSchemaExists(configs, joiner.join(CONF, DATA_FORMAT_CONFIG));
     DataFormatUpgradeHelper.upgradeAvroParserWithSchemaRegistrySupport(configs);
+  }
+
+
+  private static void upgradeV5ToV6(List<Config> configs) {
+    configs.add(new Config(joiner.join(CONF, "timestampsEnabled"), false));
+  }
+
+  private static void upgradeV6ToV7(List<Config> configs) {
+    String autoOffsetReset = "null";
+    for (Config config : configs) {
+      if ("kafkaOptions".equals(config.getName())) {
+        Map<String, String> kafkaOptions = (Map<String, String>) config.getValue();
+        autoOffsetReset = kafkaOptions.remove("auto.offset.reset");
+      }
+    }
+
+    switch (autoOffsetReset) {
+      case "earliest":
+        configs.add(new Config(joiner.join(CONF, "kafkaAutoOffsetReset"), KafkaAutoOffsetReset.EARLIEST));
+        break;
+      case "latest":
+        configs.add(new Config(joiner.join(CONF, "kafkaAutoOffsetReset"), KafkaAutoOffsetReset.LATEST));
+        break;
+      case "none":
+        configs.add(new Config(joiner.join(CONF, "kafkaAutoOffsetReset"), KafkaAutoOffsetReset.NONE));
+        break;
+      default:
+        configs.add(new Config(joiner.join(CONF, "kafkaAutoOffsetReset"), KafkaAutoOffsetReset.EARLIEST));
+    }
+
+    configs.add(new Config(joiner.join(CONF, "timestampToSearchOffsets"), 0));
   }
 }

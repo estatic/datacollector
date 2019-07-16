@@ -12,14 +12,15 @@
       },
       "admin": {
         "configuration": "Configuration",
-        "enableDPM": "Enable SCH",
-        "disableDPM": "Disable SCH",
+        "enableDPM": "Enable Control Hub",
+        "disableDPM": "Disable Control Hub",
         "jvmMetrics": "SDC Metrics",
         "logs": "Logs",
         "main": "Administration",
         "resetLocalStorage": "Reset Browser Local Storage",
         "restart": "Restart",
         "shutdown": "Shutdown",
+        "statsOptIn": "Stat collection Opt In/Out",
         "usersAndGroups": "Users & Groups"
       },
       "clusterManager": "Cluster Manager",
@@ -53,6 +54,7 @@
       "architecture": "Architecture",
       "autoArrange": "Auto Arrange",
       "batchNumber": "Batch Number",
+      "betaStageTooltip": "This is a technology preview stage, do not use in production",
       "cancel": "Cancel",
       "changeRule": "Change Rule",
       "captured": "Captured",
@@ -78,6 +80,7 @@
       "edit": "Edit",
       "email": "Email Address",
       "emailPlaceholder": "Enter Email Address",
+      "enable": "Enable",
       "error": "Error",
       "errorCode": "Error Code",
       "errorMessage": "Error Message",
@@ -88,7 +91,8 @@
       "execute": "Execute",
       "executor": "Executor",
       "export": "Export",
-      "exportWithLibraryDefinitions": "Export for SCH",
+      "exportWithPlainTextCredentials": "Export with Plain Text Credentials",
+      "exportWithLibraryDefinitions": "Export for Control Hub",
       "fieldName": "Field Name",
       "fieldName.placeholder": "New Field Name",
       "fieldHeader": "Field Header",
@@ -105,6 +109,7 @@
       "hideNameColumn": "Hide Pipeline ID Column",
       "hideValue": "Hide Value",
       "histogram": "Records Per Batch Histogram (5 minutes decay)",
+      "httpUrl": "HTTP URL",
       "id": "ID",
       "import": "Import",
       "importing": "Importing...",
@@ -118,6 +123,7 @@
       "lastModifiedOn": "Last Modified On",
       "lastStatusChange": "Timestamp",
       "lastUpdated": "Last Updated",
+      "later": "Later",
       "library": "Library",
       "listView": "List View",
       "loading": "Loading",
@@ -142,6 +148,8 @@
       "processor": "Processor",
       "processors": "Processors",
       "publish": "Publish Pipeline",
+      "publishToEdge": "Publish Pipeline to Data Collector Edge",
+      "publishPipelinesToEdge": "Publish Pipelines to Data Collector Edge",
       "record": "Record",
       "recordHeader": "Record Header",
       "records": "Records",
@@ -203,7 +211,7 @@
         "deleteOriginConfirmationMsg": "Deleting origin stage resets the current origin offset. Are you sure you want to delete?",
         "graphErrorBadgeLabel": "Total Error records + Stage errors.",
         "isDPMPipelineDirty": "Pipeline has been updated since it was last published",
-        "noParametersDefinedMsg": "No parameters are defined for this pipeline. To pass parameter values to the pipeline at runtime, first define parameters in the Parameters tab for the pipeline. For more information, see <a href=\"https://streamsets.com/documentation/datacollector/latest/help/index.html#Pipeline_Configuration/PipelineConfiguration_title.html#concept_rjh_ntz_qr\" target=\"_blank\">Using Runtime Parameters.</a>",
+        "noParametersDefinedMsg": "No parameters are defined for this pipeline. To pass parameter values to the pipeline at runtime, first define parameters in the Parameters tab for the pipeline. For more information, see <a href=\"https://streamsets.com/documentation/datacollector/latest/help/index.html#datacollector/UserGuide/Pipeline_Configuration/PipelineConfiguration_title.html#concept_rjh_ntz_qr\" target=\"_blank\">Using Runtime Parameters.</a>",
         "noPipelineExists": "No Pipeline found with name '{{name}}'",
         "noDataAvailable": "No Data Available.",
         "originExists": "Origin already exists.",
@@ -225,26 +233,31 @@
   "home": {
     "ago": "ago",
     "createDPMUsers": {
-      "title": "Create SCH Groups & Users"
+      "title": "Create Control Hub Groups & Users"
     },
     "enableDPM": {
-      "alreadyEnabledMsg": "SCH is already enabled",
+      "alreadyEnabledMsg": "Control Hub is already enabled",
       "contactMessage": "Contact <a href=\"mailto:enteprise@streamsets.com\" target=\"_top\">enteprise@streamsets.com</a> for a StreamSets Enterprise account",
-      "dpmBaseURL": "SCH Base URL",
-      "dpmBaseURLPlaceholder": "Enter SCH Base URL",
-      "dpmUserName": "SCH User ID",
-      "dpmUserNamePlaceholder": "Enter SCH User ID",
-      "dpmUserPassword": "SCH User Password",
-      "dpmUserPasswordPlaceholder": "Enter SCH User Password",
-      "headerLabel": "Enable SCH",
+      "dpmBaseURL": "Control Hub Base URL",
+      "dpmBaseURLPlaceholder": "Enter Control Hub Base URL",
+      "dpmUserName": "Control Hub User ID",
+      "dpmUserNamePlaceholder": "Enter Control Hub User ID",
+      "dpmUserPassword": "Control Hub User Password",
+      "dpmUserPasswordPlaceholder": "Enter Control Hub User Password",
+      "headerLabel": "Enable StreamSets Control Hub",
       "installStatistics": "Install Statistics Library",
-      "installStatsLibraryMessage": "Important: SCH requires that the statistics stage library be installed on each registered Data Collector. SCH requires the library to run system pipelines on the Data Collector.",
-      "isEnableInProgress": "Enabling SCH...",
-      "isManagedByClouderaManager": "For an installation with Cloudera Manager, you must use the Cloudera Manager to enable Data Collector to work with SCH. <a href=\"https://streamsets.com/documentation/datacollector/latest/help//index.html#SCH/RegisterSDCwithDPM.html\" target=\"_blank\">Learn More...</a>",
-      "restartMessage": "Restart the Data Collector for the changes to take effect. If you started the Data Collector manually, click Restart Data Collector. If you started the Data Collector as a service, click Cancel and then run the following command: service sdc restart",
+      "installStatsLibraryMessage": "Important: Control Hub requires that the statistics stage library be installed on each registered Data Collector. Control Hub requires the library to run system pipelines on the Data Collector.",
+      "isEnableInProgress": "Enabling Control Hub...",
+      "isManagedByClouderaManager": "For an installation with Cloudera Manager, you must use the Cloudera Manager to enable Data Collector to work with Control Hub. <a href=\"https://streamsets.com/documentation/datacollector/latest/help/#datacollector/UserGuide/DPM/RegisterSDCwithDPM.html\" target=\"_blank\">Learn More...</a>",
+      "restartMessage": "Restart the Data Collector for the changes to take effect.",
       "successMessage": "Successfully generated the authentication token and updated the files 'etc/application-token.txt' and 'etc/dpm.properties'."
     },
     "createPipeline": "Create New Pipeline",
+    "statsOptIn": {
+      "headerLabel": "Usage Statistics",
+      "headerTitle": "Improve Data Collector with Usage Statistics",
+      "optInLabel": "Improve Data Collector by sending anonymized usage data."
+    },
     "commitPipelineHistory": {
       "committer": "Committed By",
       "commitTime": "Committed On",
@@ -259,11 +272,11 @@
       "retryingInSeconds": "Retrying in {{retryCountDown}} seconds..."
     },
     "disableDPM": {
-      "headerLabel": "Disable SCH",
-      "isDisableInProgress": "Disabling SCH...",
-      "isManagedByClouderaManager": "For an installation with Cloudera Manager, you must use the SCH console to disable SCH.",
-      "confirmationMessage": "Are you sure you want to disable SCH?",
-      "successMessage": "Successfully disabled SCH by updating file'etc/dpm.properties'. Restart the Data Collector for the changes to take effect. If you started the Data Collector manually, click Restart Data Collector. If you started the Data Collector as a service, click Cancel and then run the following command: sdc service restart"
+      "headerLabel": "Disable Control Hub",
+      "isDisableInProgress": "Disabling Control Hub...",
+      "isManagedByClouderaManager": "For an installation with Cloudera Manager, you must use the Control Hub console to disable Control Hub.",
+      "confirmationMessage": "Are you sure you want to disable Control Hub?",
+      "successMessage": "Successfully disabled Control Hub by updating file'etc/dpm.properties'. Restart the Data Collector for the changes to take effect."
     },
     "downloadRemotePipeline": "Download Published Pipeline",
     "downloadRemote": {
@@ -275,8 +288,12 @@
       "pipelineId": "Pipeline ID",
       "version": "Version"
     },
+    "downloadEdgePipelines": {
+      "edgeHttpUrl": "Data Collector Edge URL",
+      "title": "Download Edge Pipelines"
+    },
     "dpmInfo": {
-      "enableDPM": "Enable SCH",
+      "enableDPM": "Enable Control Hub",
       "headerLabel": "StreamSets Control Hub",
       "learnMore": "Learn More"
     },
@@ -284,6 +301,7 @@
     "getStarted": "Get Started",
     "importPipeline": "Import Pipeline",
     "importPipelinesFromArchive": "Import Pipelines From Archive",
+    "importPipelineFromHttpUrl": "Import Pipeline from HTTP URL",
     "invalidStatus": "Pipeline is invalid",
     "header" : {
       "addLabels": "Add Labels",
@@ -297,6 +315,7 @@
       "closePreview": "Close Preview",
       "closeSnapshot": "Close Snapshot",
       "clusterManagerNode": "Cluster Manager:",
+      "collapseAllFragments": "Collapse All Fragments",
       "comfortable": "Comfortable",
       "commitHistory": "Commit History",
       "compact": "Compact",
@@ -309,6 +328,8 @@
       "displayDensity": "Display density:",
       "downloadExecutable": "Download Edge Executable",
       "emptyAlerts": "It’s all good! You don’t have any new alerts.",
+      "errorImportConfirmationMessage": "No Pipeline configurations imported.",
+      "expandAllFragments": "Expand All Fragments",
       "finishingPipeline": "Finishing Pipeline...",
       "forceStop": "Force Stop",
       "forceStopConfirmationTitle": "Force Stop Pipeline Confirmation",
@@ -331,7 +352,7 @@
       "processors": "Processors",
       "refreshPreview": "Refresh Preview",
       "refreshSnapshot": "Refresh Snapshot",
-      "remoteOptions": "SCH Options",
+      "remoteOptions": "Control Hub Options",
       "retryPipeline": "Retrying to start Pipeline in ",
       "revertChanges": "Revert Changes",
       "selectorProcessors": "Selectors",
@@ -342,6 +363,7 @@
       "sources": "Origins",
       "stageLibrary": "Stage Library",
       "start": "Start",
+      "startPipeline": "Start Pipeline",
       "startingPipeline": "Starting Pipeline...",
       "startWithParametersTitle": "Start With Parameters",
       "stop": "Stop",
@@ -360,7 +382,7 @@
     },
     "getStartedWithTutorials": "Try a Tutorial",
     "graphPane": {
-      "errorStackTrace": "Error Stack Trace",
+      "errorStackTrace": "Error Details",
       "dontShowAgain": "Don't show again.",
       "originMissing": "Origin missing",
       "selectExecutor": "Select Executor to connect...",
@@ -368,13 +390,14 @@
       "selectProcessorToAddInBetween": "Select Processor to add in between the selected stream...",
       "selectTarget": "Select Destination to connect...",
       "startErrorMessage": "Pipeline definition '{{name}}' is running.",
-      "viewStackTrace": "View Stack Trace"
+      "viewStackTrace": "View Details"
     },
     "detailPane": {
       "alerts": "Alerts",
       "batchesPerSecond": "( batches / sec )",
       "emailIDs": "Email IDs",
       "errors": "Errors",
+      "eventsInfo": "Generated Events",
       "badRecords": "Error Records",
       "badRecordsTab": {
         "mostRecentBadRecords": "Most Recent Error Records",
@@ -428,6 +451,7 @@
         "notMatchedSampledRecordsTooltip": "Show only Sampled Records which didn't matched the condition"
       },
       "definitionsJSONData": "Definitions",
+      "externalLibraries": "External Libraries",
       "general": "General",
       "history": "History",
       "historyTab": {
@@ -457,6 +481,7 @@
       "monitoringJSONData": "Pipeline Monitoring",
       "notifications": "Notifications",
       "noStageDefinitionFound": "Could not find stage definition for stage name: {{stageName}}, library: {{library}}",
+      "legacyStageLibFound": "Stage library '{{library}}' is now a legacy stage library and must be installed as a custom stage library.",
       "pipelineConfigJSONData": "Pipeline Configuration",
       "pipelinePreviewJSONData": "Preview Data",
       "pipelineRulesJSONData": "Pipeline Rules",
@@ -522,7 +547,8 @@
       "summaryTab": {
         "alertsTitle": "Alerts",
         "batchThroughput": "Batch Throughput",
-        "batchCount": "Batch Count",
+        "batchCount": "Data Batch Count",
+        "idleBatchCount": "Idle Batch Count",
         "chartsLabel": "Charts",
         "chartsPlaceholder": "Select Chart",
         "currentSourceOffset": "Current Source Offset",
@@ -571,6 +597,8 @@
         "totalRunners": "Total runners",
         "availableRunners": "Available runners"
       },
+      "testOrigin": "Test Origin",
+      "testStageConfiguration": "Test Origin",
       "timeSeries": "Time Series",
       "timeSeriesTab": {
         "memoryConsumed": "Heap Memory Usage",
@@ -583,7 +611,7 @@
       "batchSize": "Preview Batch Size",
       "cancelPreview": "Cancel Preview",
       "configTitle": "Preview Configuration",
-      "configuredSource": "Configured Source",
+      "configuredSource": "Configured Origin",
       "previewSource": "Preview Source",
       "previewStage": "Preview Stage",
       "previewSingleStage": "Preview Single Stage",
@@ -605,6 +633,7 @@
       "stageErrorsWarning": "{{stageErrorsCount}} Stage Errors, check Errors tab for more detail.",
       "stageConfigTitle": "Stage Configuration",
       "streamCondition": "Stream Condition",
+      "testOrigin": "Test Origin",
       "timeout": "Preview Timeout (in milliseconds)",
       "writeToDestinations": "Write to Destinations and Executors",
       "writeToDestinationsTooltip": "Writes preview data to destination systems (both executors and destinations)",
@@ -621,6 +650,8 @@
       "deletePipelinesConfirmationMessage": "Are you sure you want to delete below Pipelines?",
       "duplicatePipelineDefinition": "Duplicate Pipeline Definition",
       "emptyPipelineList": "No Pipeline to view.",
+      "httpUrlPlaceholder": "Pipeline Definition HTTP URL",
+      "labelPlaceholder": "Pipeline Label",
       "newPipelineDefinition": "New Pipeline",
       "namePlaceholder": "Pipeline Definition Title",
       "nameRequiredValidation": "Please enter title of the pipeline.",
@@ -633,9 +664,11 @@
       "selectUsersAndGroupsPlaceholder": "Select users and groups...",
       "sourcePlaceholder":"Select Origin...",
       "system:allPipelines" : "All Pipelines",
+      "system:edgePipelines" : "Edge Pipelines",
       "system:publishedPipelines": "Published Pipelines",
-      "system:dpmControlledPipelines": "SCH Controlled Pipelines",
+      "system:dpmControlledPipelines": "Control Hub Controlled Pipelines",
       "system:localPipelines": "Local Pipelines",
+      "system:microServicePipelines": "Microservice Pipelines",
       "system:runningPipelines": "Running Pipelines",
       "system:nonRunningPipelines": "Non Running Pipelines",
       "system:invalidPipelines": "Invalid Pipelines",
@@ -657,7 +690,13 @@
     "publish": {
       "headerLabel" : "Publish Pipeline",
       "listHeaderLabel": "Publish Pipelines",
-      "pipelineRepository": "SCH Pipeline Repository"
+      "pipelineRepository": "Control Hub Pipeline Repository"
+    },
+    "publishEdgePipelines": {
+      "edgeHttpUrl": "Data Collector Edge URL",
+      "publish": "Publish",
+      "publishing": "Publishing...",
+      "title": "Publish pipelines to Data Collector Edge"
     },
     "resetOffset": {
       "title": "Reset Origin",
@@ -666,6 +705,14 @@
       "confirmationMessageBulk": "The Data Collector will request all available data from the origin instead of continuing from the last processed record. This might result in processing data that was already processed, and this will only be applied to pipelines with an origin stage that supports resetting offset. Are you sure and want to reset origin for below pipelines?",
       "noSupport": "Origin '{{label}}' doesn't support reset operation",
       "successMessage": "Reset Origin is successful."
+    },
+    "resetOffsetAndStart": {
+      "title": "Reset Origin & Start",
+      "confirmationTitle": "Reset Origin and Start Confirmation",
+      "confirmationMessage": "The Data Collector will request all available data from the origin instead of continuing from the last processed record. This might result in processing data that was already processed. Continue?",
+      "confirmationMessageBulk": "The Data Collector will request all available data from the origin instead of continuing from the last processed record. This might result in processing data that was already processed, and this will only be applied to pipelines with an origin stage that supports resetting offset. Are you sure and want to reset origin for below pipelines?",
+      "noSupport": "Origin '{{label}}' doesn't support reset operation",
+      "successMessage": "Reset Origin and Start is successful."
     },
     "runningStatus": "Pipeline is running",
     "restart": {
@@ -752,7 +799,7 @@
   },
   "about": {
     "builtBy": "built by",
-    "copyrightText": "Copyright &copy; 2016 StreamSets, Inc. All rights reserved.",
+    "copyrightText": "Copyright &copy; 2018 StreamSets, Inc. All rights reserved.",
     "on": "on",
     "productName": "StreamSets Data Collector",
     "title": "About",
@@ -818,7 +865,7 @@
     },
     "deleteExtras": {
       "confirmationMessage": "Are you sure you want to delete below additional drivers?",
-      "successMessage": "Successfully deleted additional driver. Restart the Data Collector for the changes to take effect. If you started the Data Collector manually, click Restart Data Collector. If you started the Data Collector as a service, click Cancel and then run the following command: sdc service restart",
+      "successMessage": "Successfully deleted additional driver. Restart the Data Collector for the changes to take effect.",
       "title": "Delete Additional Drivers"
     },
     "header": {
@@ -827,8 +874,8 @@
       "uninstall": "Uninstall"
     },
     "install": {
-      "confirmationMessage": "Are you sure you want to install below stage libraries?",
-      "successMessage": "Successfully installed stage libraries. Restart the Data Collector for the changes to take effect. If you started the Data Collector manually, click Restart Data Collector. If you started the Data Collector as a service, click Cancel and then run the following command: sdc service restart",
+      "confirmationMessage": "Are you sure you want to install the following stage libraries?",
+      "successMessage": "Successfully installed stage libraries. Restart the Data Collector for the changes to take effect.",
       "title": "Install Stage Library"
     },
     "manifestURL": "Manifest URL",
@@ -836,13 +883,13 @@
     "noStageLibrariesExtras": "No Additional Drivers Found",
     "title": "Package Manager",
     "uninstall": {
-      "confirmationMessage": "Are you sure you want to uninstall below stage libraries?",
-      "successMessage": "Successfully uninstalled stage libraries. Restart the Data Collector for the changes to take effect. If you started the Data Collector manually, click Restart Data Collector. If you started the Data Collector as a service, click Cancel and then run the following command: sdc service restart",
+      "confirmationMessage": "Are you sure you want to uninstall the following stage libraries?",
+      "successMessage": "Successfully uninstalled stage libraries. Restart the Data Collector for the changes to take effect.",
       "title": "Uninstall Stage Library"
     },
     "uploadExtras": {
       "library": "Stage Library",
-      "successMessage": "Successfully installed external library. Restart the Data Collector for the changes to take effect. If you started the Data Collector manually, click Restart Data Collector. If you started the Data Collector as a service, click Cancel and then run the following command: sdc service restart",
+      "successMessage": "Successfully installed external library. Restart the Data Collector for the changes to take effect.",
       "title": "Install External Libraries"
     }
   },

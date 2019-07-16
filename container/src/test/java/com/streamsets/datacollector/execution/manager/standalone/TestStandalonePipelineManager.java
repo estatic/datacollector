@@ -16,6 +16,9 @@
 package com.streamsets.datacollector.execution.manager.standalone;
 
 import com.codahale.metrics.MetricRegistry;
+import com.streamsets.datacollector.blobstore.BlobStoreTask;
+import com.streamsets.datacollector.credential.CredentialStoresTask;
+import com.streamsets.datacollector.event.dto.PipelineStartEvent;
 import com.streamsets.datacollector.execution.EventListenerManager;
 import com.streamsets.datacollector.execution.Manager;
 import com.streamsets.datacollector.execution.PipelineState;
@@ -33,6 +36,8 @@ import com.streamsets.datacollector.execution.runner.standalone.StandaloneRunner
 import com.streamsets.datacollector.execution.snapshot.file.FileSnapshotStore;
 import com.streamsets.datacollector.execution.store.FilePipelineStateStore;
 import com.streamsets.datacollector.lineage.LineagePublisherTask;
+import com.streamsets.datacollector.main.BuildInfo;
+import com.streamsets.datacollector.main.DataCollectorBuildInfo;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.main.RuntimeModule;
 import com.streamsets.datacollector.main.StandaloneRuntimeInfo;
@@ -44,6 +49,7 @@ import com.streamsets.datacollector.store.PipelineStoreException;
 import com.streamsets.datacollector.store.PipelineStoreTask;
 import com.streamsets.datacollector.store.impl.FileAclStoreTask;
 import com.streamsets.datacollector.store.impl.FilePipelineStoreTask;
+import com.streamsets.datacollector.usagestats.StatsCollector;
 import com.streamsets.datacollector.util.Configuration;
 import com.streamsets.datacollector.util.LockCache;
 import com.streamsets.datacollector.util.LockCacheModule;
@@ -69,9 +75,13 @@ import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 
 import static com.streamsets.datacollector.util.AwaitConditionUtil.numPipelinesEqualTo;
 import static org.awaitility.Awaitility.await;
@@ -89,6 +99,12 @@ public class TestStandalonePipelineManager {
   private PipelineStoreTask pipelineStoreTask;
   private Manager pipelineManager;
   private PipelineStateStore pipelineStateStore;
+  private Object afterActionsFunctionCallParam;
+
+  @Before
+  public void resetState() {
+    afterActionsFunctionCallParam = null;
+  }
 
   @Module(
     injects = {
@@ -111,6 +127,11 @@ public class TestStandalonePipelineManager {
     public TestPipelineManagerModule(long expiry, long initialExpiryDelay) {
       this.initialExpiryDelay = initialExpiryDelay;
       this.expiry = expiry;
+    }
+
+    @Provides @Singleton
+    public BuildInfo provideBuildInfo() {
+      return new DataCollectorBuildInfo();
     }
 
     @Provides @Singleton
@@ -177,6 +198,11 @@ public class TestStandalonePipelineManager {
       return MockStages.createStageLibrary(new URLClassLoader(new URL[0]));
     }
 
+    @Provides @Singleton
+    public CredentialStoresTask provideCredentialStoreTask() {
+      return Mockito.mock(CredentialStoresTask.class);
+    }
+
     @Provides @Singleton @Named("previewExecutor")
     public SafeScheduledExecutorService providePreviewExecutor() {
       return new SafeScheduledExecutorService(1, "preview");
@@ -197,16 +223,35 @@ public class TestStandalonePipelineManager {
       return new SafeScheduledExecutorService(10, "manager");
     }
 
+    @Provides @Singleton @Named("supportBundleExecutor")
+    public SafeScheduledExecutorService provideSupportBundleExecutor() {
+      return new SafeScheduledExecutorService(1, "supportBundleExecutor");
+    }
+
     @Provides @Singleton
     public PreviewerProvider providePreviewerProvider() {
       return new PreviewerProvider() {
         @Override
-        public Previewer createPreviewer(String user, String name, String rev, PreviewerListener listener,
-                                         ObjectGraph objectGraph) {
+        public Previewer createPreviewer(
+            String user,
+            String name,
+            String rev,
+            PreviewerListener listener,
+            ObjectGraph objectGraph,
+            List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
+            Function<Object, Void> afterActionsFunction
+        ) {
           Previewer mock = Mockito.mock(Previewer.class);
           Mockito.when(mock.getId()).thenReturn(UUID.randomUUID().toString());
           Mockito.when(mock.getName()).thenReturn(name);
           Mockito.when(mock.getRev()).thenReturn(rev);
+          Mockito.when(mock.getInterceptorConfs()).thenReturn(interceptorConfs);
+          Mockito.doAnswer(a -> {
+            if (afterActionsFunction != null) {
+              afterActionsFunction.apply(this);
+            }
+            return null;
+          }).when(mock).stop();
           return mock;
         }
       };
@@ -228,8 +273,18 @@ public class TestStandalonePipelineManager {
     }
 
     @Provides @Singleton
+    public BlobStoreTask provideBlobStoreTask() {
+      return Mockito.mock(BlobStoreTask.class);
+    }
+
+    @Provides @Singleton
     public LineagePublisherTask provideLineagePublisherTask() {
       return Mockito.mock(LineagePublisherTask.class);
+    }
+
+    @Provides @Singleton
+    public StatsCollector provideStatsCollector() {
+      return Mockito.mock(StatsCollector.class);
     }
 
   }
@@ -264,11 +319,25 @@ public class TestStandalonePipelineManager {
 
   @Test
   public void testPreviewer() throws PipelineException {
-    pipelineStoreTask.create("user", "abcd", "label","blah", false, false);
-    Previewer previewer = pipelineManager.createPreviewer("user", "abcd", "0");
+    pipelineStoreTask.create("user", "abcd", "label","blah", false, false, new HashMap<String, Object>());
+
+    final List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs = new LinkedList<>();
+    final PipelineStartEvent.InterceptorConfiguration interceptorConf = new PipelineStartEvent.InterceptorConfiguration();
+    interceptorConf.setStageLibrary("testing-stagelib");
+    interceptorConf.setInterceptorClassName("com.streamsets.test.TestInterceptor");
+    interceptorConf.setParameters(Collections.singletonMap("paramKey", "paramValue"));
+
+    interceptorConfs.add(interceptorConf);
+    Previewer previewer = pipelineManager.createPreviewer("user", "abcd", "0", interceptorConfs, p -> {
+      this.afterActionsFunctionCallParam = p;
+      return null;
+    });
     assertEquals(previewer, pipelineManager.getPreviewer(previewer.getId()));
+    assertEquals(interceptorConfs, previewer.getInterceptorConfs());
     ((StandaloneAndClusterPipelineManager)pipelineManager).outputRetrieved(previewer.getId());
     assertNull(pipelineManager.getPreviewer(previewer.getId()));
+    previewer.stop();
+    assertNotNull(afterActionsFunctionCallParam);
   }
 
   @Test
@@ -285,20 +354,20 @@ public class TestStandalonePipelineManager {
 
   @Test
   public void testRunner() throws Exception {
-    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false);
+    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false, new HashMap<String, Object>());
     Runner runner = pipelineManager.getRunner("aaaa", "0");
     assertNotNull(runner);
   }
 
   @Test
   public void testGetPipelineStates() throws Exception {
-    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false);
+    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false, new HashMap<String, Object>());
     List<PipelineState> pipelineStates = pipelineManager.getPipelines();
 
     assertEquals("aaaa", pipelineStates.get(0).getPipelineId());
     assertEquals("0", pipelineStates.get(0).getRev());
 
-    pipelineStoreTask.create("user", "bbbb", "label","blah", false, false);
+    pipelineStoreTask.create("user", "bbbb", "label","blah", false, false, new HashMap<String, Object>());
     pipelineStates = pipelineManager.getPipelines();
     assertEquals(2, pipelineStates.size());
 
@@ -312,7 +381,7 @@ public class TestStandalonePipelineManager {
 
   @Test
   public void testRemotePipelineStartup() throws Exception {
-    pipelineStoreTask.create("user", "remote", "label","0", true, false);
+    pipelineStoreTask.create("user", "remote", "label","0", true, false, new HashMap<String, Object>());
     pipelineStateStore.saveState("user", "remote", "0", PipelineStatus.CONNECTING, "blah", null, ExecutionMode
             .STANDALONE,
         null, 0, 0);
@@ -333,6 +402,9 @@ public class TestStandalonePipelineManager {
     pipelineStateStore.saveState("user", "remote", "0", PipelineStatus.CONNECTING, "blah", null, ExecutionMode
         .STANDALONE, null, 0, 0);
 
+    // Make sure that handover between the sub-tests is done properly
+    assertFalse(((StandaloneAndClusterPipelineManager) pipelineManager).isRunnerPresent("remote", "0"));
+
     setUpManager(StandaloneAndClusterPipelineManager.DEFAULT_RUNNER_EXPIRY_INTERVAL,
         StandaloneAndClusterPipelineManager.DEFAULT_RUNNER_EXPIRY_INITIAL_DELAY,
         false);
@@ -347,7 +419,7 @@ public class TestStandalonePipelineManager {
 
   @Test
   public void testInitTask() throws Exception {
-    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false);
+    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false, new HashMap<String, Object>());
     pipelineStateStore.saveState("user", "aaaa", "0", PipelineStatus.CONNECTING, "blah", null, ExecutionMode.STANDALONE, null, 0, 0);
     pipelineManager.stop();
     pipelineStoreTask.stop();
@@ -379,7 +451,7 @@ public class TestStandalonePipelineManager {
 
   @Test
   public void testExpiry() throws Exception {
-    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false);
+    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false, new HashMap<String, Object>());
     Runner runner = pipelineManager.getRunner("aaaa", "0");
     pipelineStateStore.saveState("user", "aaaa", "0", PipelineStatus.RUNNING_ERROR, "blah", null, ExecutionMode.STANDALONE, null, 0, 0);
     assertEquals(PipelineStatus.RUNNING_ERROR, runner.getState().getStatus());
@@ -403,8 +475,8 @@ public class TestStandalonePipelineManager {
 
   @Test
   public void testPipelineRunnersAtDifferentTimesExpiry() throws Exception {
-    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false);
-    pipelineStoreTask.create("user", "bbbb", "label","blah", false, false);
+    pipelineStoreTask.create("user", "aaaa", "label","blah", false, false, new HashMap<String, Object>());
+    pipelineStoreTask.create("user", "bbbb", "label","blah", false, false, new HashMap<String, Object>());
     setUpManager(100, 0, false);
 
     pipelineManager.getRunner("aaaa", "0");
@@ -435,7 +507,7 @@ public class TestStandalonePipelineManager {
 
   @Test
   public void testChangeExecutionModes() throws Exception {
-    pipelineStoreTask.create("user1", "pipeline2", "label","blah", false, false);
+    pipelineStoreTask.create("user1", "pipeline2", "label","blah", false, false, new HashMap<String, Object>());
     pipelineStateStore.saveState("user", "pipeline2", "0", PipelineStatus.EDITED, "blah", null, ExecutionMode.STANDALONE, null, 0, 0);
     Runner runner1 = pipelineManager.getRunner("pipeline2", "0");
     pipelineStateStore.saveState("user", "pipeline2", "0", PipelineStatus.EDITED, "blah", null, ExecutionMode.CLUSTER_BATCH, null, 0, 0);

@@ -20,7 +20,7 @@
 angular
   .module('dataCollectorApp.home')
 
-  .controller('BadRecordsController', function ($scope, $rootScope, _, api, pipelineConstant, $filter, $timeout) {
+  .controller('BadRecordsController', function ($scope, $rootScope, _, api, pipelineConstant, $filter, $timeout, $modal) {
 
     var formatValue = function(d){
       return $filter('abbreviateNumber')(d);
@@ -137,6 +137,31 @@ angular
 
       },
 
+      /**
+       * Display stack trace in modal dialog.
+       *
+       * @param errorMessage
+       */
+      showStackTrace: function (errorMessage) {
+        $modal.open({
+          templateUrl: 'errorModalContent.html',
+          controller: 'ErrorModalInstanceController',
+          size: 'lg',
+          backdrop: true,
+          resolve: {
+            errorObj: function () {
+              return {
+                RemoteException: {
+                  antennaDoctorMessages: errorMessage.antennaDoctorMessages,
+                  localizedMessage: errorMessage.localized,
+                  stackTrace: errorMessage.errorStackTrace
+                }
+              };
+            }
+          }
+        });
+      },
+
       getYAxisLabel: function() {
         return function() {
           return '';
@@ -156,38 +181,44 @@ angular
 
     var updateBadRecordsData = function(currentSelection) {
       $scope.showBadRecordsLoading = true;
-      api.pipelineAgent.getErrorRecords($scope.pipelineConfig.info.pipelineId, 0, currentSelection.instanceName)
-        .then(function(response) {
-          var res = response.data;
-          $scope.showBadRecordsLoading = false;
-          if(res && res.length) {
-            $scope.stageBadRecords = res.reverse();
-          } else {
-            $scope.showBadRecordsLoading = [];
-          }
-        })
-        .catch(function(res) {
-          $scope.showBadRecordsLoading = false;
-          $rootScope.common.errors = [res.data];
-        });
+      api.pipelineAgent.getErrorRecords(
+        $scope.pipelineConfig.info.pipelineId,
+        0,
+        currentSelection.instanceName,
+        $scope.edgeHttpUrl
+      ).then(function(response) {
+        var res = response.data;
+        $scope.showBadRecordsLoading = false;
+        if(res && res.length) {
+          $scope.stageBadRecords = res.reverse();
+        } else {
+          $scope.showBadRecordsLoading = [];
+        }
+      }).catch(function(res) {
+        $scope.showBadRecordsLoading = false;
+        $rootScope.common.errors = [res.data];
+      });
     };
 
     var updateErrorMessagesData = function(currentSelection) {
       $scope.showErrorMessagesLoading = true;
-      api.pipelineAgent.getErrorMessages($scope.pipelineConfig.info.pipelineId, 0, currentSelection.instanceName)
-        .then(function(response) {
-          var res = response.data;
-          $scope.showErrorMessagesLoading = false;
-          if(res && res.length) {
-            $scope.errorMessages = res.reverse();
-          } else {
-            $scope.errorMessages = [];
-          }
-        })
-        .catch(function(res) {
-          $scope.showErrorMessagesLoading = false;
-          $rootScope.common.errors = [res.data];
-        });
+      api.pipelineAgent.getErrorMessages(
+        $scope.pipelineConfig.info.pipelineId,
+        0,
+        currentSelection.instanceName,
+        $scope.edgeHttpUrl
+      ).then(function(response) {
+        var res = response.data;
+        $scope.showErrorMessagesLoading = false;
+        if(res && res.length) {
+          $scope.errorMessages = res.reverse();
+        } else {
+          $scope.errorMessages = [];
+        }
+      }).catch(function(res) {
+        $scope.showErrorMessagesLoading = false;
+        $rootScope.common.errors = [res.data];
+      });
     };
 
     var updateErrorsTabData = function(options) {
@@ -243,7 +274,7 @@ angular
 
       var pipelineMetrics = $rootScope.common.pipelineMetrics,
         currentSelection = $scope.detailPaneConfig,
-        stages = $scope.pipelineConfig.stages,
+        stages = $scope.stageInstances,
         badRecordsArr = [],
         errorMessagesArr = [],
         errorRecordsHistogram,

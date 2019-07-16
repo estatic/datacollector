@@ -19,14 +19,16 @@ import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
-import com.streamsets.pipeline.api.Source;
+import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSource;
-
-import static com.streamsets.pipeline.config.OriginAvroSchemaSource.SOURCE;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
+import com.streamsets.pipeline.api.service.ServiceConfiguration;
+import com.streamsets.pipeline.api.service.ServiceDependency;
+import com.streamsets.pipeline.api.service.dataformats.DataFormatParserService;
+import com.streamsets.pipeline.lib.event.NoMoreDataEvent;
 
 @StageDef(
-    version = 9,
+    version = 11,
     label = "Amazon S3",
     description = "Reads files from Amazon S3",
     icon="s3.png",
@@ -34,19 +36,28 @@ import static com.streamsets.pipeline.config.OriginAvroSchemaSource.SOURCE;
     recordsByRef = true,
     resetOffset = true,
     producesEvents = true,
+    eventDefs = {NoMoreDataEvent.class},
     upgrader = AmazonS3SourceUpgrader.class,
-    onlineHelpRefUrl = "index.html#Origins/AmazonS3.html#task_gfj_ssv_yq"
+    onlineHelpRefUrl ="index.html?contextID=task_gfj_ssv_yq",
+    services = @ServiceDependency(
+      service = DataFormatParserService.class,
+      configuration = {
+        @ServiceConfiguration(
+            name = "displayFormats",
+            value = "AVRO,DELIMITED,EXCEL,JSON,LOG,PROTOBUF,SDC_JSON,TEXT,WHOLE_FILE,XML"
+        )
+      }
+    )
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle
-public class AmazonS3DSource extends DSource {
+public class AmazonS3DSource extends DPushSource {
 
   @ConfigDefBean()
   public S3ConfigBean s3ConfigBean;
 
   @Override
-  protected Source createSource() {
-    s3ConfigBean.dataFormatConfig.avroSchemaSource = SOURCE;
-    return new AmazonS3Source(s3ConfigBean);
+  protected PushSource createPushSource() {
+    return new AmazonS3SourceImpl(s3ConfigBean);
   }
 }

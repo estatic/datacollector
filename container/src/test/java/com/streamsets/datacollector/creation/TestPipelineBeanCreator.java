@@ -17,14 +17,18 @@ package com.streamsets.datacollector.creation;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.streamsets.pipeline.api.BlobStoreDef;
+import com.streamsets.datacollector.config.InterceptorDefinition;
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.config.ServiceDefinition;
 import com.streamsets.datacollector.config.StageConfiguration;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.config.StageLibraryDefinition;
 import com.streamsets.datacollector.credential.CredentialEL;
+import com.streamsets.datacollector.definition.InterceptorDefinitionExtractor;
 import com.streamsets.datacollector.definition.ServiceDefinitionExtractor;
 import com.streamsets.datacollector.definition.StageDefinitionExtractor;
+import com.streamsets.datacollector.runner.InterceptorCreatorContextBuilder;
 import com.streamsets.datacollector.runner.preview.StageConfigurationBuilder;
 import com.streamsets.datacollector.stagelibrary.ClassLoaderReleaser;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
@@ -34,11 +38,13 @@ import com.streamsets.pipeline.api.BatchMaker;
 import com.streamsets.pipeline.api.Config;
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ConfigDefBean;
+import com.streamsets.pipeline.api.ConfigIssue;
 import com.streamsets.pipeline.api.ErrorStage;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.ListBeanModel;
 import com.streamsets.pipeline.api.MultiValueChooserModel;
 import com.streamsets.pipeline.api.PipelineLifecycleStage;
+import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.StatsAggregatorStage;
@@ -49,6 +55,10 @@ import com.streamsets.pipeline.api.base.BaseSource;
 import com.streamsets.pipeline.api.base.BaseTarget;
 import com.streamsets.pipeline.api.credential.CredentialStore;
 import com.streamsets.pipeline.api.credential.CredentialValue;
+import com.streamsets.pipeline.api.interceptor.BaseInterceptor;
+import com.streamsets.pipeline.api.interceptor.Interceptor;
+import com.streamsets.pipeline.api.interceptor.InterceptorCreator;
+import com.streamsets.pipeline.api.interceptor.InterceptorDef;
 import com.streamsets.pipeline.api.service.Service;
 import com.streamsets.pipeline.api.service.ServiceDef;
 import com.streamsets.pipeline.api.service.ServiceDependency;
@@ -65,6 +75,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import static org.powermock.api.mockito.PowerMockito.when;
 
 @SuppressWarnings("unchecked")
 public class TestPipelineBeanCreator {
@@ -316,7 +328,12 @@ public class TestPipelineBeanCreator {
     }
   }
 
-  @StageDef(version = 1, label = "L", onlineHelpRefUrl = "")
+  @StageDef(
+    version = 1,
+    label = "L",
+    onlineHelpRefUrl = "",
+    services = @ServiceDependency(service = CoolService.class)
+  )
   public static class MyTarget extends BaseTarget {
     @ConfigDef(
         label = "L",
@@ -347,12 +364,42 @@ public class TestPipelineBeanCreator {
   public static class AggregatingMyTarget extends MyTarget {
   }
 
+  public static class MyDefaultInterceptorCreator implements InterceptorCreator {
+    @Override
+    public Interceptor create(Context context) {
+      return new MyInterceptor(context.getStageType().name() + " " + context.getInterceptorType().name());
+    }
+
+    @Override
+    public List<BlobStoreDef> blobStoreResource(Map<String, String> ids){
+      return new ArrayList<>();
+    }
+  }
+
+  @InterceptorDef(
+    version = 1,
+    creator = MyDefaultInterceptorCreator.class
+  )
+  public static class MyInterceptor extends BaseInterceptor {
+    public final String str;
+    public MyInterceptor(String str) {
+      this.str = str;
+    }
+
+    @Override
+    public List<Record> intercept(List<Record> records) {
+      return records;
+    }
+  }
+
   @Test
   public void testCreateAndInjectStageUsingDefaults() throws StageException {
     StageLibraryDefinition libraryDef = Mockito.mock(StageLibraryDefinition.class);
     Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
     StageDefinition stageDef = StageDefinitionExtractor.get().extract(libraryDef, MySource.class, "");
     ServiceDefinition serviceDef = ServiceDefinitionExtractor.get().extract(libraryDef, CoolService.class);
+    StageLibraryTask library = Mockito.mock(StageLibraryTask.class);
+    when(library.getInterceptorDefinitions()).thenReturn(Collections.emptyList());
 
     StageConfiguration stageConf = new StageConfigurationBuilder("i", "n")
       .withServices(new ServiceConfigurationBuilder()
@@ -364,10 +411,12 @@ public class TestPipelineBeanCreator {
     List<Issue> issues = new ArrayList<>();
 
     StageBean bean = PipelineBeanCreator.get().createStage(
+      library,
       stageDef,
       Mockito.mock(ClassLoaderReleaser.class),
       stageConf,
       s -> serviceDef,
+      null,
       constants,
       issues
     );
@@ -400,6 +449,8 @@ public class TestPipelineBeanCreator {
     Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
     StageDefinition stageDef = StageDefinitionExtractor.get().extract(libraryDef, MySource.class, "");
     ServiceDefinition serviceDef = ServiceDefinitionExtractor.get().extract(libraryDef, CoolService.class);
+    StageLibraryTask library = Mockito.mock(StageLibraryTask.class);
+    when(library.getInterceptorDefinitions()).thenReturn(Collections.emptyList());
 
     StageConfiguration stageConf = new StageConfigurationBuilder("i", "n")
       .withConfig(
@@ -424,10 +475,12 @@ public class TestPipelineBeanCreator {
     List<Issue> issues = new ArrayList<>();
 
     StageBean bean = PipelineBeanCreator.get().createStage(
+      library,
       stageDef,
       Mockito.mock(ClassLoaderReleaser.class),
       stageConf,
       s -> serviceDef,
+      null,
       constants,
       issues
     );
@@ -456,7 +509,7 @@ public class TestPipelineBeanCreator {
   }
 
   @Test
-  public void testCreatePipelineBean() {
+  public void testCreatePipelineBeanAndDuplicate() {
     StageLibraryDefinition libraryDef = Mockito.mock(StageLibraryDefinition.class);
     Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
     StageDefinition sourceDef = StageDefinitionExtractor.get().extract(libraryDef, MySource.class, "");
@@ -464,6 +517,7 @@ public class TestPipelineBeanCreator {
     StageDefinition lifecycleTargetDef = StageDefinitionExtractor.get().extract(libraryDef, LifecycleEventMyTarget.class, "");
     StageDefinition errorStageDef = StageDefinitionExtractor.get().extract(libraryDef, ErrorMyTarget.class, "");
     StageDefinition aggStageDef = StageDefinitionExtractor.get().extract(libraryDef, AggregatingMyTarget.class, "");
+    ServiceDefinition serviceDef = ServiceDefinitionExtractor.get().extract(libraryDef, CoolService.class);
     StageLibraryTask library = Mockito.mock(StageLibraryTask.class);
     Mockito.when(library.getStage(Mockito.eq("default"), Mockito.eq("s"), Mockito.eq(false)))
          .thenReturn(sourceDef);
@@ -476,6 +530,7 @@ public class TestPipelineBeanCreator {
     Mockito.when(library.getStage(Mockito.eq("default"), Mockito.eq("lifecycle"), Mockito.eq(false)))
       .thenReturn(lifecycleTargetDef);
     Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
+    Mockito.when(library.getServiceDefinition(Mockito.eq(Runnable.class), Mockito.anyBoolean())).thenReturn(serviceDef);
 
     List<Map<String, Object>> constants = new ArrayList<>();
     Map<String, Object> constantValue = new LinkedHashMap<>();
@@ -484,7 +539,6 @@ public class TestPipelineBeanCreator {
     constants.add(constantValue);
     List<Config> pipelineConfigs = ImmutableList.of(
         new Config("executionMode", ExecutionMode.CLUSTER_BATCH.name()),
-        new Config("memoryLimit", "${MEMORY_LIMIT}"),
         new Config("constants", constants)
     );
 
@@ -493,6 +547,9 @@ public class TestPipelineBeanCreator {
       .build();
     StageConfiguration targetConf = new StageConfigurationBuilder("si", "t")
       .withConfig(new Config("list", ImmutableList.of("T")))
+      .withServices(new ServiceConfigurationBuilder()
+        .withService(Runnable.class)
+        .build())
       .build();
     StageConfiguration errorStageConf = new StageConfigurationBuilder("ei", "e")
       .withConfig(new Config("list", ImmutableList.of("E")))
@@ -524,13 +581,12 @@ public class TestPipelineBeanCreator {
     );
 
     List<Issue> issues = new ArrayList<>();
-    PipelineBean bean = PipelineBeanCreator.get().create(false, library, pipelineConf, issues);
+    PipelineBean bean = PipelineBeanCreator.get().create(false, library, pipelineConf, null, issues);
 
     Assert.assertNotNull(bean);
 
     // pipeline configs
     Assert.assertEquals(ExecutionMode.CLUSTER_BATCH, bean.getConfig().executionMode);
-    Assert.assertEquals(1000, bean.getConfig().memoryLimit);
 
     // Origin
     Assert.assertNotNull(bean.getOrigin());
@@ -541,8 +597,10 @@ public class TestPipelineBeanCreator {
     Assert.assertEquals(1, bean.getPipelineStageBeans().size());
     PipelineStageBeans stages = bean.getPipelineStageBeans();
     Assert.assertEquals(1, stages.getStages().size());
-    MyTarget target = (MyTarget)stages.getStages().get(0).getStage();
+    StageBean targetBean = stages.getStages().get(0);
+    MyTarget target = (MyTarget)targetBean.getStage();
     Assert.assertEquals(ImmutableList.of("T"), target.list);
+    Assert.assertEquals(1, targetBean.getServices().size());
 
     // Aggregating stage
     AggregatingMyTarget aggregatingStage = (AggregatingMyTarget) bean.getStatsAggregatorStage().getStage();
@@ -563,11 +621,26 @@ public class TestPipelineBeanCreator {
     // pass runtime parameters
     Map<String, Object> runtimeParameters = ImmutableMap.of("MEMORY_LIMIT", 2000);
     issues = new ArrayList<>();
-    bean = PipelineBeanCreator.get().create(false, library, pipelineConf, issues, runtimeParameters);
+    bean = PipelineBeanCreator.get().create(false, library, pipelineConf, null, issues, runtimeParameters);
     Assert.assertNotNull(bean);
     // pipeline configs
     Assert.assertEquals(ExecutionMode.CLUSTER_BATCH, bean.getConfig().executionMode);
-    Assert.assertEquals(2000, bean.getConfig().memoryLimit);
+
+    // Verify duplicate stage bean
+    issues = new ArrayList<>();
+    PipelineStageBeans duplicate = PipelineBeanCreator.get().duplicatePipelineStageBeans(
+      library,
+      bean.getPipelineStageBeans(),
+      null,
+      Collections.emptyMap(),
+      issues
+    );
+    Assert.assertNotNull(duplicate);
+    Assert.assertEquals(1, duplicate.size());
+    targetBean = stages.getStages().get(0);
+    target = (MyTarget)targetBean.getStage();
+    Assert.assertEquals(ImmutableList.of("T"), target.list);
+    Assert.assertEquals(1, targetBean.getServices().size());
   }
 
   @Test
@@ -590,8 +663,7 @@ public class TestPipelineBeanCreator {
     Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
 
     List<Config> pipelineConfigs = ImmutableList.of(
-        new Config("executionMode", ExecutionMode.CLUSTER_BATCH.name()),
-        new Config("memoryLimit", 1000)
+        new Config("executionMode", ExecutionMode.CLUSTER_BATCH.name())
     );
 
     StageConfiguration sourceConf = new StageConfigurationBuilder("si", "s")
@@ -623,7 +695,7 @@ public class TestPipelineBeanCreator {
     );
 
     List<Issue> issues = new ArrayList<>();
-    PipelineBean bean = PipelineBeanCreator.get().create(false, library, pipelineConf, issues);
+    PipelineBean bean = PipelineBeanCreator.get().create(false, library, pipelineConf, null, issues);
 
     Assert.assertNotNull(bean);
 
@@ -649,6 +721,8 @@ public class TestPipelineBeanCreator {
     ClassLoader cl = Thread.currentThread().getContextClassLoader();
     Mockito.when(libraryDef.getClassLoader()).thenReturn(cl);
     StageDefinition stageDef = StageDefinitionExtractor.get().extract(libraryDef, MySource.class, "");
+    StageLibraryTask library = Mockito.mock(StageLibraryTask.class);
+    when(library.getInterceptorDefinitions()).thenReturn(Collections.emptyList());
 
     StageConfiguration stageConf = new StageConfiguration(
       "i",
@@ -667,14 +741,21 @@ public class TestPipelineBeanCreator {
     List<Issue> issues = new ArrayList<>();
 
     ClassLoaderReleaser releaser = Mockito.mock(ClassLoaderReleaser.class);
-    StageBean bean = PipelineBeanCreator.get().createStage(stageDef, releaser, stageConf, s -> null, constants, issues);
+    StageBean bean = PipelineBeanCreator.get().createStage(
+      library,
+      stageDef,
+      releaser,
+      stageConf,
+      s -> null,
+      null,
+      constants,
+      issues
+    );
 
     Mockito.verify(releaser, Mockito.never()).releaseStageClassLoader(Mockito.<ClassLoader>any());
     bean.releaseClassLoader();
     Mockito.verify(releaser, Mockito.times(1)).releaseStageClassLoader(cl);
-
   }
-
 
   @Test
   public void testConfigsWithJavaDefaults() {
@@ -693,8 +774,7 @@ public class TestPipelineBeanCreator {
     Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
 
     List<Config> pipelineConfigs = ImmutableList.of(
-        new Config("executionMode", ExecutionMode.CLUSTER_BATCH.name()),
-        new Config("memoryLimit", 1000)
+        new Config("executionMode", ExecutionMode.CLUSTER_BATCH.name())
     );
 
     StageConfiguration stageConf = new StageConfigurationBuilder("si", "s")
@@ -724,7 +804,7 @@ public class TestPipelineBeanCreator {
     );
 
     List<Issue> issues = new ArrayList<>();
-    PipelineBean bean = PipelineBeanCreator.get().create(false, library, pipelineConf, issues);
+    PipelineBean bean = PipelineBeanCreator.get().create(false, library, pipelineConf, null, issues);
 
     MySource source = (MySource) bean.getOrigin().getStage();
 
@@ -734,4 +814,76 @@ public class TestPipelineBeanCreator {
     Assert.assertEquals(5, source.intJavaDefault);
     Assert.assertEquals(E.A, source.enumSNoDefaultAlAll);
   }
+
+  @Test
+  public void testDefaultInterceptorCreation() {
+    StageLibraryDefinition libraryDef = Mockito.mock(StageLibraryDefinition.class);
+    Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
+    StageDefinition sourceDef = StageDefinitionExtractor.get().extract(libraryDef, MySource.class, "");
+    StageDefinition targetDef = StageDefinitionExtractor.get().extract(libraryDef, MyTarget.class, "");
+    StageDefinition errorStageDef = StageDefinitionExtractor.get().extract(libraryDef, ErrorMyTarget.class, "");
+    StageDefinition aggregatingStageDef = StageDefinitionExtractor.get().extract(libraryDef, AggregatingMyTarget.class, "");
+    InterceptorDefinition interceptorDef = InterceptorDefinitionExtractor.get().extract(libraryDef, MyInterceptor.class);
+    StageLibraryTask library = Mockito.mock(StageLibraryTask.class);
+    Mockito.when(library.getInterceptorDefinitions()).thenReturn(Collections.singletonList(interceptorDef));
+    Mockito.when(library.getStage(Mockito.eq("default"), Mockito.eq("s"), Mockito.eq(false)))
+       .thenReturn(sourceDef);
+    Mockito.when(library.getStage(Mockito.eq("default"), Mockito.eq("t"), Mockito.eq(false)))
+      .thenReturn(targetDef);
+    Mockito.when(library.getStage(Mockito.eq("default"), Mockito.eq("e"), Mockito.eq(false)))
+       .thenReturn(errorStageDef);
+    Mockito.when(library.getStage(Mockito.eq("default"), Mockito.eq("a"), Mockito.eq(false)))
+      .thenReturn(aggregatingStageDef);
+    Mockito.when(libraryDef.getClassLoader()).thenReturn(Thread.currentThread().getContextClassLoader());
+
+    List<Config> pipelineConfigs = ImmutableList.of(
+        new Config("executionMode", ExecutionMode.CLUSTER_BATCH.name())
+    );
+
+    StageConfiguration sourceConf = new StageConfigurationBuilder("si", "s")
+      .withConfig(new Config("list", ImmutableList.of("S")))
+      .build();
+    StageConfiguration errorStageConf = new StageConfigurationBuilder("ei", "e")
+      .withConfig(new Config("list", ImmutableList.of("E")))
+      .build();
+    StageConfiguration aggStageConf = new StageConfigurationBuilder("ai", "a")
+      .withConfig(new Config("list", ImmutableList.of("A")))
+      .build();
+    StageConfiguration targetConf = new StageConfigurationBuilder("si", "t")
+      .withConfig(new Config("list", ImmutableList.of("T")))
+      .build();
+
+    PipelineConfiguration pipelineConf = new PipelineConfiguration(
+        1,
+        PipelineConfigBean.VERSION,
+        "pipelineId",
+        UUID.randomUUID(),
+        "label",
+        "D",
+        pipelineConfigs,
+        Collections.EMPTY_MAP,
+        ImmutableList.of(sourceConf, targetConf),
+        errorStageConf,
+        aggStageConf,
+        Collections.emptyList(),
+        Collections.emptyList()
+    );
+
+    List<Issue> issues = new ArrayList<>();
+    InterceptorCreatorContextBuilder contextBuilder = new InterceptorCreatorContextBuilder(null, null);
+    PipelineBean bean = PipelineBeanCreator.get().create(false, library, pipelineConf, contextBuilder, issues);
+
+    Assert.assertNotNull(bean.getOrigin());
+    Assert.assertEquals(1, bean.getOrigin().getPreInterceptors().size());
+    Assert.assertEquals(1, bean.getOrigin().getPostInterceptors().size());
+    Assert.assertEquals("SOURCE PRE_STAGE", ((MyInterceptor)(bean.getOrigin().getPreInterceptors().get(0).getInterceptor())).str);
+    Assert.assertEquals("SOURCE POST_STAGE", ((MyInterceptor)(bean.getOrigin().getPostInterceptors().get(0).getInterceptor())).str);
+
+    StageBean processor = bean.getPipelineStageBeans().get(0);
+    Assert.assertEquals(1, processor.getPreInterceptors().size());
+    Assert.assertEquals(1, processor.getPostInterceptors().size());
+    Assert.assertEquals("TARGET PRE_STAGE", ((MyInterceptor)(processor.getPreInterceptors().get(0).getInterceptor())).str);
+    Assert.assertEquals("TARGET POST_STAGE", ((MyInterceptor)(processor.getPostInterceptors().get(0).getInterceptor())).str);
+  }
+
 }

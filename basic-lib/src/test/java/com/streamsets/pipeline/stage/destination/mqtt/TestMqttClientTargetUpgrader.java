@@ -15,8 +15,16 @@
  */
 package com.streamsets.pipeline.stage.destination.mqtt;
 
+import com.streamsets.pipeline.api.Config;
+import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.StageUpgrader;
+import com.streamsets.pipeline.config.upgrade.UpgraderTestUtils;
 import com.streamsets.pipeline.stage.util.tls.TlsConfigBeanUpgraderTestUtil;
 import org.junit.Test;
+import org.mockito.Mockito;
+
+import java.util.LinkedList;
+import java.util.List;
 
 public class TestMqttClientTargetUpgrader {
 
@@ -27,5 +35,32 @@ public class TestMqttClientTargetUpgrader {
         new MqttClientTargetUpgrader(),
         2
     );
+  }
+
+  @Test
+  public void testV2ToV3() throws Exception {
+    final List<Config> configs = new LinkedList<>();
+    final MqttClientTargetUpgrader upgrader = new MqttClientTargetUpgrader();
+    StageUpgrader.Context context = Mockito.mock(StageUpgrader.Context.class);
+    Mockito.doReturn(2).when(context).getFromVersion();
+    Mockito.doReturn(3).when(context).getToVersion();
+    assertCleanSessionFlagAdded(upgrader.upgrade(configs, context));
+  }
+
+  @Test
+  public void testV3ToV4() throws StageException {
+    List<Config> configs = new LinkedList<>();
+    final MqttClientTargetUpgrader upgrader = new MqttClientTargetUpgrader();
+    StageUpgrader.Context context = Mockito.mock(StageUpgrader.Context.class);
+    Mockito.doReturn(3).when(context).getFromVersion();
+    Mockito.doReturn(4).when(context).getToVersion();
+    configs = upgrader.upgrade(configs, context);
+    UpgraderTestUtils.assertExists(configs, "publisherConf.runtimeTopicResolution", false);
+    UpgraderTestUtils.assertExists(configs, "publisherConf.topicExpression", "${record:value('/topic')}");
+    UpgraderTestUtils.assertExists(configs, "publisherConf.topicWhiteList", "*");
+  }
+
+  public static void assertCleanSessionFlagAdded(List<Config> configs) {
+    UpgraderTestUtils.assertExists(configs, "commonConf.cleanSession", false);
   }
 }

@@ -17,34 +17,45 @@ package com.streamsets.datacollector.cluster;
 
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.config.RuleDefinitions;
+import com.streamsets.datacollector.creation.PipelineConfigBean;
+import com.streamsets.datacollector.credential.CredentialStoresTask;
+import com.streamsets.datacollector.runner.InterceptorCreatorContextBuilder;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
-import com.streamsets.datacollector.util.SystemProcessFactory;
 import com.streamsets.lib.security.acl.dto.Acl;
+import com.streamsets.pipeline.api.StageException;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.URLClassLoader;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 public interface ClusterProvider {
 
-  void killPipeline(SystemProcessFactory systemProcessFactory, File sparkManager, File tempDir,
-                                   String appId, PipelineConfiguration pipelineConfiguration) throws TimeoutException,
-                                   IOException;
+  void killPipeline(
+      File tempDir,
+      ApplicationState applicationState,
+      PipelineConfiguration pipelineConfiguration,
+      PipelineConfigBean pipelineConfigBean
+  ) throws TimeoutException, IOException, StageException;
 
-  ClusterPipelineStatus getStatus(SystemProcessFactory systemProcessFactory, File sparkManager, File tempDir,
-                                   String appId, PipelineConfiguration pipelineConfiguration) throws TimeoutException, IOException;
+
+  ClusterPipelineStatus getStatus(
+      File tempDir,
+      ApplicationState applicationState,
+      PipelineConfiguration pipelineConfiguration,
+      PipelineConfigBean pipelineConfigBean
+  ) throws TimeoutException, IOException, StageException;
 
 
   ApplicationState startPipeline(
-      SystemProcessFactory systemProcessFactory,
-      File sparkManager,
       File tempDir,
-      Map<String, String> environment,
       Map<String, String> sourceInfo,
       PipelineConfiguration pipelineConfiguration,
+      PipelineConfigBean pipelineConfigBean,
       StageLibraryTask stageLibrary,
+      CredentialStoresTask credentialStoresTask,
       File etcDir,
       File resourcesDir,
       File staticWebDir,
@@ -53,7 +64,15 @@ public interface ClusterProvider {
       URLClassLoader containerCL,
       long timeToWaitForFailure,
       RuleDefinitions ruleDefinitions,
-      Acl acl
-  )
-    throws TimeoutException, IOException;
+      Acl acl,
+      InterceptorCreatorContextBuilder interceptorCreatorContextBuilder,
+      List<String> blobStoreResources
+  ) throws TimeoutException, IOException, StageException;
+
+
+  void cleanUp(
+      ApplicationState applicationState,
+      PipelineConfiguration pipelineConfiguration,
+      PipelineConfigBean pipelineConfigBean
+  ) throws IOException, StageException;
 }

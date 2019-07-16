@@ -26,6 +26,7 @@ import com.streamsets.datacollector.config.MetricElement;
 import com.streamsets.datacollector.config.MetricType;
 import com.streamsets.datacollector.config.MetricsRuleDefinition;
 import com.streamsets.datacollector.creation.RuleDefinitionsConfigBean;
+import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
 import com.streamsets.datacollector.el.ELEvaluator;
 import com.streamsets.datacollector.el.ELVariables;
 import com.streamsets.datacollector.execution.EventListenerManager;
@@ -40,6 +41,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -60,7 +63,7 @@ public class TestMetricRuleEvaluator {
   public static void setUp() {
     metrics = new MetricRegistry();
     variables = new ELVariables();
-    elEvaluator = new ELEvaluator("TestMetricRuleEvaluator", RecordEL.class, StringEL.class);
+    elEvaluator = new ELEvaluator("TestMetricRuleEvaluator", ConcreteELDefinitionExtractor.get(), RecordEL.class, StringEL.class);
     runtimeInfo = new StandaloneRuntimeInfo(RuntimeModule.SDC_PROPERTY_PREFIX, new MetricRegistry(),
       Arrays.asList(TestDataRuleEvaluator.class.getClassLoader()));
   }
@@ -78,7 +81,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.TIMER_COUNT, "${value()>2}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -101,7 +104,7 @@ public class TestMetricRuleEvaluator {
       "${value()>2}", false, false, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -123,7 +126,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.TIMER_COUNT, "${value()>4}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-         new RuleDefinitionsConfigBean());
+         new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -144,7 +147,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.TIMER_COUNT, "${valu()>2", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -165,7 +168,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.COUNTER_COUNT, "${value()>98}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -186,7 +189,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.COUNTER_COUNT, "${value()>98}", false, false, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -206,7 +209,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.COUNTER_COUNT, "${value()>100}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -221,12 +224,16 @@ public class TestMetricRuleEvaluator {
     Meter m = MetricsConfigurator.createMeter(metrics, "testMeterMatch", PIPELINE_NAME, REVISION);
     m.mark(1000);
 
+    List<String> alertedRules = new LinkedList<>();
+    EventListenerManager eventListenerManager = new EventListenerManager();
+    eventListenerManager.addAlertEventListener(alertedRules::add);
+
     MetricsRuleDefinition metricsRuleDefinition = new MetricsRuleDefinition("testMeterMatch", "testMeterMatch",
       "testMeterMatch", MetricType.METER,
       MetricElement.METER_COUNT, "${value()>98}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
-      new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+      new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, eventListenerManager),
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -234,6 +241,32 @@ public class TestMetricRuleEvaluator {
       AlertsUtil.getAlertGaugeName(metricsRuleDefinition.getId()));
     Assert.assertNotNull(gauge);
     Assert.assertEquals((long)1000, ((Map<String, Object>) gauge.getValue()).get("currentValue"));
+    Assert.assertEquals(1, alertedRules.size());
+  }
+
+  @Test
+  public void testMeterNoMatchTimeBackoff() {
+    //create timer with id "testMetricAlerts" and register with metric registry, bump up value to 4.
+    Meter m = MetricsConfigurator.createMeter(metrics, "testMeterNoMatchTimeBackoff", PIPELINE_NAME, REVISION);
+    m.mark(1000);
+
+    List<String> alertedRules = new LinkedList<>();
+    EventListenerManager eventListenerManager = new EventListenerManager();
+    eventListenerManager.addAlertEventListener(alertedRules::add);
+
+    MetricsRuleDefinition metricsRuleDefinition = new MetricsRuleDefinition("testMeterNoMatchTimeBackoff", "testMeterNoMatchTimeBackoff",
+      "testMeterNoMatchTimeBackoff", MetricType.METER,
+      MetricElement.METER_COUNT, "${(time:now() > pipeline:startTime() * 30 * SECONDS ) && value() < 98}", false, true, System.currentTimeMillis());
+    MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
+      new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, eventListenerManager),
+        new RuleDefinitionsConfigBean(), System.currentTimeMillis());
+    metricRuleEvaluator.checkForAlerts();
+
+    //get alert gauge
+    Gauge<Object> gauge = MetricsConfigurator.getGauge(metrics,
+      AlertsUtil.getAlertGaugeName(metricsRuleDefinition.getId()));
+    Assert.assertNull(gauge);
+    Assert.assertEquals(0, alertedRules.size());
   }
 
   @Test
@@ -247,7 +280,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.METER_COUNT, "${value()>1001}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -267,7 +300,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.METER_COUNT, "${value()>100}", false, false, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -287,7 +320,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.HISTOGRAM_COUNT, "${value()==1}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -308,7 +341,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.HISTOGRAM_COUNT, "${value()>1}", false, true, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge
@@ -328,7 +361,7 @@ public class TestMetricRuleEvaluator {
       MetricElement.HISTOGRAM_COUNT, "${value()==1}", false, false, System.currentTimeMillis());
     MetricRuleEvaluator metricRuleEvaluator = new MetricRuleEvaluator(metricsRuleDefinition, metrics,
       new AlertManager(PIPELINE_NAME, PIPELINE_TITLE, REVISION, null, metrics, runtimeInfo, new EventListenerManager()),
-        new RuleDefinitionsConfigBean());
+        new RuleDefinitionsConfigBean(), 0);
     metricRuleEvaluator.checkForAlerts();
 
     //get alert gauge

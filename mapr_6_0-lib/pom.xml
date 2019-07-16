@@ -23,14 +23,14 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-stage-lib-parent</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../stage-lib-parent</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-mapr_6_0-lib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector MapR 6.0.0 Lib</description>
-  <name>StreamSets Data Collector MapR 6.00.0 Lib</name>
+  <name>StreamSets Data Collector MapR 6.0.0 Lib</name>
   <packaging>jar</packaging>
 
   <properties>
@@ -39,8 +39,8 @@
     <hadoop.version>2.7.0-mapr-1710</hadoop.version>
     <hive.version>2.1.1-mapr-1710</hive.version>
     <zookeeper.version>3.4.5-mapr-1604</zookeeper.version>
-    <spark.version>1.6.1-mapr-1710</spark.version>
- </properties>
+    <mapr.version>6.0.0-mapr</mapr.version>
+  </properties>
 
   <dependencies>
     <!-- MapR Hadoop client -->
@@ -105,6 +105,13 @@
       <groupId>org.apache.zookeeper</groupId>
       <artifactId>zookeeper</artifactId>
       <version>${zookeeper.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.mapr.hadoop</groupId>
+      <artifactId>maprfs</artifactId>
+      <version>${mapr.version}</version>
       <scope>provided</scope>
     </dependency>
 
@@ -225,7 +232,7 @@
     </dependency>
     <dependency>
       <groupId>com.streamsets</groupId>
-      <artifactId>streamsets-datacollector-sdc-kafka-09-mapr51</artifactId>
+      <artifactId>streamsets-datacollector-sdc-kafka-09-mapr52</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
       <exclusions>
@@ -257,6 +264,10 @@
           <groupId>com.mapr.db</groupId>
           <artifactId>maprdb-cdc</artifactId>
         </exclusion>
+         <exclusion>
+           <groupId>org.apache.hbase</groupId>
+           <artifactId>hbase-client</artifactId>
+         </exclusion>
        </exclusions>
     </dependency>
     <dependency>
@@ -284,7 +295,12 @@
           <artifactId>jackson-databind</artifactId>
         </exclusion>
       </exclusions>
-    </dependency>    
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-kafka_multisource-0_9-protolib</artifactId>
+      <scope>compile</scope>
+    </dependency>
 
     <!-- include the LoginUgiProvider implementation for MapR with workaround -->
     <dependency>
@@ -293,7 +309,6 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
-
   </dependencies>
 
   <build>
@@ -304,13 +319,6 @@
         <version>2.8.2</version>
         <configuration>
           <skip>true</skip>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-            <argLine>-Xmx1g</argLine>
         </configuration>
       </plugin>
     </plugins>

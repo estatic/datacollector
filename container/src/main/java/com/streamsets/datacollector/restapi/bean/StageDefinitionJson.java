@@ -17,16 +17,18 @@ package com.streamsets.datacollector.restapi.bean;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.pipeline.api.ExecutionMode;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class StageDefinitionJson {
 
-  private final com.streamsets.datacollector.config.StageDefinition stageDefinition;
+  private final StageDefinition stageDefinition;
 
-  public StageDefinitionJson(com.streamsets.datacollector.config.StageDefinition stageDefinition) {
+  public StageDefinitionJson(StageDefinition stageDefinition) {
     this.stageDefinition = stageDefinition;
   }
 
@@ -116,6 +118,10 @@ public class StageDefinitionJson {
     return stageDefinition.getOutputStreamLabelProviderClass();
   }
 
+  public String getOutputStreamsDrivenByConfig() {
+    return stageDefinition.getOutputStreamsDrivenByConfig();
+  }
+
   public String getLibrary() {
     return stageDefinition.getLibrary();
   }
@@ -144,4 +150,41 @@ public class StageDefinitionJson {
   public List<ServiceDependencyDefinitionJson> getServices() {
     return BeanHelper.wrapServiceDependencyDefinitions(stageDefinition.getServices());
   }
+
+  public List<String> getHideStage() {
+    return BeanHelper.wrapHideStage(stageDefinition.getHideStage());
+  }
+
+  public boolean getSendsResponse() {
+    return stageDefinition.getSendsResponse();
+  }
+
+  public boolean isBeta() {
+    return stageDefinition.isBeta();
+  }
+
+  public int getInputStreams() {
+    return stageDefinition.getInputStreams();
+  }
+
+  public String getInputStreamLabelProviderClass() {
+    return stageDefinition.getInputStreamLabelProviderClass();
+  }
+
+  public List<String> getInputStreamLabels() {
+    return stageDefinition.getInputStreamLabels();
+  }
+
+  public Boolean isBisectable() {
+    return stageDefinition.isBisectable();
+  }
+
+  public List<String> getEventDefs() {
+    return stageDefinition.getEventDefs().stream().map(Class::getCanonicalName).collect(Collectors.toList());
+  }
+
+  public String getYamlUpgrader() {
+    return stageDefinition.getYamlUpgrader();
+  }
+
 }

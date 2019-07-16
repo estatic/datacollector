@@ -27,6 +27,9 @@ import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.impl.ErrorMessage;
 
+import java.util.Collection;
+import java.util.List;
+
 /**
  * BatchContext implementation keeping all the state for given Batch while the pipeline is running the origin's code.
  */
@@ -78,7 +81,7 @@ public class BatchContextImpl implements BatchContext {
   public void toError(Record record, String errorMessage) {
     Preconditions.checkNotNull(record, "record cannot be null");
     Preconditions.checkNotNull(errorMessage, "errorMessage cannot be null");
-    toError(record, new ErrorMessage(ContainerError.CONTAINER_0002, errorMessage));
+    toError(record, new ErrorMessage(ContainerError.CONTAINER_0001, errorMessage));
   }
 
   @Override
@@ -110,6 +113,16 @@ public class BatchContextImpl implements BatchContext {
   }
 
   @Override
+  public void complete(Record record) {
+    pipeBatch.getProcessedSink().addRecord(originStageName, record);
+  }
+
+  @Override
+  public void complete(Collection<Record> records) {
+    pipeBatch.getProcessedSink().addRecords(originStageName, records);
+  }
+
+  @Override
   public BatchMaker getBatchMaker() {
     return batchMaker;
   }
@@ -129,5 +142,10 @@ public class BatchContextImpl implements BatchContext {
 
   public long getStartTime() {
     return startTime;
+  }
+
+  @Override
+  public List<Record> getSourceResponseRecords() {
+    return pipeBatch.getSourceResponseSink().getResponseRecords();
   }
 }

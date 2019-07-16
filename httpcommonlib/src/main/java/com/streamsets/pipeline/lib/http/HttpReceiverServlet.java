@@ -21,6 +21,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.impl.Utils;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.iq80.snappy.SnappyFramedInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +33,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
@@ -42,10 +46,16 @@ public class HttpReceiverServlet extends HttpServlet {
   private final HttpReceiver receiver;
   private final BlockingQueue<Exception> errorQueue;
   private final Meter invalidRequestMeter;
-  private final Meter errorRequestMeter;
-  private final Meter requestMeter;
+  protected final Meter errorRequestMeter;
+  protected final Meter requestMeter;
   private final Timer requestTimer;
   private volatile boolean shuttingDown;
+
+  // In case of FlowFile data format, we need to put certain header as the OK response
+  // NiFi HTTP destination will check the header and fail if it doesn't see this header
+  private static final String NIFI_TRANSACTION_HEADER = "x-nifi-transaction-id";
+  // Even if the actual FlowFile is version 1 or 2, passing v3 seems valid
+  private static final String NIFI_RESPONSE = "application/flowfile-v3";
 
   public HttpReceiverServlet(Stage.Context context, HttpReceiver receiver, BlockingQueue<Exception> errorQueue) {
     this.receiver = receiver;
@@ -56,12 +66,33 @@ public class HttpReceiverServlet extends HttpServlet {
     requestTimer = context.createTimer("requests");
   }
 
-  HttpReceiver getReceiver() {
+  protected HttpReceiver getReceiver() {
     return receiver;
   }
 
+  // From https://stackoverflow.com/a/31928740/33905
   @VisibleForTesting
-  boolean validateAppId(HttpServletRequest req, HttpServletResponse res)
+  protected static Map<String, String[]> getQueryParameters(HttpServletRequest request) {
+    Map<String, String[]> queryParameters = new HashMap<>();
+    String queryString = request.getQueryString();
+
+    if (StringUtils.isEmpty(queryString)) {
+      return queryParameters;
+    }
+
+    String[] parameters = queryString.split("&");
+
+    for (String parameter : parameters) {
+      String[] keyValuePair = parameter.split("=");
+      String[] values = queryParameters.get(keyValuePair[0]);
+      values = ArrayUtils.add(values, keyValuePair.length == 1 ? "" : keyValuePair[1]); //length is one if no value is available.
+      queryParameters.put(keyValuePair[0], values);
+    }
+    return queryParameters;
+  }
+
+  @VisibleForTesting
+  protected boolean validateAppId(HttpServletRequest req, HttpServletResponse res)
       throws ServletException, IOException {
     boolean valid = false;
     String ourAppId = null;
@@ -74,7 +105,7 @@ public class HttpReceiverServlet extends HttpServlet {
     String reqAppId = req.getHeader(HttpConstants.X_SDC_APPLICATION_ID_HEADER);
 
     if (reqAppId == null && receiver.isAppIdViaQueryParamAllowed()) {
-      reqAppId = req.getParameter(HttpConstants.SDC_APPLICATION_ID_QUERY_PARAM);
+      reqAppId = getQueryParameters(req).get(HttpConstants.SDC_APPLICATION_ID_QUERY_PARAM)[0];
     }
 
     if (reqAppId == null) {
@@ -95,6 +126,9 @@ public class HttpReceiverServlet extends HttpServlet {
       LOG.debug("Validation from '{}', OK", req.getRemoteAddr());
       res.setHeader(HttpConstants.X_SDC_PING_HEADER, HttpConstants.X_SDC_PING_VALUE);
       res.setStatus(HttpServletResponse.SC_OK);
+      if (res.getHeaderNames().contains(NIFI_TRANSACTION_HEADER)) {
+        res.setHeader("Accept", NIFI_RESPONSE);
+      }
     }
   }
 
@@ -120,6 +154,11 @@ public class HttpReceiverServlet extends HttpServlet {
       }
     }
     return valid && getReceiver().validate(req, res);
+  }
+
+  @Override
+  protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    doPost(req, resp);
   }
 
   @Override
@@ -151,13 +190,7 @@ public class HttpReceiverServlet extends HttpServlet {
             }
           }
           LOG.debug("Processing request from '{}'", requestor);
-          if (getReceiver().process(req, is)) {
-            resp.setStatus(HttpServletResponse.SC_OK);
-            requestMeter.mark();
-          } else {
-            resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Record(s) didn't reach all destinations");
-            errorRequestMeter.mark();
-          }
+          processRequest(req, is, resp);
         } catch (Exception ex) {
           errorQueue.offer(ex);
           errorRequestMeter.mark();
@@ -173,12 +206,22 @@ public class HttpReceiverServlet extends HttpServlet {
     }
   }
 
+  protected void processRequest(HttpServletRequest req, InputStream is, HttpServletResponse resp) throws IOException {
+    if (getReceiver().process(req, is, resp)) {
+      resp.setStatus(HttpServletResponse.SC_OK);
+      requestMeter.mark();
+    } else {
+      resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Record(s) didn't reach all destinations");
+      errorRequestMeter.mark();
+    }
+  }
+
   @VisibleForTesting
   boolean isShuttingDown() {
     return shuttingDown;
   }
 
-  void setShuttingDown() {
+  public void setShuttingDown() {
     shuttingDown = true;
   }
 

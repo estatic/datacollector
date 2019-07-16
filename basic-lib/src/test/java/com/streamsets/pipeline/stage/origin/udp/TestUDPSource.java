@@ -19,6 +19,7 @@ import com.google.common.collect.Lists;
 import com.streamsets.pipeline.api.BatchMaker;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.Stage;
+import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.config.DatagramMode;
 import com.streamsets.pipeline.sdk.SourceRunner;
@@ -32,6 +33,11 @@ public class TestUDPSource extends BaseUDPSourceTest {
   private SourceRunner runner;
   private TUDPSource source;
 
+  @StageDef(
+    version = 1,
+    label = "Test stage",
+    onlineHelpRefUrl = ""
+  )
   public static class TUDPSource extends UDPSource {
 
     boolean produceCalled;
@@ -100,5 +106,6 @@ public class TestUDPSource extends BaseUDPSourceTest {
   @Override
   protected void destroyRunner() throws StageException {
     runner.runDestroy();
+    source.destroy();
   }
 }

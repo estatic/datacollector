@@ -20,6 +20,7 @@ import com.google.common.base.Strings;
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.Dependency;
 import com.streamsets.pipeline.api.ListBeanModel;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.common.DataFormatConstants;
@@ -36,6 +37,8 @@ import com.streamsets.pipeline.config.CsvRecordTypeChooserValues;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.DatagramMode;
 import com.streamsets.pipeline.config.DatagramModeChooserValues;
+import com.streamsets.pipeline.config.ExcelHeader;
+import com.streamsets.pipeline.config.ExcelHeaderChooserValues;
 import com.streamsets.pipeline.config.JsonMode;
 import com.streamsets.pipeline.config.JsonModeChooserValues;
 import com.streamsets.pipeline.config.LogMode;
@@ -49,6 +52,7 @@ import com.streamsets.pipeline.lib.el.DataUnitsEL;
 import com.streamsets.pipeline.lib.parser.DataParserFactory;
 import com.streamsets.pipeline.lib.parser.DataParserFactoryBuilder;
 import com.streamsets.pipeline.lib.parser.DataParserFormat;
+import com.streamsets.pipeline.lib.parser.excel.WorkbookParserConstants;
 import com.streamsets.pipeline.lib.parser.log.LogDataFormatValidator;
 import com.streamsets.pipeline.lib.parser.log.LogDataParserFactory;
 import com.streamsets.pipeline.lib.parser.log.RegExConfig;
@@ -73,15 +77,13 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.streamsets.pipeline.lib.util.AvroSchemaHelper.SCHEMA_ID_KEY;
-import static com.streamsets.pipeline.lib.util.AvroSchemaHelper.SCHEMA_KEY;
-import static com.streamsets.pipeline.lib.util.AvroSchemaHelper.SCHEMA_REPO_URLS_KEY;
-import static com.streamsets.pipeline.lib.util.AvroSchemaHelper.SCHEMA_SOURCE_KEY;
-import static com.streamsets.pipeline.lib.util.AvroSchemaHelper.SUBJECT_KEY;
+import static com.streamsets.pipeline.lib.util.AvroSchemaHelper.*;
 import static com.streamsets.pipeline.stage.common.DataFormatErrors.DATA_FORMAT_11;
 
 /**
@@ -99,7 +101,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
   private static final String DEFAULT_LOG4J_CUSTOM_FORMAT = "%r [%t] %-5p %c %x - %m%n";
 
   private LogDataFormatValidator logDataFormatValidator;
-  private DataParserFactory parserFactory;
+  protected DataParserFactory parserFactory;
 
   /* Compression always shown immediately after Data Format */
 
@@ -331,14 +333,45 @@ public class DataParserFormatConfig implements DataFormatConfig {
   public char csvCustomDelimiter = '|';
 
   @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.STRING,
+      defaultValue = DelimitedDataConstants.DEFAULT_MULTI_CHARACTER_FIELD_DELIMITER,
+      label = "Multi Character Field Delimiter",
+      description = "Delimiter between fields in multi-character delimited mode.",
+      displayPosition = 405,
+      group = "DATA_FORMAT",
+      dependsOn = "csvFileFormat",
+      triggeredByValue = "MULTI_CHARACTER"
+  )
+  public String multiCharacterFieldDelimiter = DelimitedDataConstants.DEFAULT_MULTI_CHARACTER_FIELD_DELIMITER;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.STRING,
+      defaultValue = DelimitedDataConstants.DEFAULT_MULTI_CHARACTER_LINE_DELIMITER_EL,
+      label = "Multi Character Line Delimiter",
+      description = "Delimiter between lines (i.e. different records) in multi-character delimited mode.",
+      displayPosition = 406,
+      group = "DATA_FORMAT",
+      dependsOn = "csvFileFormat",
+      triggeredByValue = "MULTI_CHARACTER"
+  )
+  public String multiCharacterLineDelimiter = String.format(
+      "${str:unescapeJava('%s')}",
+      DelimitedDataConstants.DEFAULT_MULTI_CHARACTER_LINE_DELIMITER_EL
+  );
+
+  @ConfigDef(
       required = false,
       type = ConfigDef.Type.CHARACTER,
       defaultValue = "\\",
       label = "Escape Character",
+      description = "Character used to escape quote and delimiter characters. To disable select Other and enter " +
+          "\\u0000 (unicode codepoint for the NULL character).",
       displayPosition = 410,
       group = "DATA_FORMAT",
       dependsOn = "csvFileFormat",
-      triggeredByValue = "CUSTOM"
+      triggeredByValue = {"CUSTOM", "MULTI_CHARACTER"}
   )
   public char csvCustomEscape = '\\';
 
@@ -347,10 +380,12 @@ public class DataParserFormatConfig implements DataFormatConfig {
       type = ConfigDef.Type.CHARACTER,
       defaultValue = "\"",
       label = "Quote Character",
+      description = "Character used to quote string fields. To disable select Other and enter" +
+          " \\u0000 (unicode codepoint for the NULL character).",
       displayPosition = 420,
       group = "DATA_FORMAT",
       dependsOn = "csvFileFormat",
-      triggeredByValue = "CUSTOM"
+      triggeredByValue = {"CUSTOM", "MULTI_CHARACTER"}
   )
   public char csvCustomQuote = '\"';
 
@@ -1030,13 +1065,66 @@ public class DataParserFormatConfig implements DataFormatConfig {
   )
   public boolean verifyChecksum = false;
 
+  // EXCEL
+  @ConfigDef(
+          required = true,
+          type = ConfigDef.Type.MODEL,
+          label = "Excel Header Option",
+          description = "Excel headers",
+          displayPosition = 1000,
+          group = "DATA_FORMAT",
+          dependsOn = "dataFormat^",
+          triggeredByValue = "EXCEL"
+  )
+  @ValueChooserModel(ExcelHeaderChooserValues.class)
+  public ExcelHeader excelHeader;
+
+  @ConfigDef(
+    required = true,
+    type = ConfigDef.Type.BOOLEAN,
+    defaultValue = "false",
+    label = "Skip Cells With No Header",
+    description = "If checked, cells that have no associated header value will be skipped.",
+    displayPosition = 1001,
+    group = "DATA_FORMAT",
+    dependsOn = "excelHeader",
+    triggeredByValue = "WITH_HEADER"
+  )
+  public boolean excelSkipCellsWithNoHeader = false;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "true",
+      label = "Read All Sheets",
+      description = "Specifies whether all sheets from the document should be read.",
+      displayPosition = 1010,
+      group = "DATA_FORMAT",
+      dependsOn = "dataFormat^",
+      triggeredByValue = "EXCEL"
+  )
+  public boolean excelReadAllSheets = true;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.LIST,
+      label = "Import Sheets",
+      defaultValue = "[]",
+      description = "Names of the sheets that should be imported. Other sheets will be ignored.",
+      displayPosition = 1020,
+      group = "DATA_FORMAT",
+      dependsOn = "excelReadAllSheets",
+      triggeredByValue = "false"
+  )
+  public List<String> excelSheetNames = Collections.emptyList();
+
   // Size of StringBuilder pool maintained by Text and Log Data Parser Factories.
   // The default value is 1 for regular origins. Multithreaded origins should override this value as required.
   public int stringBuilderPoolSize = DataFormatConstants.STRING_BUILDER_POOL_SIZE;
 
   @Override
   public boolean init(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       DataFormat dataFormat,
       String stageGroup,
       String configPrefix,
@@ -1054,7 +1142,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
   }
 
   public boolean init(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       DataFormat dataFormat,
       String stageGroup,
       String configPrefix,
@@ -1073,7 +1161,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
   }
 
   public boolean init(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       DataFormat dataFormat,
       String stageGroup,
       String configPrefix,
@@ -1092,7 +1180,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
   }
 
   public boolean init(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       DataFormat dataFormat,
       String stageGroup,
       String configPrefix,
@@ -1158,6 +1246,9 @@ public class DataParserFormatConfig implements DataFormatConfig {
             templateCacheTimeoutMs
         );
         break;
+      case EXCEL:
+        valid = validateWorkbook(context, configPrefix, issues);
+        break;
       case SDC_JSON:
       case BINARY:
       case AVRO:
@@ -1188,7 +1279,22 @@ public class DataParserFormatConfig implements DataFormatConfig {
     return valid;
   }
 
-  private boolean validateJson(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  private boolean validateWorkbook(ProtoConfigurableEntity.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+    boolean valid = true;
+    if (excelHeader == null) {
+      valid = false;
+      issues.add(
+          context.createConfigIssue(
+              DataFormatGroups.DATA_FORMAT.name(),
+              configPrefix + "excelHeader",
+              DataFormatErrors.DATA_FORMAT_200
+          )
+      );
+    }
+    return valid;
+  }
+
+  private boolean validateJson(ProtoConfigurableEntity.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
     boolean valid = true;
     if (jsonMaxObjectLen < 1) {
       issues.add(
@@ -1203,7 +1309,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
     return valid;
   }
 
-  private boolean validateText(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  private boolean validateText(ProtoConfigurableEntity.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
     boolean valid = true;
     if (textMaxLineLen < 1) {
       issues.add(
@@ -1228,7 +1334,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
     return valid;
   }
 
-  private boolean validateDelimited(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  private boolean validateDelimited(ProtoConfigurableEntity.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
     boolean valid = true;
     if (csvMaxObjectLen < 1) {
       issues.add(
@@ -1243,7 +1349,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
     return valid;
   }
 
-  private boolean validateXml(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  private boolean validateXml(ProtoConfigurableEntity.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
     boolean valid = true;
     if (xmlMaxObjectLen < 1) {
       issues.add(
@@ -1273,7 +1379,10 @@ public class DataParserFormatConfig implements DataFormatConfig {
   }
 
   private boolean validateWholeFile(
-      Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+      ProtoConfigurableEntity.Context context,
+      String configPrefix,
+      List<Stage.ConfigIssue> issues
+  ) {
     boolean valid = true;
     if (wholeFileMaxObjectLen < 1) {
       issues.add(
@@ -1288,7 +1397,11 @@ public class DataParserFormatConfig implements DataFormatConfig {
     return valid;
   }
 
-  private void validateProtobuf(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  private void validateProtobuf(
+      ProtoConfigurableEntity.Context context,
+      String configPrefix,
+      List<Stage.ConfigIssue> issues
+  ) {
     if (protoDescriptorFile == null || protoDescriptorFile.isEmpty()) {
       issues.add(
           context.createConfigIssue(
@@ -1321,7 +1434,11 @@ public class DataParserFormatConfig implements DataFormatConfig {
     }
   }
 
-  private void validateLogFormat(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  private void validateLogFormat(
+      ProtoConfigurableEntity.Context context,
+      String configPrefix,
+      List<Stage.ConfigIssue> issues
+  ) {
     logDataFormatValidator = new LogDataFormatValidator(
         logMode,
         logMaxObjectLen,
@@ -1329,7 +1446,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
         customLogFormat,
         regex,
         grokPatternDefinition,
-        grokPattern,
+        Arrays.asList(grokPattern),
         enableLog4jCustomLogFormat,
         log4jCustomLogFormat,
         onParseError,
@@ -1340,7 +1457,11 @@ public class DataParserFormatConfig implements DataFormatConfig {
     logDataFormatValidator.validateLogFormatConfig(context, configPrefix, issues);
   }
 
-  void checkCollectdParserConfigs(Stage.Context context, String configPrefix, List<Stage.ConfigIssue> issues) {
+  void checkCollectdParserConfigs(
+      ProtoConfigurableEntity.Context context,
+      String configPrefix,
+      List<Stage.ConfigIssue> issues
+  ) {
     if (null != typesDbPath && !typesDbPath.isEmpty()) {
       File typesDbFile = new File(typesDbPath);
       if (!typesDbFile.canRead() || !typesDbFile.isFile()) {
@@ -1368,7 +1489,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
   }
 
   private boolean validateDataParser(
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       DataFormat dataFormat,
       String stageGroup,
       String configPrefix,
@@ -1376,30 +1497,9 @@ public class DataParserFormatConfig implements DataFormatConfig {
       boolean multiLines,
       List<Stage.ConfigIssue> issues
   ) {
-    boolean valid = true;
-    DataParserFactoryBuilder builder = new DataParserFactoryBuilder(context, dataFormat.getParserFormat());
-    Charset fileCharset;
 
-    try {
-      fileCharset = Charset.forName(charset);
-    } catch (UnsupportedCharsetException ignored) { // NOSONAR
-      // setting it to a valid one so the parser factory can be configured and tested for more errors
-      fileCharset = StandardCharsets.UTF_8;
-      issues.add(
-          context.createConfigIssue(
-              stageGroup,
-              configPrefix + "charset",
-              DataFormatErrors.DATA_FORMAT_05,
-              charset
-          )
-      );
-      valid = false;
-    }
-    builder.setCharset(fileCharset);
-    builder.setOverRunLimit(overrunLimit);
-    builder.setRemoveCtrlChars(removeCtrlChars);
-    builder.setCompression(compression);
-    builder.setFilePatternInArchive(filePatternInArchive);
+    DataParserFactoryBuilder builder = new DataParserFactoryBuilder(context, dataFormat.getParserFormat());
+    boolean valid = isValid(context, stageGroup, configPrefix, overrunLimit, issues, builder);
 
     switch (dataFormat) {
       case TEXT:
@@ -1445,6 +1545,9 @@ public class DataParserFormatConfig implements DataFormatConfig {
       case NETFLOW:
         buildNetflowParser(builder);
         break;
+      case EXCEL:
+        buildWorkbookParser(builder);
+        break;
       default:
         throw new IllegalStateException("Unexpected data format" + dataFormat);
     }
@@ -1455,6 +1558,38 @@ public class DataParserFormatConfig implements DataFormatConfig {
       issues.add(context.createConfigIssue(null, null, DataFormatErrors.DATA_FORMAT_06, ex.toString(), ex));
       valid = false;
     }
+    return valid;
+  }
+
+  protected boolean isValid(
+      ProtoConfigurableEntity.Context context,
+      String stageGroup,
+      String configPrefix,
+      int overrunLimit,
+      List<Stage.ConfigIssue> issues,
+      DataParserFactoryBuilder builder
+  ) {
+    boolean valid = true;
+    Charset fileCharset;
+
+    try {
+      fileCharset = Charset.forName(charset);
+    } catch (UnsupportedCharsetException ignored) { // NOSONAR
+      // setting it to a valid one so the parser factory can be configured and tested for more errors
+      fileCharset = StandardCharsets.UTF_8;
+      issues.add(context.createConfigIssue(
+          stageGroup,
+          configPrefix + "charset",
+          DataFormatErrors.DATA_FORMAT_05,
+          charset)
+      );
+      valid = false;
+    }
+    builder.setCharset(fileCharset);
+    builder.setOverRunLimit(overrunLimit);
+    builder.setRemoveCtrlChars(removeCtrlChars);
+    builder.setCompression(compression);
+    builder.setFilePatternInArchive(filePatternInArchive);
     return valid;
   }
 
@@ -1489,7 +1624,13 @@ public class DataParserFormatConfig implements DataFormatConfig {
         .setConfig(DelimitedDataConstants.IGNORE_EMPTY_LINES_CONFIG, csvIgnoreEmptyLines)
         .setConfig(DelimitedDataConstants.ALLOW_EXTRA_COLUMNS, csvAllowExtraColumns)
         .setConfig(DelimitedDataConstants.EXTRA_COLUMN_PREFIX, csvExtraColumnPrefix)
-    ;
+        .setConfig(
+            DelimitedDataConstants.MULTI_CHARACTER_FIELD_DELIMITER_CONFIG,
+            multiCharacterFieldDelimiter
+        ).setConfig(
+            DelimitedDataConstants.MULTI_CHARACTER_LINE_DELIMITER_CONFIG,
+            multiCharacterLineDelimiter
+        );
   }
 
   private void buildProtobufParser(DataParserFactoryBuilder builder) {
@@ -1538,9 +1679,18 @@ public class DataParserFormatConfig implements DataFormatConfig {
 
   private void buildNetflowParser(DataParserFactoryBuilder builder) {
     builder
+        .setMaxDataLen(-1)
         .setConfig(NetflowDataParserFactory.OUTPUT_VALUES_MODE_KEY, netflowOutputValuesMode)
         .setConfig(NetflowDataParserFactory.MAX_TEMPLATE_CACHE_SIZE_KEY, maxTemplateCacheSize)
         .setConfig(NetflowDataParserFactory.TEMPLATE_CACHE_TIMEOUT_MS_KEY, templateCacheTimeoutMs);
+  }
+
+  private void buildWorkbookParser(DataParserFactoryBuilder builder) {
+    builder
+        .setConfig(WorkbookParserConstants.SHEETS, excelReadAllSheets ? Collections.emptyList() : excelSheetNames)
+        .setConfig(WorkbookParserConstants.SKIP_CELLS_WITH_NO_HEADER, excelSkipCellsWithNoHeader)
+        .setMode(excelHeader)
+        .setMaxDataLen(-1);
   }
 
   /**
@@ -1579,7 +1729,7 @@ public class DataParserFormatConfig implements DataFormatConfig {
   public void checkForInvalidAvroSchemaLookupMode(
       DataFormat dataFormat,
       String configBeanPrefix,
-      Stage.Context context,
+      ProtoConfigurableEntity.Context context,
       List<Stage.ConfigIssue> issues
   ) {
     if (dataFormat != DataFormat.AVRO) {

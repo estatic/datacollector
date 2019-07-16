@@ -26,9 +26,10 @@ public enum CsvMode implements Label {
   EXCEL("MS Excel CSV", CSVFormat.EXCEL),
   MYSQL("MySQL CSV", CSVFormat.MYSQL),
   TDF("Tab Separated Values", CSVFormat.TDF),
-  POSTGRES_CSV("Postgres CSV", CSVFormat.POSTGRESQL_CSV),
-  POSTGRES_TEXT("Postgres Text", CSVFormat.POSTGRESQL_TEXT),
-  CUSTOM("Custom", null)
+  POSTGRES_CSV("PostgreSQL CSV", CSVFormat.POSTGRESQL_CSV),
+  POSTGRES_TEXT("PostgreSQL Text", CSVFormat.POSTGRESQL_TEXT),
+  CUSTOM("Custom", null),
+  MULTI_CHARACTER("Multi Character Delimited", null)
   ;
 
   private final String label;

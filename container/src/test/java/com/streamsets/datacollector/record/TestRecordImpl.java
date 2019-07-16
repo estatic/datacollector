@@ -16,20 +16,28 @@
 package com.streamsets.datacollector.record;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
+import com.streamsets.pipeline.api.StageException;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public class TestRecordImpl {
+
+  private static final String RESERVED_PREFIX = "_.";
+  private static final String REQUIRED_ATTR_EXCEPTION_MSG = "Does not have required attributes";
+  private static final String RESERVED_PREFIX_EXCEPTION_MSG = "Header attributes cannot start with '" +
+      RESERVED_PREFIX + "'";
 
   @Test(expected = NullPointerException.class)
   public void testConstructorInvalid1() {
@@ -92,6 +100,61 @@ public class TestRecordImpl {
   }
 
   @Test
+  public void testHeaderUserAttr_reservedAttrs() {
+    RecordImpl record = new RecordImpl("stage", "source", null, null);
+    HeaderImpl header = (HeaderImpl) record.getHeader();
+    Assert.assertNull(header.getRaw());
+    Assert.assertNull(header.getRawMimeType());
+
+    Map<String, Object> userAttrs = new HashMap<>();
+    userAttrs.put("bird", "chicken");
+    userAttrs.put("SSN", 12345);
+    userAttrs.forEach((k, v) -> header.setAttribute(k, v.toString()));
+
+    // Now try and add a RESERVED attribute
+    try {
+      userAttrs.put(RESERVED_PREFIX+"-bird", "rabbit");
+      header.setAttribute(RESERVED_PREFIX+"-bird", "rabbit");
+      Assert.fail("Test should have asserted with attempt to set reserved attribute");
+    } catch (IllegalArgumentException ex) {
+      Assert.assertEquals(ex.getMessage(), RESERVED_PREFIX_EXCEPTION_MSG);
+    }
+
+    //Try overriding all attributes without required attributes
+    try {
+      header.overrideUserAndSystemAttributes(userAttrs);
+      Assert.fail("Test should have asserted with attempt to override attributes with all required attributes.");
+    } catch (IllegalArgumentException ex) {
+      Assert.assertEquals(ex.getMessage(), REQUIRED_ATTR_EXCEPTION_MSG);
+    }
+
+    //Try overriding all attributes with required attributes
+    Map<String, Object> oldAttrs = header.getAllAttributes();
+    header.overrideUserAndSystemAttributes(oldAttrs);
+
+    //oldAttrs should have all headers, reserved and user
+    Assert.assertEquals(oldAttrs, header.getAllAttributes());
+
+    /* Test for hasRequiredAttributes(). Any new header map MUST have the MINIMUM required reserved
+      header attributes AND if any reserved attributes exist in existing map the MUST exist in new
+      map's keys
+      */
+    oldAttrs = header.getAllAttributes();
+    Assert.assertEquals(oldAttrs.size(), 5);
+
+    // Remove reserved attribute RESERVED_PREFIX+"sourceRecord" from map, which exists in existing
+    // header, and attempt to override header map with missing attribute
+    Map<String, Object> badAttrs = new HashMap<>(oldAttrs);
+    badAttrs.remove(new String(RESERVED_PREFIX+"sourceRecord"));
+    try {
+      header.overrideUserAndSystemAttributes(badAttrs);
+      Assert.fail("Should not be able to override header map without all reserved attributes.");
+    } catch (IllegalArgumentException ex) {
+      Assert.assertEquals(ex.getMessage(), REQUIRED_ATTR_EXCEPTION_MSG);
+    }
+  }
+
+  @Test
   public void testRaw() {
     RecordImpl record = new RecordImpl("stage", "source", new byte[0], "M");
     Assert.assertArrayEquals(new byte[0], record.getHeader().getRaw());
@@ -122,6 +185,29 @@ public class TestRecordImpl {
   // tests for field-path expressions
 
   @Test
+  public void testRootFieldAccessOptimizationCorrectness() {
+    RecordImpl r = new RecordImpl("stage", "source", null, null);
+
+    Field f = Field.create(1);
+    r.set(f);
+    Assert.assertEquals(f, r.get());
+    Assert.assertEquals(f, r.get(""));
+    Assert.assertEquals(f, r.get("/"));
+
+    f = Field.create(1);
+    r.set("", f);
+    Assert.assertEquals(f, r.get());
+    Assert.assertEquals(f, r.get(""));
+    Assert.assertEquals(f, r.get("/"));
+
+    f = Field.create(1);
+    r.set("/", f);
+    Assert.assertEquals(f, r.get());
+    Assert.assertEquals(f, r.get(""));
+    Assert.assertEquals(f, r.get("/"));
+  }
+
+    @Test
   public void testRootBasicField() {
     RecordImpl r = new RecordImpl("stage", "source", null, null);
 
@@ -616,5 +702,31 @@ public class TestRecordImpl {
         Assert.assertEquals("value", f.getValueAsString());
       }
     }
+  }
+
+  @Test
+  public void testForEachField() throws StageException {
+    RecordImpl r = new RecordImpl("stage", "source", null, null);
+    r.set(Field.create(ImmutableMap.of(
+      "string", Field.create(Field.Type.STRING, "text"),
+      "map", Field.create(ImmutableMap.of(
+        "inner", Field.create("inner")
+      )),
+      "list", Field.create(ImmutableList.of(
+        Field.create(0),
+        Field.create(1)
+      ))
+    )));
+
+    Set<String> fieldPaths = new HashSet<>();
+    Set<String> fieldNames = new HashSet<>();
+    r.forEachField(recordField -> {
+      fieldPaths.add(recordField.getFieldPath());
+      fieldNames.add(recordField.getFieldName());
+    });
+
+    Assert.assertEquals(fieldPaths, r.getEscapedFieldPaths());
+    Assert.assertEquals(fieldNames, ImmutableSet.of("", "string", "map", "inner", "list"));
+
   }
 }

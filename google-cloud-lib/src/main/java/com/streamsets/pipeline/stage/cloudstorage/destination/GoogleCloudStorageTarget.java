@@ -24,7 +24,6 @@ import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageException;
 import com.google.cloud.storage.StorageOptions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.streamsets.pipeline.api.Batch;
 import com.streamsets.pipeline.api.EventRecord;
@@ -41,6 +40,7 @@ import com.streamsets.pipeline.lib.el.ELUtils;
 import com.streamsets.pipeline.lib.el.RecordEL;
 import com.streamsets.pipeline.lib.el.TimeEL;
 import com.streamsets.pipeline.lib.el.TimeNowEL;
+import com.streamsets.pipeline.lib.event.WholeFileProcessedEvent;
 import com.streamsets.pipeline.lib.generator.DataGenerator;
 import com.streamsets.pipeline.lib.generator.DataGeneratorException;
 import com.streamsets.pipeline.lib.io.fileref.FileRefStreamCloseEventHandler;
@@ -67,8 +67,6 @@ import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPOutputStream;
-
-import static com.streamsets.pipeline.stage.lib.Errors.GOOGLE_01;
 
 public class GoogleCloudStorageTarget extends BaseTarget {
   private static final Logger LOG = LoggerFactory.getLogger(GoogleCloudStorageTarget.class);
@@ -218,10 +216,10 @@ public class GoogleCloudStorageTarget extends BaseTarget {
           return;
         } //else overwrite
 
-        EventRecord eventRecord = GCSEvents.FILE_TRANSFER_COMPLETE_EVENT.create(getContext())
-            .with(FileRefUtil.WHOLE_FILE_SOURCE_FILE_INFO, record.get(FileRefUtil.FILE_INFO_FIELD_PATH).getValueAsMap())
+        EventRecord eventRecord = WholeFileProcessedEvent.FILE_TRANSFER_COMPLETE_EVENT.create(getContext())
+            .with(WholeFileProcessedEvent.SOURCE_FILE_INFO, record.get(FileRefUtil.FILE_INFO_FIELD_PATH).getValueAsMap())
             .withStringMap(
-                FileRefUtil.WHOLE_FILE_TARGET_FILE_INFO,
+                WholeFileProcessedEvent.TARGET_FILE_INFO,
                 ImmutableMap.of(
                     GCSEvents.BUCKET, blobId.getBucket(),
                     GCSEvents.OBJECT_KEY, blobId.getName()

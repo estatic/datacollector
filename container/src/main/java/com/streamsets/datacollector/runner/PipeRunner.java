@@ -16,6 +16,7 @@
 package com.streamsets.datacollector.runner;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.streamsets.datacollector.metrics.MetricsConfigurator;
 import com.streamsets.datacollector.util.PipelineException;
@@ -25,6 +26,8 @@ import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.lib.log.LogConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import java.util.List;
@@ -35,6 +38,8 @@ import java.util.Optional;
  * Pipe Runner that wraps one source-less instance of the pipeline.
  */
 public class PipeRunner {
+
+  private static final Logger LOG = LoggerFactory.getLogger(PipeRunner.class);
 
   public static final String METRIC_BATCH_COUNT = "batchCount";
   public static final String METRIC_OFFSET_KEY = "offsetKey";
@@ -95,6 +100,10 @@ public class PipeRunner {
     return pipes.get(i);
   }
 
+  public int getRunnerId() {
+    return runnerId;
+  }
+
   public int size() {
     return pipes.size();
   }
@@ -118,25 +127,28 @@ public class PipeRunner {
     // Persist static information for the batch (this won't change as the batch progresses)
     this.runtimeMetricGauge.put(METRIC_BATCH_START_TIME, batchStartTime);
     this.runtimeMetricGauge.put(METRIC_OFFSET_KEY, Optional.ofNullable(offsetKey).orElse(""));
-    this.runtimeMetricGauge.put(METRIC_OFFSET_KEY, Optional.ofNullable(offsetValue).orElse(""));
+    this.runtimeMetricGauge.put(METRIC_OFFSET_VALUE, Optional.ofNullable(offsetValue).orElse(""));
     this.runtimeMetricGauge.put(METRIC_STAGE_START_TIME, System.currentTimeMillis());
     try {
       // Run one pipe at a time
       for(Pipe p : pipes) {
-        this.runtimeMetricGauge.put(METRIC_CURRENT_STAGE, p.getStage().getInfo().getInstanceName());
-        if(p instanceof StagePipe) {
+        String instanceName = p.getStage().getInfo().getInstanceName();
+        this.runtimeMetricGauge.put(METRIC_CURRENT_STAGE, instanceName);
+        MDC.put(LogConstants.STAGE, instanceName);
+        if (p instanceof StagePipe) {
           this.runtimeMetricGauge.put(METRIC_STAGE_START_TIME, System.currentTimeMillis());
         }
 
-        // Process pipe
-        consumer.accept(p);
+        acceptConsumer(consumer, p);
       }
+
 
       // We've successfully finished batch
       this.runtimeMetricGauge.computeIfPresent(METRIC_BATCH_COUNT, (key, value) -> ((long)value) + 1);
     } finally {
       resetBatchSpecificMetrics();
       MDC.put(LogConstants.RUNNER, "");
+      MDC.put(LogConstants.STAGE, "");
     }
   }
 
@@ -145,7 +157,7 @@ public class PipeRunner {
     this.runtimeMetricGauge.put(METRIC_CURRENT_STAGE, IDLE);
     this.runtimeMetricGauge.put(METRIC_OFFSET_KEY, "");
     this.runtimeMetricGauge.put(METRIC_OFFSET_VALUE, "");
-    this.runtimeMetricGauge.put(METRIC_BATCH_START_TIME, 0);
+    this.runtimeMetricGauge.put(METRIC_BATCH_START_TIME, 0L);
   }
 
   /**
@@ -159,10 +171,12 @@ public class PipeRunner {
       MDC.put(LogConstants.RUNNER, String.valueOf(runnerId));
       try {
         for(Pipe p : pipes) {
-          consumer.accept(p);
+          MDC.put(LogConstants.STAGE, p.getStage().getInfo().getInstanceName());
+          acceptConsumer(consumer, p);
         }
       } finally {
         MDC.put(LogConstants.RUNNER, "");
+        MDC.put(LogConstants.STAGE, "");
       }
     } catch (PipelineException|StageException e) {
       throw new RuntimeException(e);
@@ -196,5 +210,21 @@ public class PipeRunner {
     }
 
     return false;
+  }
+
+  /**
+   * Accept given consumer and proper log context of any exception.
+   */
+  private void acceptConsumer(ThrowingConsumer<Pipe> consumer, Pipe p) throws PipelineRuntimeException, StageException {
+    try {
+      // Process pipe
+      consumer.accept(p);
+    } catch (Throwable t) {
+      String instanceName = p.getStage().getInfo().getInstanceName();
+      LOG.error("Failed executing stage '{}': {}", instanceName, t.toString(), t);
+      Throwables.propagateIfInstanceOf(t, PipelineRuntimeException.class);
+      Throwables.propagateIfInstanceOf(t, StageException.class);
+      Throwables.propagate(t);
+    }
   }
 }

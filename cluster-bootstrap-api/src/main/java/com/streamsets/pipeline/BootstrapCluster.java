@@ -18,6 +18,7 @@ package com.streamsets.pipeline;
 import com.streamsets.datacollector.cluster.ClusterModeConstants;
 import com.streamsets.pipeline.spark.api.SparkTransformer;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -225,17 +226,6 @@ public class BootstrapCluster {
       throw new IllegalStateException("Could not find classloader for " + lookupLib);
     }
     try {
-      Instrumentation instrumentation = BootstrapMain.getInstrumentation();
-      if (instrumentation != null) {
-        Method memoryUsageCollectorInitialize = Class.forName("com.streamsets.datacollector.memory.MemoryUsageCollector",
-          true, containerCL).getMethod("initialize", Instrumentation.class);
-        memoryUsageCollectorInitialize.invoke(null, instrumentation);
-      }
-    } catch (Exception ex) {
-      String msg = "Error trying to initialize MemoryUsageCollector: " + ex;
-      throw new IllegalStateException(msg, ex);
-    }
-    try {
       Class<?> runtimeModuleClz = Class.forName("com.streamsets.datacollector.main.SlaveRuntimeModule", true,
           containerCL);
       Method setStageLibraryClassLoadersMethod = runtimeModuleClz.getMethod("setStageLibraryClassLoaders", List.class);
@@ -309,7 +299,7 @@ public class BootstrapCluster {
   }
 
   @SuppressWarnings("unchecked")
-  public static void createTransformers(JavaSparkContext context) throws Exception {
+  public static void createTransformers(JavaSparkContext context, SparkSession sparkSession) throws Exception {
     transformers = new ArrayList<>();
     if (transformerCLs == null) {
       return;
@@ -326,6 +316,12 @@ public class BootstrapCluster {
         List<String> params =
             (List<String>) transformerConfig.getClass().
                 getMethod("getTransformerParameters").invoke(transformerConfig);
+        try {
+          Method sparkSessionInit = transformer.getClass().getMethod("init", SparkSession.class, List.class);
+          sparkSessionInit.invoke(transformer, sparkSession, params);
+        } catch (NoSuchMethodException e) {
+          System.out.format("SparkSession support not found in SparkTransformer: %s", e);
+        }
         transformer.init(context, params);
         transformers.add(transformer);
       } catch (Exception ex) {
@@ -338,13 +334,14 @@ public class BootstrapCluster {
     return transformers;
   }
 
-  public static Object getClusterFunction(Integer id) throws Exception {
+  public static Object getClusterFunction(String id) throws Exception {
     BootstrapCluster.initialize();
     ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
     try {
       Thread.currentThread().setContextClassLoader(sparkCL);
-      return Class.forName("com.streamsets.pipeline.cluster.ClusterFunctionImpl", true,
-        sparkCL).getMethod("create", Properties.class, Integer.class, String.class).invoke(null, properties, id, dataDir);
+      return Class.forName("com.streamsets.pipeline.cluster.ClusterFunctionImpl", true, sparkCL)
+          .getMethod("create", Properties.class, String.class, String.class)
+          .invoke(null, properties, id, dataDir);
     } catch (Exception ex) {
       String msg = "Error trying to obtain ClusterFunction Class: " + ex;
       throw new IllegalStateException(msg, ex);

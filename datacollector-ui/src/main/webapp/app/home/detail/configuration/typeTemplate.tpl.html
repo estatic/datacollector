@@ -15,8 +15,21 @@
 <script type="text/ng-template" id="configurationIssuesTemplate">
   <div class="help-block">
     <div ng-repeat="issue in getConfigurationIssues(detailPaneConfig, configDefinition)">
+     <i class="fa fa-info-circle help-icon"
+         ng-class="fa-info-circle"
+         ng-if="issue.antennaDoctorMessages && issue.antennaDoctorMessages.length > 0"
+         tooltip-placement="right"
+         tooltip-append-to-body="false"
+         tooltip="{{issue.antennaDoctorMessages[0].summary}}"
+         tooltip-trigger="mouseenter">
+      </i>
       <span>{{issue.message}}</span>
       <span ng-show="issue.count > 1" class="badge">{{issue.count}}</span>
+      <a class="view-stack-trace"
+         ng-if="issue.antennaDoctorMessages && issue.antennaDoctorMessages.length > 0"
+         ng-click="showIssueDetails(issue)">
+            ( <span translate="home.graphPane.viewStackTrace">View Details</span>... )
+      </a>
     </div>
   </div>
 </script>
@@ -25,8 +38,21 @@
   <div class="help-block">
     <div ng-repeat="issue in getConfigurationIssues(detailPaneConfig, customFieldConfigDefinition)"
          ng-if="issue.additionalInfo && issue.additionalInfo.index === configIndex">
+     <i class="fa fa-info-circle help-icon"
+         ng-class="fa-info-circle"
+         ng-if="issue.antennaDoctorMessages && issue.antennaDoctorMessages.length > 0"
+         tooltip-placement="right"
+         tooltip-append-to-body="false"
+         tooltip="{{issue.antennaDoctorMessages[0].summary}}"
+         tooltip-trigger="mouseenter">
+      </i>
       <span>{{issue.message}}</span>
       <span ng-show="issue.count > 1" class="badge">{{issue.count}}</span>
+      <a class="view-stack-trace"
+         ng-if="issue.antennaDoctorMessages && issue.antennaDoctorMessages.length > 0"
+         ng-click="showIssueDetails(issue)">
+            ( <span translate="home.graphPane.viewStackTrace">View Details</span>... )
+      </a>
     </div>
   </div>
 </script>
@@ -170,9 +196,38 @@
 
 <script type="text/ng-template" id="booleanConfigurationTemplate">
   <div class="controls col-lg-7 col-md-8">
-    <input type="checkbox" name="{{configDefinition.name}}"
+    <input ng-if="!fieldParamHash[configDefinition.name]"
+           type="checkbox" name="{{configDefinition.name}}"
            ng-disabled="isPipelineReadOnly || isPipelineRunning"
            ng-model="detailPaneConfig.configuration[configIndex].value">
+
+    <div ui-codemirror
+          ng-if="!isPipelineReadOnly && !isPipelineRunning && fieldParamHash[configDefinition.name]"
+          id="{{configDefinition.name + 'param'}}"
+          ng-class="{'codemirror-read-only': isPipelineReadOnly || isPipelineRunning}"
+          class="pc100px"
+          focus-me="{{autoFocusConfigName === configDefinition.name}}"
+          ng-model="detailPaneConfig.configuration[configIndex].value"
+          ui-refresh="refreshCodemirror"
+          ui-codemirror-opts="getCodeMirrorOptions({
+                readOnly: (isPipelineReadOnly || isPipelineRunning),
+                autofocus: autoFocusConfigName === configDefinition.name,
+                extraKeys: {
+                  'Tab': false,
+                  'Enter': common.ignoreCodeMirrorEnterKey,
+                  'Ctrl-Space': 'autocomplete'
+                }
+              }, configDefinition)"
+          codemirror-el
+          field-paths="fieldPaths"
+          d-field-paths="dFieldPaths"
+          data-type="configDefinition.type">
+    </div>
+
+    <a ng-if="!isPipelineReadOnly && !isPipelineRunning" class="valOrParam" href="Javascript:void(0)" ng-click="onParamClick(configDefinition.name)">
+      <i title="{{fieldParamHash[configDefinition.name] ? 'Use value' : 'Use parameter'}}"
+          class="fa {{fieldParamHash[configDefinition.name] ? 'fa-square-o' : 'fa-caret-square-o-right'}} fa-14x"></i>
+    </a>
 
     <ng-include src="'configurationIssuesTemplate'"></ng-include>
   </div>
@@ -192,7 +247,7 @@
 
 <script type="text/ng-template" id="listConfigurationTemplate">
   <div class="controls col-lg-7 col-md-8 container-fluid"
-       ng-init="bulkEdit=(detailPaneConfig.configuration[configIndex].value.length > 9)">
+       ng-init="bulkEdit=(detailPaneConfig.configuration[configIndex].value.length > 50)">
 
     <div class="row map-list-type"
          ng-if="!bulkEdit"
@@ -277,7 +332,7 @@
 
 <script type="text/ng-template" id="mapConfigurationTemplate">
   <div class="controls col-lg-7 col-md-8"
-       ng-init="bulkEdit=(detailPaneConfig.configuration[configIndex].value.length > 9)">
+       ng-init="bulkEdit=(detailPaneConfig.configuration[configIndex].value.length > 50)">
     <div class="row map-list-type"
          ng-if="!bulkEdit"
          ng-repeat="mapObject in detailPaneConfig.configuration[configIndex].value track by $index">
@@ -368,16 +423,46 @@
 
 <script type="text/ng-template" id="valueChooserConfigurationTemplate">
   <div class="controls col-lg-7 col-md-8">
-   <select class="form-control"
+   <select ng-if="!fieldParamHash[configDefinition.name]"
+            class="form-control pc100px"
             name="{{configDefinition.name}}"
             focus-me="{{autoFocusConfigName === configDefinition.name}}"
             ng-required="configDefinition.required"
             ng-disabled="isPipelineReadOnly || isPipelineRunning"
-            ng-model="detailPaneConfig.configuration[configIndex].value">
-      <option ng-repeat="listValue in configDefinition.model.values"
-              value="{{listValue}}"
-              ng-selected="listValue === detailPaneConfig.configuration[configIndex].value">{{configDefinition.model.labels[$index]}}</option>
+            ng-model="detailPaneConfig.configuration[configIndex].value"
+            ng-init="entities = getValueChooserOptions(detailPaneConfig, configDefinition)">
+      <option ng-repeat="entity in entities"
+              value="{{entity.value}}"
+              ng-selected="entity.value === detailPaneConfig.configuration[configIndex].value">{{entity.label}}</option>
     </select>
+
+    <div ui-codemirror
+        ng-if="fieldParamHash[configDefinition.name]"
+        id="{{configDefinition.name + 'param'}}"
+        ng-class="{'codemirror-read-only': isPipelineReadOnly || isPipelineRunning}"
+        class="pc100px"
+        focus-me="{{autoFocusConfigName === configDefinition.name}}"
+        ng-model="detailPaneConfig.configuration[configIndex].value"
+        ui-refresh="refreshCodemirror"
+        ui-codemirror-opts="getCodeMirrorOptions({
+              readOnly: (isPipelineReadOnly || isPipelineRunning),
+              autofocus: autoFocusConfigName === configDefinition.name,
+              extraKeys: {
+                'Tab': false,
+                'Enter': common.ignoreCodeMirrorEnterKey,
+                'Ctrl-Space': 'autocomplete'
+              }
+            }, configDefinition)"
+        codemirror-el
+        field-paths="fieldPaths"
+        d-field-paths="dFieldPaths"
+        data-type="configDefinition.type">
+    </div>
+
+    <a ng-if="!isPipelineReadOnly && !isPipelineRunning" class="valOrParam" href="Javascript:void(0)" ng-click="onParamClick(configDefinition.name)">
+      <i title="{{fieldParamHash[configDefinition.name] ? 'Use value' : 'Use parameter'}}"
+        class="fa {{fieldParamHash[configDefinition.name] ? 'fa-square-o' : 'fa-caret-square-o-right'}} fa-14x"></i>
+    </a>
 
     <ng-include src="'configurationIssuesTemplate'"></ng-include>
   </div>
@@ -720,6 +805,8 @@
          field-paths="fieldPaths"
          d-field-paths="dFieldPaths">
     </div>
+
+    <p class="codemirror-fullscreen-tooltip">Press F11 (or ESC on Mac OS X) when cursor is in the editor to toggle full screen editing.</p>
 
     <ng-include src="'configurationIssuesTemplate'"></ng-include>
   </div>

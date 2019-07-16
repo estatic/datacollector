@@ -15,6 +15,7 @@
  */
 package com.streamsets.datacollector.execution.preview.async.dagger;
 
+import com.streamsets.datacollector.event.dto.PipelineStartEvent;
 import com.streamsets.datacollector.execution.Previewer;
 import com.streamsets.datacollector.execution.PreviewerListener;
 import com.streamsets.datacollector.execution.preview.async.AsyncPreviewer;
@@ -26,6 +27,8 @@ import dagger.ObjectGraph;
 import dagger.Provides;
 
 import javax.inject.Named;
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * Provides instances of SyncPreviewer.
@@ -39,21 +42,42 @@ public class AsyncPreviewerModule {
   private final String rev;
   private final ObjectGraph objectGraph;
   private final PreviewerListener previewerListener;
+  private final List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs;
+  private final Function<Object, Void> afterActionsFunction;
 
-  public AsyncPreviewerModule(String id, String user, String name, String rev, PreviewerListener previewerListener,
-                              ObjectGraph objectGraph) {
+  public AsyncPreviewerModule(
+      String id,
+      String user,
+      String name,
+      String rev,
+      PreviewerListener previewerListener,
+      ObjectGraph objectGraph,
+      List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
+      Function<Object, Void> afterActionsFunction
+  ) {
     this.id = id;
     this.user = user;
     this.name = name;
     this.rev = rev;
     this.objectGraph = objectGraph;
     this.previewerListener = previewerListener;
+    this.interceptorConfs = interceptorConfs;
+    this.afterActionsFunction = afterActionsFunction;
   }
 
 
   @Provides
   public SyncPreviewer providePreviewer() {
-    return new SyncPreviewer(id, user, name, rev, previewerListener, objectGraph);
+    return new SyncPreviewer(
+        id,
+        user,
+        name,
+        rev,
+        previewerListener,
+        objectGraph,
+        interceptorConfs,
+        afterActionsFunction
+    );
   }
 
   @Provides

@@ -24,8 +24,8 @@ import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
+import com.streamsets.pipeline.api.base.configurablestage.DPushSource;
 import com.streamsets.pipeline.config.DataFormat;
-import com.streamsets.pipeline.configurablestage.DPushSource;
 import com.streamsets.pipeline.lib.coap.Groups;
 import com.streamsets.pipeline.stage.origin.lib.DataParserFormatConfig;
 
@@ -36,7 +36,7 @@ import com.streamsets.pipeline.stage.origin.lib.DataParserFormatConfig;
     icon="coap_multithreaded.png",
     execution = {ExecutionMode.STANDALONE},
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Origins/CoAPServer.html#task_hsb_l3n_sz"
+    onlineHelpRefUrl ="index.html?contextID=task_hsb_l3n_sz"
 )
 @ConfigGroups(Groups.class)
 @HideConfigs(value = {

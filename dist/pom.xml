@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-dist</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector Distribution</description>
   <name>StreamSets Data Collector Dist</name>
   <packaging>jar</packaging>
@@ -40,7 +40,7 @@
     <edge.dist-dir>${basedir}/dist/target/edge-binaries</edge.dist-dir>
     <sdc.log4j.level>DEBUG</sdc.log4j.level>
     <snappy.version>1.0.5</snappy.version>
-    <datacollector-edge.version>3.1.0.0-SNAPSHOT</datacollector-edge.version>
+    <datacollector-edge.version>3.10.0-SNAPSHOT</datacollector-edge.version>
   </properties>
 
   <dependencies>
@@ -86,13 +86,18 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>com.streamsets</groupId>
-      <artifactId>streamsets-datacollector-cluster-bootstrap</artifactId>
-      <scope>provided</scope>
+       <groupId>com.streamsets</groupId>
+       <artifactId>streamsets-datacollector-cluster-bootstrap</artifactId>
+       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-mapr-cluster-bootstrap</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-mapr-cluster-bootstrap_2_2</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -104,6 +109,11 @@
       <groupId>org.xerial.snappy</groupId>
       <artifactId>snappy-java</artifactId>
       <version>${snappy.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-metadata-generator</artifactId>
       <scope>compile</scope>
     </dependency>
   </dependencies>
@@ -154,7 +164,7 @@
                   <artifactId>streamsets-datacollector-edge</artifactId>
                   <classifier>windows-amd64</classifier>
                   <version>${datacollector-edge.version}</version>
-                  <type>tgz</type>
+                  <type>zip</type>
                   <overWrite>true</overWrite>
                   <outputDirectory>target/edge-binaries</outputDirectory>
                 </artifactItem>

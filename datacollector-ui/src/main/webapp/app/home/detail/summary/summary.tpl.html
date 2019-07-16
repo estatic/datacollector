@@ -24,7 +24,7 @@
   </div>
 
   <div ng-if="summaryDataLoaded && selectedType === pipelineConstant.STAGE_INSTANCE && customStageMeters">
-    <div class="col-sm-4" ng-repeat="customStageMeter in customStageMeters">
+    <div class="col-sm-4 chartPanels" ng-repeat="customStageMeter in customStageMeters">
       <div class="panel panel-default" ng-controller="CustomMeterController">
         <div class="panel-heading">
           <span>{{customStageMeter.label}} Meter</span>
@@ -43,7 +43,7 @@
   </div>
 
   <div ng-if="summaryDataLoaded && selectedType === pipelineConstant.STAGE_INSTANCE && customStageHistograms">
-    <div class="col-sm-4" ng-repeat="customStageHistogram in customStageHistograms">
+    <div class="col-sm-4 chartPanels" ng-repeat="customStageHistogram in customStageHistograms">
       <div class="panel panel-default" ng-controller="CustomHistogramController">
         <div class="panel-heading">
           <span>{{customStageHistogram.label}} Histogram</span>
@@ -63,7 +63,7 @@
 
 
   <div ng-if="summaryDataLoaded && selectedType === pipelineConstant.STAGE_INSTANCE && customStageTimers">
-    <div class="col-sm-4" ng-repeat="customStageTimer in customStageTimers">
+    <div class="col-sm-4 chartPanels" ng-repeat="customStageTimer in customStageTimers">
       <div class="panel panel-default" ng-controller="CustomTimerController">
         <div class="panel-heading">
           <span>{{customStageTimer.label}} Timer</span>
@@ -82,21 +82,21 @@
   </div>
 
   <div ng-if="summaryDataLoaded && selectedType === pipelineConstant.STAGE_INSTANCE && customStageGauges">
-  <div class="col-sm-4 chartPanels" ng-repeat="customStageGauge in customStageGauges" ng-if="!customStageGauge.gaugeKey.startsWith('custom.Aggregator')">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <span>{{customStageGauge.label}}</span>
-      </div>
-      <div class="panel-body">
-        <ul class="table-properties">
-          <li ng-repeat= "(propertyKey, propertyValue) in common.pipelineMetrics.gauges[customStageGauge.gaugeKey].value">
-            <span class="properties-label">{{propertyKey}}: </span>
-            <span class="properties-value">{{propertyValue}}</span>
-          </li>
-        </ul>
+    <div class="col-sm-4 chartPanels" ng-repeat="customStageGauge in customStageGauges" ng-if="!customStageGauge.gaugeKey.startsWith('custom.Aggregator')">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <span>{{customStageGauge.label}}</span>
+        </div>
+        <div class="panel-body">
+          <ul class="table-properties">
+            <li ng-repeat= "(propertyKey, propertyValue) in common.pipelineMetrics.gauges[customStageGauge.gaugeKey].value">
+              <span class="properties-label">{{propertyKey}}: </span>
+              <span class="properties-value">{{propertyValue}}</span>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
-  </div>
   </div>
 
   <!-- Aggregations -->
@@ -120,45 +120,44 @@
   </div>
 
   <div ng-if="summaryDataLoaded && selectedType === pipelineConstant.PIPELINE && runnerGauges">
-  <div class="col-sm-4 chartPanels" ng-repeat="runnerGauge in runnerGauges">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <span> Runner {{runnerGauge.runnerId}}</span>
-      </div>
-      <div class="panel-body">
-        <ul class="table-properties" ng-init="gaugeData = common.pipelineMetrics.gauges[runnerGauge.gaugeKey].value">
-          <li>
-            <span class="properties-label">Current Stage:</span>
-            <span class="properties-value">{{stageNameToLabelMap[gaugeData.currentStage]}}</span>
-          </li>
-          <li>
-            <span class="properties-label">Batch Count:</span>
-            <span class="properties-value">{{gaugeData.batchCount}}</span>
-          </li>
-          <li ng-if="gaugeData.currentStage !== 'IDLE'">
-            <span class="properties-label">In Stage Since:</span>
-            <span class="properties-value">{{gaugeData.stageStartTime | date:'medium' }}</span>
-          </li>
-          <li ng-if="gaugeData.currentStage !== 'IDLE'">
-            <span class="properties-label">Batch Start Time:</span>
-            <span class="properties-value">{{gaugeData.batchStartTime | date:'medium' }}</span>
-          </li>
-          <li ng-if="gaugeData.currentStage !== 'IDLE'">
-            <span class="properties-label">Offset Key:</span>
-            <span class="properties-value">{{gaugeData.offsetKey}}</span>
-          </li>
-          <li ng-if="gaugeData.currentStage !== 'IDLE'">
-            <span class="properties-label">Offset Value:</span>
-            <span class="properties-value">{{gaugeData.offseValue}}</span>
-          </li>
-        </ul>
+    <div class="col-sm-4 chartPanels" ng-repeat="runnerGauge in runnerGauges">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <span> Runner {{runnerGauge.runnerId}}</span>
+        </div>
+        <div class="panel-body">
+          <ul class="table-properties" ng-init="gaugeData = common.pipelineMetrics.gauges[runnerGauge.gaugeKey].value">
+            <li>
+              <span class="properties-label">Current Stage:</span>
+              <span class="properties-value">{{stageNameToLabelMap[gaugeData.currentStage]}}</span>
+            </li>
+            <li>
+              <span class="properties-label">Batch Count:</span>
+              <span class="properties-value">{{gaugeData.batchCount}}</span>
+            </li>
+            <li ng-if="gaugeData.currentStage !== 'IDLE'">
+              <span class="properties-label">In Stage Since:</span>
+              <span class="properties-value">{{gaugeData.stageStartTime | date:'medium' }}</span>
+            </li>
+            <li ng-if="gaugeData.currentStage !== 'IDLE'">
+              <span class="properties-label">Batch Start Time:</span>
+              <span class="properties-value">{{gaugeData.batchStartTime | date:'medium' }}</span>
+            </li>
+            <li ng-if="gaugeData.currentStage !== 'IDLE'">
+              <span class="properties-label">Offset Key:</span>
+              <span class="properties-value">{{gaugeData.offsetKey}}</span>
+            </li>
+            <li ng-if="gaugeData.currentStage !== 'IDLE'">
+              <span class="properties-label">Offset Value:</span>
+              <span class="properties-value">{{gaugeData.offseValue}}</span>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
-  </div>
 
 </div>
-
 
 <script type="text/ng-template" id="summaryRecordPercentagePieChartTemplate">
   <div class="col-sm-4"
@@ -266,8 +265,11 @@
 
 <script type="text/ng-template" id="summaryRecordHistogramTemplate">
   <div class="col-sm-4"
-       ng-if="activeConfigStatus.executionMode !== pipelineConstant.CLUSTER && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
-       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && timeRange === 'latest'"
+       ng-if="activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && timeRange === 'latest'"
        ng-controller="HistogramChartController">
     <div class="panel panel-default">
       <div class="panel-heading">
@@ -288,8 +290,12 @@
 
 <script type="text/ng-template" id="summaryPipelineRunnersTemplate">
   <div class="col-sm-4"
-       ng-if="selectedType === pipelineConstant.PIPELINE && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
-       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && timeRange === 'latest'"
+       ng-if="selectedType === pipelineConstant.PIPELINE &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && timeRange === 'latest'"
        ng-controller="RunnersHistogramChartController">
     <div class="panel panel-default">
       <div class="panel-heading">
@@ -315,8 +321,11 @@
 
 <script type="text/ng-template" id="summaryRecordsProcessedTemplate">
   <div class="col-sm-4"
-       ng-if="activeConfigStatus.executionMode !== pipelineConstant.CLUSTER && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
-       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && timeRange === 'latest'"
+       ng-if="activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && timeRange === 'latest'"
        ng-controller="BatchTimerChartController">
     <div class="panel panel-default">
       <div class="panel-heading">
@@ -337,8 +346,11 @@
 
 <script type="text/ng-template" id="memoryConsumedLineChartTemplate">
   <div class="col-sm-4"
-       ng-if="activeConfigStatus.executionMode !== pipelineConstant.CLUSTER && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
-       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && monitorMemoryEnabled"
+       ng-if="activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && monitorMemoryEnabled"
        ng-controller="MemoryConsumedLineChartController">
     <div class="panel panel-default">
       <div class="panel-heading">
@@ -363,8 +375,12 @@
 
 <script type="text/ng-template" id="summaryRuntimeStatisticsTemplate">
   <div class="col-sm-4"
-       ng-if="selectedType === pipelineConstant.PIPELINE && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
-       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING">
+       ng-if="selectedType === pipelineConstant.PIPELINE &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING">
     <div class="panel panel-default">
       <div class="panel-heading">
         <span title="{{'home.detailPane.summaryTab.runtimeStatistics' | translate}}"
@@ -409,6 +425,11 @@
           </li>
 
           <li>
+            <span class="properties-label">{{'home.detailPane.summaryTab.idleBatchCount' | translate}}:</span>
+            <span class="properties-value">{{common.pipelineMetrics.gauges['RuntimeStatsGauge.gauge'].value.idleBatchCount}}</span>
+          </li>
+
+          <li>
             <span class="properties-value">{{'home.detailPane.summaryTab.threadLastRun' | translate}}</span>
           </li>
 
@@ -446,8 +467,12 @@
 
 <script type="text/ng-template" id="slaveSDCInstancesTemplate">
   <div class="col-sm-4"
-       ng-if="selectedType === pipelineConstant.PIPELINE && (activeConfigStatus.executionMode === pipelineConstant.CLUSTER  || activeConfigStatus.executionMode === pipelineConstant.CLUSTER_BATCH ||
-       activeConfigStatus.executionMode === pipelineConstant.CLUSTER_YARN_STREAMING || activeConfigStatus.executionMode === pipelineConstant.CLUSTER_MESOS_STREAMING)">
+       ng-if="selectedType === pipelineConstant.PIPELINE && (
+        activeConfigStatus.executionMode === pipelineConstant.CLUSTER  ||
+        activeConfigStatus.executionMode === pipelineConstant.CLUSTER_BATCH ||
+        activeConfigStatus.executionMode === pipelineConstant.CLUSTER_EMR_BATCH ||
+        activeConfigStatus.executionMode === pipelineConstant.CLUSTER_YARN_STREAMING ||
+        activeConfigStatus.executionMode === pipelineConstant.CLUSTER_MESOS_STREAMING)">
     <div class="panel panel-default">
       <div class="panel-heading">
         <span title="{{'home.detailPane.summaryTab.slaveSDCInstances' | translate}}"
@@ -476,8 +501,12 @@
 
 <script type="text/ng-template" id="summaryAllStageBatchTimerBarChartTemplate">
   <div class="col-sm-4"
-       ng-if="selectedType === pipelineConstant.PIPELINE && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
- activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING"
+       ng-if="selectedType === pipelineConstant.PIPELINE &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING"
        ng-controller="AllStageBatchTimerChartController">
     <div class="panel panel-default">
       <div class="panel-heading">
@@ -514,8 +543,13 @@
 
 <script type="text/ng-template" id="summaryAllStageMemoryConsumedBarChartTemplate">
   <div class="col-sm-4"
-       ng-if="selectedType === pipelineConstant.PIPELINE && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
-activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING && monitorMemoryEnabled"
+       ng-if="selectedType === pipelineConstant.PIPELINE &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_EMR_BATCH &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING &&
+       activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_MESOS_STREAMING &&
+       monitorMemoryEnabled"
        ng-controller="AllStageMemoryConsumedChartController">
     <div class="panel panel-default">
       <div class="panel-heading">
@@ -551,7 +585,9 @@ activeConfigStatus.executionMode !== pipelineConstant.CLUSTER_YARN_STREAMING && 
 
 <script type="text/ng-template" id="summaryRuntimeConstantsTemplate">
   <div class="col-sm-4"
-       ng-if="selectedType === pipelineConstant.PIPELINE && activeConfigStatus.attributes && activeConfigStatus.attributes['RUNTIME_PARAMETERS']">
+       ng-if="selectedType === pipelineConstant.PIPELINE &&
+       activeConfigStatus.attributes &&
+       activeConfigStatus.attributes['RUNTIME_PARAMETERS']">
     <div class="panel panel-default">
       <div class="panel-heading">
         <span title="{{'home.detailPane.summaryTab.runtimeParameters' | translate}}"

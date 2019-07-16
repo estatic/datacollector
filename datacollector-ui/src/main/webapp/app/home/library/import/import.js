@@ -69,6 +69,7 @@ angular
 
             if (jsonConfigObj.uuid) {
               if (pipelineInfo && !$scope.createNewPipeline) { // If pipeline config already exists
+                jsonConfigObj.pipelineId = pipelineInfo.pipelineId;
                 jsonConfigObj.uuid = pipelineInfo.uuid;
                 jsonConfigObj.metadata = pipelineInfo.metadata;
                 jsonConfigObj.title = pipelineInfo.title;
@@ -189,13 +190,10 @@ angular
       }
     });
 
-
-
     $scope.$watch('uploadFile', function (newValue) {
       if (newValue && newValue.name && !$scope.newConfig.title) {
         $scope.newConfig.title = newValue.name.replace('.json', '');
       }
     });
-
 
   });

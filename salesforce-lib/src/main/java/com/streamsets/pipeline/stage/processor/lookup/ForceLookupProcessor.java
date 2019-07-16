@@ -20,6 +20,7 @@ import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
@@ -45,11 +46,13 @@ import com.streamsets.pipeline.api.el.ELVars;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.lib.cache.CacheCleaner;
 import com.streamsets.pipeline.lib.el.RecordEL;
+import com.streamsets.pipeline.lib.el.TimeNowEL;
 import com.streamsets.pipeline.lib.salesforce.DataType;
 import com.streamsets.pipeline.lib.salesforce.Errors;
 import com.streamsets.pipeline.lib.salesforce.ForceLookupConfigBean;
 import com.streamsets.pipeline.lib.salesforce.ForceSDCFieldMapping;
 import com.streamsets.pipeline.lib.salesforce.ForceUtils;
+import com.streamsets.pipeline.lib.salesforce.LookupMode;
 import com.streamsets.pipeline.lib.salesforce.SoapRecordCreator;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
@@ -60,12 +63,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.xml.namespace.QName;
+import java.net.URISyntaxException;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -76,12 +82,13 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
   private static final int MAX_OBJECT_IDS = 2000;
   private static final Logger LOG = LoggerFactory.getLogger(ForceLookupProcessor.class);
   final ForceLookupConfigBean conf;
+  private static final String CONF_PREFIX = "conf";
 
   private Map<String, String> columnsToFields = new HashMap<>();
   private Map<String, String> columnsToDefaults = new HashMap<>();
   Map<String, DataType> columnsToTypes = new HashMap<>();
 
-  private Cache<String, Map<String, Field>> cache;
+  private Cache<String, Optional<List<Map<String, Field>>>> cache;
 
   PartnerConnection partnerConnection;
   private ErrorRecordHandler errorRecordHandler;
@@ -114,6 +121,9 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
   @Override
   protected List<ConfigIssue> init() {
     List<ConfigIssue> issues = super.init();
+    Optional
+        .ofNullable(conf.init(getContext(), CONF_PREFIX ))
+        .ifPresent(issues::addAll);
 
     errorRecordHandler = new DefaultErrorRecordHandler(getContext());
 
@@ -124,7 +134,10 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
         ConnectorConfig partnerConfig = ForceUtils.getPartnerConfig(conf, new ForceLookupProcessor.ForceSessionRenewer());
 
         partnerConnection = new PartnerConnection(partnerConfig);
-      } catch (ConnectionException | StageException e) {
+        if (conf.mutualAuth.useMutualAuth) {
+          ForceUtils.setupMutualAuth(partnerConfig, conf.mutualAuth);
+        }
+      } catch (ConnectionException | StageException | URISyntaxException e) {
         LOG.error("Error connecting: {}", e);
         issues.add(getContext().createConfigIssue(Groups.FORCE.name(),
             "connectorConfig",
@@ -151,7 +164,10 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
     if (issues.isEmpty()) {
       cache = buildCache();
       cacheCleaner = new CacheCleaner(cache, "ForceLookupProcessor", 10 * 60 * 1000);
-      recordCreator = new SoapRecordCreator(getContext(), conf, conf.sObjectType);
+      if (conf.lookupMode == LookupMode.RETRIEVE) {
+        // All records are of the configured object type, so we only need one record creator
+        recordCreator = new SoapRecordCreator(getContext(), conf, conf.sObjectType);
+      }
     }
 
     return issues;
@@ -194,11 +210,23 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
       Field idField = record.get(conf.idField);
       String id = (idField != null) ? idField.getValueAsString() : null;
       if (Strings.isNullOrEmpty(id)) {
-        setFieldsInRecord(record, getDefaultFields());
+        switch (conf.missingValuesBehavior) {
+          case SEND_TO_ERROR:
+            LOG.error(Errors.FORCE_35.getMessage());
+            errorRecordHandler.onError(new OnRecordErrorException(record, Errors.FORCE_35));
+            break;
+          case PASS_RECORD_ON:
+            setFieldsInRecord(record, getDefaultFields());
+            break;
+          default:
+            throw new IllegalStateException("Unknown missing value behavior: " + conf.missingValuesBehavior);
+        }
       } else {
-        Map<String, Field> fieldMap = cache.getIfPresent(id);
-        if (fieldMap != null) {
-          setFieldsInRecord(record, fieldMap);
+        Optional<List<Map<String, Field>>> entry = cache.getIfPresent(id);
+
+        if (entry != null && entry.isPresent()) {
+          // Salesforce record id is unique, so we'll always have just one entry in the list
+          setFieldsInRecord(record, entry.get().get(0));
         } else {
           recordsToRetrieve.put(id, record);
         }
@@ -229,7 +257,7 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
             for (Record record : recordsToRetrieve.get(id)) {
               setFieldsInRecord(record, fieldMap);
             }
-            cache.put(id, fieldMap);
+            cache.put(id, Optional.of(ImmutableList.of(fieldMap)));
           }
         } catch (InvalidIdFault e) {
           // exceptionMessage has form "malformed id 0013600001NnbAdOnE"
@@ -356,7 +384,9 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
   private void processQuery(Batch batch, SingleLaneBatchMaker batchMaker) throws StageException {
     if (batch.getRecords().hasNext()) {
       // New record creator for each batch
-      recordCreator.clearMetadataCache();
+      if (recordCreator != null) {
+        recordCreator.clearMetadataCache();
+      }
     } else {
       // No records - take the opportunity to clean up the cache so that we don't hold on to memory indefinitely
       cacheCleaner.periodicCleanUp();
@@ -372,17 +402,43 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
     try {
       ELVars elVars = getContext().createELVars();
       RecordEL.setRecordInContext(elVars, record);
+      TimeNowEL.setTimeNowInContext(elVars, new Date());
       String preparedQuery = prepareQuery(queryEval.eval(elVars, conf.soqlQuery, String.class));
       // Need this ugly cast since there isn't a way to do a simple
       // get with the Cache interface
-      Map<String, Field> fieldMap = ((LoadingCache<String, Map<String, Field>>)cache).get(preparedQuery);
-      if (fieldMap.isEmpty()) {
+      Optional<List<Map<String, Field>>> entry = ((LoadingCache<String, Optional<List<Map<String, Field>>>>)cache).get(preparedQuery);
+
+      if (!entry.isPresent()) {
         // No results
-        LOG.error(Errors.FORCE_15.getMessage(), preparedQuery);
-        errorRecordHandler.onError(new OnRecordErrorException(record, Errors.FORCE_15, preparedQuery));
+        switch (conf.missingValuesBehavior) {
+          case SEND_TO_ERROR:
+            LOG.error(Errors.FORCE_15.getMessage(), preparedQuery);
+            errorRecordHandler.onError(new OnRecordErrorException(record, Errors.FORCE_15, preparedQuery));
+            break;
+          case PASS_RECORD_ON:
+            batchMaker.addRecord(record);
+            break;
+          default:
+            throw new IllegalStateException("Unknown missing value behavior: " + conf.missingValuesBehavior);
+        }
+      } else {
+        List<Map<String, Field>> values = entry.get();
+        switch (conf.multipleValuesBehavior) {
+          case FIRST_ONLY:
+            setFieldsInRecord(record, values.get(0));
+            batchMaker.addRecord(record);
+            break;
+          case SPLIT_INTO_MULTIPLE_RECORDS:
+            for (Map<String, Field> lookupItem : values) {
+              Record newRecord = getContext().cloneRecord(record);
+              setFieldsInRecord(newRecord, lookupItem);
+              batchMaker.addRecord(newRecord);
+            }
+            break;
+          default:
+            throw new IllegalStateException("Unknown multiple value behavior: " + conf.multipleValuesBehavior);
+        }
       }
-      setFieldsInRecord(record, fieldMap);
-      batchMaker.addRecord(record);
     } catch (ELEvalException e) {
       LOG.error(Errors.FORCE_16.getMessage(), conf.soqlQuery, e);
       throw new OnRecordErrorException(record, Errors.FORCE_16, conf.soqlQuery);
@@ -396,9 +452,15 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
   }
 
   private String prepareQuery(String preparedQuery) throws StageException {
+    String sobjectType = ForceUtils.getSobjectTypeFromQuery(preparedQuery);
+
+    if (recordCreator == null || ! sobjectType.equals(recordCreator.getSobjectType())) {
+      recordCreator = new SoapRecordCreator(getContext(), conf, sobjectType);
+    }
+
     if (recordCreator.queryHasWildcard(preparedQuery)) {
       if (!recordCreator.metadataCacheExists()) {
-        // Can't follow relationships on a wildcard query, so build the cache from the object type
+        // No need to follow relationships on a wildcard query, so build the cache from the object type
         recordCreator.buildMetadataCache(partnerConnection);
       }
       preparedQuery = recordCreator.expandWildcard(preparedQuery);
@@ -412,7 +474,7 @@ public class ForceLookupProcessor extends SingleLaneRecordProcessor {
   }
 
   @SuppressWarnings("unchecked")
-  private Cache<String, Map<String, Field>> buildCache() {
+  private Cache<String, Optional<List<Map<String, Field>>>> buildCache() {
     CacheBuilder cacheBuilder = CacheBuilder.newBuilder();
 
     if (!conf.cacheConfig.enabled) {

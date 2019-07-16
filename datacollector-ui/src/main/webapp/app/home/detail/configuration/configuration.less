@@ -1,13 +1,9 @@
-/**
- * Copyright 2015 StreamSets Inc.
+/*
+ * Copyright 2017 StreamSets Inc.
  *
- * Licensed under the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -36,6 +32,7 @@
   }
 
   .input-sm, .form-group-sm .form-control {
+    position: relative;
     font-size: 14px;
   }
 
@@ -100,6 +97,14 @@
 
   .custom-field-property {
     min-width: 180px;
+
+    &.output-lane {
+      width: 50px;
+    }
+  }
+
+  .output-lane-value {
+    padding-top: 4px;
   }
 
   .custom-field-buttons {
@@ -112,6 +117,12 @@
         background-color: #a94442;
       }
     }
+  }
+
+  .codemirror-fullscreen-tooltip {
+    margin-top: 20px;
+    opacity: 0.5;
+    font-size: 12px;
   }
 }
 
@@ -139,5 +150,25 @@
 
   .field-selector-btn {
     padding-top: @defaultPadding * 0.5;
+  }
+}
+
+
+.pc100px {
+  width: 95%;
+  width: ~"calc(100% - 23px)";
+}
+
+.valOrParam {
+  position: absolute;
+  top: 0;
+  right: 15px;
+  z-index: 800;
+
+  >i {
+    color: silver;
+    &:hover {
+      color: black;
+    }
   }
 }

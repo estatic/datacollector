@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-groovy-protolib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector Groovy ProtoLib</description>
   <name>StreamSets Data Collector Groovy ProtoLib</name>
   <packaging>jar</packaging>
@@ -101,7 +101,7 @@
 
     <dependency>
       <groupId>com.streamsets</groupId>
-      <artifactId>streamsets-datacollector-commonlib</artifactId>
+      <artifactId>streamsets-datacollector-scripting-protolib</artifactId>
       <scope>compile</scope>
     </dependency>
 
@@ -112,7 +112,13 @@
     </dependency>
     <dependency>
       <groupId>com.streamsets</groupId>
-      <artifactId>streamsets-datacollector-commonlib</artifactId>
+      <artifactId>streamsets-datacollector-guavasupport</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-scripting-protolib</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
       <scope>test</scope>

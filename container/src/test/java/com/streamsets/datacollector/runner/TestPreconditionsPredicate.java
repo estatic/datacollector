@@ -17,7 +17,6 @@ package com.streamsets.datacollector.runner;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.datacollector.el.RuntimeEL;
 import com.streamsets.datacollector.email.EmailSender;
 import com.streamsets.datacollector.lineage.LineagePublisherDelegator;
@@ -29,6 +28,7 @@ import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.Stage;
+import com.streamsets.pipeline.api.StageType;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -58,7 +58,8 @@ public class TestPreconditionsPredicate {
         new EmailSender(new Configuration()),
         new Configuration(),
         new LineagePublisherDelegator.NoopDelegator(),
-        Mockito.mock(RuntimeInfo.class)
+        Mockito.mock(RuntimeInfo.class),
+        Collections.emptyMap()
     );
   }
 

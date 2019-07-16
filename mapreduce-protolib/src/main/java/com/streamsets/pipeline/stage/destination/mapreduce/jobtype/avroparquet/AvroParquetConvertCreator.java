@@ -15,68 +15,50 @@
  */
 package com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroparquet;
 
+import com.streamsets.pipeline.lib.util.AvroLogicalTypeSupport;
+import com.streamsets.pipeline.lib.util.AvroParquetWriterBuilder190Int96;
+import com.streamsets.pipeline.lib.util.AvroToParquetConverterUtil;
 import com.streamsets.pipeline.stage.destination.mapreduce.MapreduceUtils;
+import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroconvert.AvroConversionBaseCreator;
+import com.streamsets.pipeline.stage.destination.mapreduce.jobtype.avroconvert.AvroConversionInputFormat;
 import org.apache.avro.mapred.FsInput;
-import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
+import org.apache.hadoop.mapreduce.InputFormat;
+import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.parquet.SemanticVersion;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.avro.AvroSchemaConverter190Int96Avro18;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.hadoop.ParquetWriter;
 
-import java.util.concurrent.Callable;
-
-public class AvroParquetConvertCreator implements Configurable, Callable<Job> {
-
-  Configuration conf;
+public class AvroParquetConvertCreator extends AvroConversionBaseCreator {
 
   @Override
-  public void setConf(Configuration configuration) {
-    this.conf = configuration;
-  }
-
-  @Override
-  public Configuration getConf() {
-    return conf;
-  }
-
-  @Override
-  public Job call() throws Exception {
-    // We're explicitly disabling speculative execution
-    conf.set("mapreduce.map.speculative", "false");
-    conf.set("mapreduce.map.maxattempts", "1");
+  protected void addNecessaryJarsToJob(Configuration conf) {
     MapreduceUtils.addJarsToJob(conf,
-      SemanticVersion.class,
-      ParquetWriter.class,
-      AvroParquetWriter.class,
-      FsInput.class,
-      CompressionCodec.class,
-      ParquetProperties.class,
-      BytesInput.class
+        SemanticVersion.class,
+        ParquetWriter.class,
+        AvroParquetWriter.class,
+        AvroParquetWriterBuilder190Int96.class,
+        AvroSchemaConverter190Int96Avro18.class,
+        FsInput.class,
+        CompressionCodec.class,
+        ParquetProperties.class,
+        BytesInput.class,
+        AvroToParquetConverterUtil.class,
+        AvroLogicalTypeSupport.class
     );
+  }
 
-    Job job = Job.getInstance(conf);
+  @Override
+  protected Class<? extends InputFormat> getInputFormatClass() {
+    return AvroConversionInputFormat.class;
+  }
 
-    // IO formats
-    job.setInputFormatClass(AvroParquetInputFormat.class);
-    job.setOutputFormatClass(NullOutputFormat.class);
-
-    // Mapper & job output
-    job.setMapperClass(AvroParquetConvertMapper.class);
-    job.setOutputKeyClass(NullWritable.class);
-    job.setOutputValueClass(NullWritable.class);
-
-    // It's map only job
-    job.setNumReduceTasks(0);
-
-    // General configuration
-    job.setJarByClass(getClass());
-
-    return job;
+  @Override
+  protected Class<? extends Mapper> getMapperClass() {
+    return AvroParquetConvertMapper.class;
   }
 }

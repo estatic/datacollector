@@ -432,6 +432,7 @@ public abstract class ConfigDefinitionExtractor {
         String label = annotation.label();
         String description = annotation.description();
         Object defaultValue = ConfigValueExtractor.get().extract(field, annotation, contextMsg);
+        String defaultValueFromResource = annotation.defaultValueFromResource();
         boolean required = annotation.required();
         String group = annotation.group();
         group = resolveGroup(stageGroups, group, contextMsg, errors);
@@ -455,7 +456,7 @@ public abstract class ConfigDefinitionExtractor {
         int displayPosition = annotation.displayPosition();
         List<ElFunctionDefinition> elFunctionDefinitions = getELFunctions(annotation, model, contextMsg);
         List<ElConstantDefinition> elConstantDefinitions = getELConstants(annotation, model ,contextMsg);
-        ImmutableList.Builder<Class> builder = new ImmutableList.Builder().add(annotation.elDefs()).add(ELDefinitionExtractor.DEFAULT_EL_DEFS);
+        ImmutableList.Builder<Class> builder = new ImmutableList.Builder().add(annotation.elDefs()).add(ConcreteELDefinitionExtractor.DEFAULT_EL_DEFS);
         if (annotation.type() == ConfigDef.Type.CREDENTIAL) {
           builder.add(CredentialEL.class);
         }
@@ -466,7 +467,8 @@ public abstract class ConfigDefinitionExtractor {
         int lines = annotation.lines();
         ConfigDef.Evaluation evaluation = annotation.evaluation();
 
-        def = new ConfigDefinition(field, configPrefix + name, type, label, description, defaultValue, required, group,
+        def = new ConfigDefinition(field, configPrefix + name, type, label, description, defaultValue,
+                                   defaultValueFromResource, required, group,
                                    fieldName, model, dependsOn, triggeredByValues, displayPosition,
                                    elFunctionDefinitions, elConstantDefinitions, min, max, mode, lines, elDefs,
                                    evaluation, dependsOnMap);
@@ -569,7 +571,7 @@ public abstract class ConfigDefinitionExtractor {
     List<ErrorMessage> errors;
     if (TYPES_SUPPORTING_ELS.contains(annotation.type()) ||
         (annotation.type() == ConfigDef.Type.MODEL && MODELS_SUPPORTING_ELS.contains(model.getModelType()))) {
-      errors = ELDefinitionExtractor.get().validateFunctions(annotation.elDefs(), contextMsg);
+      errors = ConcreteELDefinitionExtractor.get().validateFunctions(annotation.elDefs(), contextMsg);
       if (errors.isEmpty() && annotation.evaluation() == ConfigDef.Evaluation.EXPLICIT) {
         List<ElFunctionDefinition> elFunctionDefinitions = getELFunctions(annotation, model, contextMsg);
         for (ElFunctionDefinition def : elFunctionDefinitions) {
@@ -596,7 +598,7 @@ public abstract class ConfigDefinitionExtractor {
           .add(VaultEL.class)
           .build();
       }
-      functions = ELDefinitionExtractor.get().extractFunctions(elClasses.toArray(new Class[elClasses.size()]), contextMsg);
+      functions = ConcreteELDefinitionExtractor.get().extractFunctions(elClasses.toArray(new Class[elClasses.size()]), contextMsg);
     }
     return functions;
   }
@@ -605,7 +607,7 @@ public abstract class ConfigDefinitionExtractor {
     List<ErrorMessage> errors;
     if (TYPES_SUPPORTING_ELS.contains(annotation.type()) ||
         (annotation.type() == ConfigDef.Type.MODEL && MODELS_SUPPORTING_ELS.contains(model.getModelType()))) {
-      errors = ELDefinitionExtractor.get().validateConstants(annotation.elDefs(), contextMsg);
+      errors = ConcreteELDefinitionExtractor.get().validateConstants(annotation.elDefs(), contextMsg);
     } else {
       errors = new ArrayList<>();
     }
@@ -616,7 +618,7 @@ public abstract class ConfigDefinitionExtractor {
     List<ElConstantDefinition> functions = Collections.emptyList();
     if (TYPES_SUPPORTING_ELS.contains(annotation.type()) ||
         (annotation.type() == ConfigDef.Type.MODEL && MODELS_SUPPORTING_ELS.contains(model.getModelType()))) {
-      functions = ELDefinitionExtractor.get().extractConstants(annotation.elDefs(), contextMsg);
+      functions = ConcreteELDefinitionExtractor.get().extractConstants(annotation.elDefs(), contextMsg);
     }
     return functions;
   }

@@ -246,7 +246,8 @@ public class MapRStreamsTargetConfig {
               new HashMap<String, Object>(kafkaProducerConfigs),
           partitionStrategy,
           null,
-          dataFormat
+          dataFormat,
+          false
       );
       kafkaProducer = SdcKafkaProducerFactory.create(settings).create();
       try {
@@ -268,16 +269,11 @@ public class MapRStreamsTargetConfig {
       partitionEval = context.createELEval("partition");
       partitionVars = context.createELVars();
       //There is no scope to provide partitionVars for kafka target as of today, create empty partitionVars
-      ELUtils.validateExpression(
-          partitionEval,
-          context.createELVars(),
-          partition,
+      ELUtils.validateExpression(partition,
           context,
           KafkaDestinationGroups.KAFKA.name(),
           KAFKA_CONFIG_BEAN_PREFIX + "partition",
-          KafkaErrors.KAFKA_57,
-          Object.class,
-          issues
+          KafkaErrors.KAFKA_57, issues
       );
     }
   }
@@ -285,16 +281,11 @@ public class MapRStreamsTargetConfig {
   private void validateTopicExpression(Stage.Context context, List<Stage.ConfigIssue> issues) {
     topicEval = context.createELEval("topicExpression");
     topicVars = context.createELVars();
-    ELUtils.validateExpression(
-        topicEval,
-        context.createELVars(),
-        topicExpression,
+    ELUtils.validateExpression(topicExpression,
         context,
         KafkaDestinationGroups.KAFKA.name(),
         KAFKA_CONFIG_BEAN_PREFIX + "topicExpression",
-        KafkaErrors.KAFKA_61,
-        Object.class,
-        issues
+        KafkaErrors.KAFKA_61, issues
     );
   }
 
@@ -442,12 +433,14 @@ public class MapRStreamsTargetConfig {
           }
           //Never seen this topic name before
           try {
+            Map<String, Object> kafkaConfigs = kafkaProducerConfigs == null ?
+                Collections.<String, Object>emptyMap() :
+                new HashMap<String, Object>(kafkaProducerConfigs);
+            kafkaValidationUtil.createTopicIfNotExists(result, kafkaConfigs, null);
             int partitionCount = kafkaValidationUtil.getPartitionCount(
                 null,
                 result,
-                kafkaProducerConfigs == null ?
-                    Collections.<String, Object>emptyMap() :
-                    new HashMap<String, Object>(kafkaProducerConfigs),
+                kafkaConfigs,
                 0,
                 0
             );

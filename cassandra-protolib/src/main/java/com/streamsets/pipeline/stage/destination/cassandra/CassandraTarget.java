@@ -24,7 +24,11 @@ import com.datastax.driver.core.ColumnMetadata;
 import com.datastax.driver.core.KeyspaceMetadata;
 import com.datastax.driver.core.PlainTextAuthProvider;
 import com.datastax.driver.core.PreparedStatement;
+import com.datastax.driver.core.QueryLogger;
+import com.datastax.driver.core.QueryOptions;
+import com.datastax.driver.core.RemoteEndpointAwareJdkSSLOptions;
 import com.datastax.driver.core.Session;
+import com.datastax.driver.core.SocketOptions;
 import com.datastax.driver.core.TableMetadata;
 import com.datastax.driver.core.TypeCodec;
 import com.datastax.driver.core.exceptions.AuthenticationException;
@@ -51,7 +55,6 @@ import com.streamsets.pipeline.api.base.OnRecordErrorException;
 import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,7 +135,7 @@ public class CassandraTarget extends BaseTarget {
       issues.add(context.createConfigIssue(Groups.CASSANDRA.name(), CONTACT_NODES_LABEL, Errors.CASSANDRA_00));
     }
 
-    if (conf.contactPoints.stream().anyMatch(StringUtils::isEmpty)) {
+    if (conf.contactPoints.stream().anyMatch(String::isEmpty)) {
       issues.add(context.createConfigIssue(Groups.CASSANDRA.name(), CONTACT_NODES_LABEL, Errors.CASSANDRA_01));
     }
 
@@ -150,32 +153,44 @@ public class CassandraTarget extends BaseTarget {
       issues.add(context.createConfigIssue(Groups.CASSANDRA.name(), CONTACT_NODES_LABEL, Errors.CASSANDRA_00));
     }
 
-    if (!conf.qualifiedTableName.contains(".")) {
-      issues.add(context.createConfigIssue(Groups.CASSANDRA.name(), "qualifiedTableName", Errors.CASSANDRA_02));
-    } else {
-      if (checkCassandraReachable(issues)) {
-        try {
-          List<String> invalidColumns = checkColumnMappings();
-          if (!invalidColumns.isEmpty()) {
+    // Need to init TLS config before we touch Cassandra
+    if (issues.isEmpty() && conf.tlsConfig.isEnabled()) {
+      // this configuration has no separate "tlsEnabled" field on the bean level, so need to do it this way
+      conf.tlsConfig.init(
+          getContext(),
+          Groups.TLS.name(),
+          "conf.tlsConfig.",
+          issues
+      );
+    }
+
+    if (issues.isEmpty()) {
+      if (!conf.qualifiedTableName.contains(".")) {
+        issues.add(context.createConfigIssue(Groups.CASSANDRA.name(), "qualifiedTableName", Errors.CASSANDRA_02));
+      } else {
+        if (checkCassandraReachable(issues)) {
+          try {
+            List<String> invalidColumns = checkColumnMappings();
+            if (!invalidColumns.isEmpty()) {
+              issues.add(
+                  context.createConfigIssue(
+                  Groups.CASSANDRA.name(),
+                  "columnNames",
+                  Errors.CASSANDRA_08,
+                  Joiner.on(", ").join(invalidColumns)
+              ));
+            }
+          } catch (StageException e) {
             issues.add(
                 context.createConfigIssue(
-                    Groups.CASSANDRA.name(),
-                    "columnNames",
-                    Errors.CASSANDRA_08,
-                    Joiner.on(", ").join(invalidColumns)
-                )
-            );
+                Groups.CASSANDRA.name(),
+                "columnNames",
+                Errors.CASSANDRA_03,
+                e.toString()
+            ));
           }
-        } catch (StageException e) {
-          issues.add(
-          context.createConfigIssue(
-              Groups.CASSANDRA.name(),
-              "columnNames",
-              Errors.CASSANDRA_03,
-              e.toString()
-          ));
-        }
 
+        }
       }
     }
 
@@ -215,6 +230,7 @@ public class CassandraTarget extends BaseTarget {
         issues.add(context.createConfigIssue(null, null, Errors.CASSANDRA_03, e.toString()));
       }
     }
+
     return issues;
   }
 
@@ -377,14 +393,41 @@ public class CassandraTarget extends BaseTarget {
   }
 
   private Cluster getCluster() throws StageException {
-    return Cluster.builder()
+    RemoteEndpointAwareJdkSSLOptions sslOptions = null;
+
+    if (conf.tlsConfig.isEnabled()) {
+      // Not certain why we need the downcast here, but we do
+      sslOptions = (RemoteEndpointAwareJdkSSLOptions)RemoteEndpointAwareJdkSSLOptions.builder()
+          .withSSLContext(conf.tlsConfig.getSslContext())
+          .build();
+    }
+
+    SocketOptions socketOptions = new SocketOptions();
+    socketOptions.setConnectTimeoutMillis(conf.connectionTimeout);
+    socketOptions.setReadTimeoutMillis(conf.readTimeout);
+
+    QueryOptions queryOptions = new QueryOptions();
+    queryOptions.setConsistencyLevel(conf.consistencyLevel);
+
+    Cluster cluster = Cluster.builder()
         .addContactPoints(contactPoints)
+        .withSSL(sslOptions)
         // If authentication is disabled on the C* cluster, this method has no effect.
         .withAuthProvider(getAuthProvider())
         .withProtocolVersion(conf.protocolVersion)
         .withPort(conf.port)
         .withCodecRegistry(new CodecRegistry().register(SDC_CODECS))
+        .withSocketOptions(socketOptions)
+        .withQueryOptions(queryOptions)
         .build();
+
+    if (conf.logSlowQueries) {
+      QueryLogger queryLogger = QueryLogger.builder()
+          .withConstantThreshold(conf.slowQueryThreshold)
+          .build();
+      cluster.register(queryLogger);
+    }
+    return cluster;
   }
 
   private AuthProvider getAuthProvider() throws StageException {

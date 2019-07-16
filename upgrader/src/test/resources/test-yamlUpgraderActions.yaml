@@ -1,0 +1,228 @@
+#
+# Copyright 2019 StreamSets Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+upgraderVersion: 1
+
+upgrades:
+- toVersion: 1
+  actions:
+  - setConfig:
+      name: set1
+      value: SET
+  - setConfig:
+      name: set2
+      value: true
+  - setConfig:
+      name: set3
+      value: 1
+  - setConfig:
+      name: set4
+      value: []
+  - iterateListConfig:
+      name: listConfig
+      actions:
+      - setConfig:
+          name: setI
+          value: SET
+
+- toVersion: 2
+  actions:
+  - setConfig:
+      lookForName: a
+      name: x
+      value: X
+  - setConfig:
+      lookForName: b
+      name: y
+      value: Y
+  - setConfig:
+      lookForName: c
+      ifValueMatches: .*FOO.*
+      name: new1
+      value: true
+  - setConfig:
+      lookForName: d
+      ifValueMatches: [1]
+      name: new2
+      value: []
+  - setConfig:
+      name: z
+      value: Z
+  - iterateListConfig:
+      name: listConfig
+      actions:
+      - setConfig:
+          lookForName: a
+          name: a
+          value: AA
+      - setConfig:
+          lookForName: b
+          name: b
+          value: B
+
+- toVersion: 3
+  actions:
+  - setConfig:
+      lookForName: a
+      elseName: x
+      elseValue: X
+  - setConfig:
+      lookForName: b
+      elseName: y
+      elseValue: Y
+  - setConfig:
+      lookForName: c
+      ifValueMatches: .*FOO.*
+      elseName: new1
+      elseValue: true
+  - setConfig:
+      lookForName: d
+      ifValueMatches: .*FOO.*
+      name: caseA
+      value: true
+      elseName: caseB
+      elseValue: false
+  - setConfig:
+      lookForName: e
+      ifValueMatches: .*FOO.*
+      name: caseC
+      value: 3
+      elseName: caseD
+      elseValue: 5
+  - setConfig:
+      name: z
+      value: Z
+  - iterateListConfig:
+      name: listConfig
+      actions:
+      - setConfig:
+          lookForName: a
+          elseName: a
+          elseValue: A
+
+- toVersion: 4
+  actions:
+  - renameConfig:
+      oldNamePattern: old
+      newNamePattern: new
+  - renameConfig:
+      oldNamePattern: old\.(.*$)
+      newNamePattern: new.(0)
+  - iterateListConfig:
+      name: listConfig
+      actions:
+      - renameConfig:
+          oldNamePattern: old
+          newNamePattern: new
+
+- toVersion: 5
+  actions:
+  - removeConfigs:
+      namePattern: a
+  - removeConfigs:
+      namePattern: a\..*
+  - iterateListConfig:
+      name: listConfig
+      actions:
+      - removeConfigs:
+          namePattern: b
+
+- toVersion: 6
+  actions:
+  - replaceConfig:
+      name: a
+      newValue: AA
+  - replaceConfig:
+      name: aa
+      ifOldValueMatches: A
+      newValue: AA
+  - replaceConfig:
+      name: aaa
+      ifOldValueMatches: A
+      newValue: AA
+  - replaceConfig:
+      name: aaaa
+      ifOldValueMatches: true
+      newValue: C
+      elseNewValue: CC
+  - replaceConfig:
+      name: aaaaa
+      ifOldValueMatches: true
+      newValue: C
+      elseNewValue: true
+  - replaceConfig:
+      name: b
+      ifOldValueMatches: .*FOO.*
+      newValue: BAR
+      elseNewValue: NOFOO
+  - replaceConfig:
+      name: bb
+      ifOldValueMatches: .*FOO.*
+      newValue: BAR
+      elseNewValue: NOFOO
+  - replaceConfig:
+      name: bbb
+      ifOldValueMatches: foo
+      newValue: oldvalue=$$
+  - replaceConfig:
+      name: bbbb
+      ifOldValueMatches: bar
+      newValue: oldvalue=??
+      tokenForOldValue: ??
+  - iterateListConfig:
+      name: listConfig
+      actions:
+      - replaceConfig:
+          name: a
+          newValue: AA
+
+- toVersion: 7
+  actions:
+  - configStringMapPut:
+      name: map1
+      key: key
+      value: value
+  - configStringMapRemove:
+      name: map2
+      key: key
+  - configStringMapRemove:
+      name: map3
+      value: value
+  - configStringListAdd:
+      name: list1
+      value: value
+  - configStringListRemove:
+      name: list2
+      value: value
+  - iterateListConfig:
+      name: listConfig
+      actions:
+      - configStringMapPut:
+          name: map1
+          key: key
+          value: value
+      - configStringMapRemove:
+          name: map2
+          key: key
+      - configStringMapRemove:
+          name: map3
+          value: value
+      - configStringListAdd:
+          name: list1
+          value: value
+      - configStringListRemove:
+          name: list2
+          value: value

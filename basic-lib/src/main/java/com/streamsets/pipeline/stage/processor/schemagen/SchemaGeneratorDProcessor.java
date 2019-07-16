@@ -19,8 +19,9 @@ import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.StageBehaviorFlags;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.stage.processor.schemagen.config.Groups;
 import com.streamsets.pipeline.stage.processor.schemagen.config.SchemaGeneratorConfig;
 
@@ -29,7 +30,8 @@ import com.streamsets.pipeline.stage.processor.schemagen.config.SchemaGeneratorC
   label = "Schema Generator",
   description = "Generate schema based on incoming records.",
   icon = "schemagen.png",
-  onlineHelpRefUrl =  "index.html#Processors/SchemaGenerator.html#task_szj_ms3_x1b"
+  flags = StageBehaviorFlags.PURE_FUNCTION,
+  onlineHelpRefUrl = "index.html?contextID=task_szj_ms3_x1b"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

@@ -20,14 +20,14 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 @StageDef(
     version=1,
     label="XML Parser",
     description = "Parses a string field with XML data",
     icon="xmlparser.png",
-    onlineHelpRefUrl = "index.html#Processors/XMLParser.html#task_txd_55q_k5"
+    onlineHelpRefUrl ="index.html?contextID=task_txd_55q_k5"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

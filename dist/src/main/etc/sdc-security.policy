@@ -1,47 +1,40 @@
+// Copyright 2017 StreamSets Inc.
 //
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// Licensed under the Apache Software Foundation (ASF) under one
-// or more contributor license agreements.  See the NOTICE file
-// distributed with this work for additional information
-// regarding copyright ownership.  The ASF licenses this file
-// to you under the Apache License, Version 2.0 (the
-// "License"); you may not use this file except in compliance
-// with the License.  You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//   http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing,
-// software distributed under the License is distributed on an
-// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied.  See the License for the
-// specific language governing permissions and limitations
-// under the License.
-//
-//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // StreamSets Data Collector Policy File
 
 // StreamSets code base:
-grant codebase "file://${sdc.dist.dir}/libexec/bootstrap-libs/-" {
+grant codebase "file://${sdc.bootstrapLib.dir}/-" {
   permission java.security.AllPermission;
 };
-grant codebase "file://${sdc.dist.dir}/root-lib/*" {
+grant codebase "file://${sdc.rootLib.dir}/*" {
   permission java.security.AllPermission;
 };
-grant codebase "file://${sdc.dist.dir}/api-lib/*" {
+grant codebase "file://${sdc.apiLib.dir}/*" {
   permission java.security.AllPermission;
 };
-grant codebase "file://${sdc.dist.dir}/container-lib/*" {
+grant codebase "file://${sdc.containerLib.dir}/*" {
   permission java.security.AllPermission;
 };
-grant codebase "file://${sdc.dist.dir}/streamsets-libs-extras/-" {
+grant codebase "file://${sdc.librariesExtras.dir}/-" {
   permission java.security.AllPermission;
 };
 // StreamSets stage libraries code base:
-grant codebase "file://${sdc.dist.dir}/streamsets-libs/-" {
+grant codebase "file://${sdc.libraries.dir}/-" {
   permission java.security.AllPermission;
 };
-grant codebase "file://${sdc.dist.dir}/user-libs/streamsets-datacollector-dev-lib/-" {
+grant codebase "file://${sdc.userLibs.dir}/streamsets-datacollector-dev-lib/-" {
   permission java.security.AllPermission;
 };
 // Groovy will parse files in a different context, so we need to grant it additional privileges
@@ -53,7 +46,7 @@ grant codebase "file:/groovy/script" {
 //   http://docs.oracle.com/javase/7/docs/technotes/guides/security/permissions.html
 
 // User stage libraries code base:
-grant codebase "file://${sdc.dist.dir}/user-libs/-" {
+grant codebase "file://${sdc.userLibs.dir}/-" {
   permission java.util.PropertyPermission "*", "read";
   permission java.lang.RuntimePermission "accessDeclaredMembers";
   permission java.lang.reflect.ReflectPermission "suppressAccessChecks";
@@ -61,6 +54,6 @@ grant codebase "file://${sdc.dist.dir}/user-libs/-" {
 };
 
 // For JARs to be available to all stage libraries
-grant codebase "file://${sdc.dist.dir}/libs-common-lib/-" {
+grant codebase "file://${sdc.libsCommon.dir}/-" {
   permission java.security.AllPermission;
 };

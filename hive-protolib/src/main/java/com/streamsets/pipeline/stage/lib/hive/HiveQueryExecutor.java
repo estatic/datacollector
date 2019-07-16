@@ -259,11 +259,13 @@ public final class HiveQueryExecutor {
     buildPartitionNameValuePair(sb, partitionColumnValMap, partitionTypeMap);
     sb.append(HiveMetastoreUtil.CLOSE_BRACKET);
     sb.append(HiveMetastoreUtil.SPACE);
-    sb.append(LOCATION);
-    sb.append(HiveMetastoreUtil.SPACE);
-    sb.append(HiveMetastoreUtil.SINGLE_QUOTE);
-    sb.append(partitionPath);
-    sb.append(HiveMetastoreUtil.SINGLE_QUOTE);
+    if (partitionPath != null) {
+      sb.append(LOCATION);
+      sb.append(HiveMetastoreUtil.SPACE);
+      sb.append(HiveMetastoreUtil.SINGLE_QUOTE);
+      sb.append(partitionPath);
+      sb.append(HiveMetastoreUtil.SINGLE_QUOTE);
+    }
     return sb.toString();
   }
 
@@ -376,6 +378,14 @@ public final class HiveQueryExecutor {
     execute(sql);
   }
 
+  /**
+   * Add a new partition to the given table, with optional custom location.
+   * @param qualifiedTableName Table name in the form `database`.`table`.
+   * @param partitionNameValueMap Map between partition column names and their values.
+   * @param partitionTypeMap Map between partition column names and their types.
+   * @param partitionPath Location in the Hadoop filesystem where the partition will be created. If null, the default
+   *                      location will be used.
+   */
   public void executeAlterTableAddPartitionQuery(
       String qualifiedTableName,
       LinkedHashMap<String, String> partitionNameValueMap,
@@ -428,40 +438,60 @@ public final class HiveQueryExecutor {
     });
   }
 
-  private LinkedHashMap<String, HiveTypeInfo> extractTypeInfo(ResultSet rs) throws StageException {
-    LinkedHashMap<String, HiveTypeInfo> typeInfo = new LinkedHashMap<>();
+  @VisibleForTesting
+  protected Pair<LinkedHashMap<String, HiveTypeInfo>, LinkedHashMap<String, HiveTypeInfo>> extractTypeInfo(ResultSet rs)
+      throws StageException {
+    LinkedHashMap<String, HiveTypeInfo> columnTypeInfo = new LinkedHashMap<>();
+    Map<String, HiveTypeInfo> temporaryMap = new LinkedHashMap<>();
+
+    boolean processedColumnInfo = false;
+
     try {
       while (rs.next()) {
         String columnName = rs.getString(RESULT_SET_COL_NAME);
-        if (columnName == null || columnName.isEmpty()) {
+        if (columnName == null) {
           break;
         }
-        String columnTypeString = rs.getString(RESULT_SET_DATA_TYPE);
-        HiveTypeInfo hiveTypeInfo =
-            HiveType.prefixMatch(columnTypeString).getSupport().generateHiveTypeInfoFromResultSet(columnTypeString);
-        typeInfo.put(columnName, hiveTypeInfo);
+        if (columnName.startsWith("#") || columnName.isEmpty()) {
+          // If we found a delimiter we just skip it
+          if (!processedColumnInfo && !temporaryMap.isEmpty()) {
+            //After the delimiters we stop processing column info and start with partition info
+            processedColumnInfo = true;
+            columnTypeInfo.putAll(temporaryMap);
+            temporaryMap = new LinkedHashMap<>();
+          }
+        } else {
+          String columnTypeString = rs.getString(RESULT_SET_DATA_TYPE);
+          HiveTypeInfo hiveTypeInfo = HiveType.prefixMatch(columnTypeString)
+                                              .getSupport()
+                                              .generateHiveTypeInfoFromResultSet(columnTypeString);
+          temporaryMap.put(columnName, hiveTypeInfo);
+        }
       }
     } catch (SQLException e) {
       LOG.error("SQL Exception: " + e.getMessage() + " {}", e);
       throw new HiveStageCheckedException(Errors.HIVE_20, "", e.getMessage());
     }
-    return typeInfo;
-  }
 
-  private void processDelimiter(ResultSet rs, String delimiter) throws SQLException {
-    if (rs.next()) {
-      String columnName = rs.getString(RESULT_SET_COL_NAME);
-      Utils.checkState(
-          (columnName.startsWith(delimiter)),
-          "Need to be \"#\" or empty after column information determining Partition Information"
-      );
+    LinkedHashMap<String, HiveTypeInfo> partitionTypeInfo;
+
+    if (columnTypeInfo.isEmpty()) {
+      //If we do not have any column type information add it, and let partition info empty
+      columnTypeInfo.putAll(temporaryMap);
+      partitionTypeInfo = new LinkedHashMap<>();
+    } else {
+      partitionTypeInfo = new LinkedHashMap<>(temporaryMap);
     }
+
+    return Pair.of(columnTypeInfo, partitionTypeInfo);
   }
 
   /**
    * Returns {@link Pair} of Column Type Info and Partition Type Info.
+   *
    * @param qualifiedTableName qualified table name.
    * @return {@link Pair} of Column Type Info and Partition Type Info.
+   *
    * @throws StageException in case of any {@link SQLException}
    */
   public Pair<LinkedHashMap<String, HiveTypeInfo>, LinkedHashMap<String, HiveTypeInfo>> executeDescTableQuery(
@@ -469,21 +499,7 @@ public final class HiveQueryExecutor {
   ) throws StageException {
     String sql = buildDescTableQuery(qualifiedTableName);
 
-    return executeQuery(sql, new WithResultSet<Pair<LinkedHashMap<String, HiveTypeInfo>, LinkedHashMap<String, HiveTypeInfo>>>() {
-      @Override
-      public Pair<LinkedHashMap<String, HiveTypeInfo>, LinkedHashMap<String, HiveTypeInfo>> run(ResultSet rs) throws SQLException, StageException {
-        LinkedHashMap<String, HiveTypeInfo> columnTypeInfo  = extractTypeInfo(rs);
-        processDelimiter(rs, "#");
-        processDelimiter(rs, "#");
-        processDelimiter(rs, "");
-        LinkedHashMap<String, HiveTypeInfo> partitionTypeInfo = extractTypeInfo(rs);
-        //Remove partition columns from the columns map.
-        for (String partitionCol : partitionTypeInfo.keySet()) {
-          columnTypeInfo.remove(partitionCol);
-        }
-        return Pair.of(columnTypeInfo, partitionTypeInfo);
-      }
-    });
+    return executeQuery(sql, this::extractTypeInfo);
   }
 
   /**

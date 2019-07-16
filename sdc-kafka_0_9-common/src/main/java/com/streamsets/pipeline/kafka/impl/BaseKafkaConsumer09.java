@@ -20,8 +20,10 @@ import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.impl.Utils;
+import com.streamsets.pipeline.kafka.api.KafkaOriginGroups;
 import com.streamsets.pipeline.kafka.api.MessageAndOffset;
 import com.streamsets.pipeline.kafka.api.SdcKafkaConsumer;
+import com.streamsets.pipeline.lib.kafka.KafkaErrors;
 import org.apache.commons.lang.StringUtils;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -32,6 +34,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +59,9 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
   private static final int CONSUMER_POLLING_WINDOW_MS = 100;
   private static final String REBALANCE_IN_PROGRESS = "Rebalance In Progress";
   private static final String WAITING_ON_POLL = "Waiting on poll";
+  public static final String KAFKA_CONFIG_BEAN_PREFIX = "kafkaConfigBean.";
+  public static final String TIMESTAMPS = "timestamps.";
+  public static final String KAFKA_AUTO_OFFSET_RESET = "kafkaAutoOffsetReset";
 
   protected KafkaConsumer<String, byte[]> kafkaConsumer;
 
@@ -88,6 +94,18 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseKafkaConsumer09.class);
 
+  boolean isTimestampSupported(){
+    return false;
+  }
+
+  boolean isTimestampEnabled(){
+    return false;
+  }
+
+  MessageAndOffset getMessageAndOffset(ConsumerRecord message, boolean isEnabled){
+    return null;
+  }
+
   public BaseKafkaConsumer09(String topic, Source.Context context, int batchSize) {
     this.topic = topic;
     this.topicPartitionToOffsetMetadataMap = new HashMap<>();
@@ -103,12 +121,30 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
 
   @Override
   public void validate(List<Stage.ConfigIssue> issues, Stage.Context context) {
-    createConsumer();
-    subscribeConsumer();
+    if (isTimestampEnabled() && !isTimestampSupported()) {
+      issues.add(context.createConfigIssue(KafkaOriginGroups.KAFKA.name(),
+          KAFKA_CONFIG_BEAN_PREFIX + TIMESTAMPS,
+          KafkaErrors.KAFKA_75
+      ));
+    }
+
     try {
-      kafkaConsumer.partitionsFor(topic);
-    } catch (WakeupException | AuthorizationException e) { // NOSONAR
-      handlePartitionsForException(issues, context, e);
+      validateAutoOffsetReset(issues);
+    } catch (StageException e) {
+      issues.add(context.createConfigIssue(KafkaOriginGroups.KAFKA.name(),
+          KAFKA_CONFIG_BEAN_PREFIX + KAFKA_AUTO_OFFSET_RESET,
+          e.getErrorCode()
+      ));
+    }
+
+    if (issues.isEmpty()) {
+      createConsumer();
+      subscribeConsumer();
+      try {
+        kafkaConsumer.partitionsFor(topic);
+      } catch (WakeupException | AuthorizationException e) { // NOSONAR
+        handlePartitionsForException(issues, context, e);
+      }
     }
   }
 
@@ -149,7 +185,7 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
         kafkaConsumer != null,
         "validate method must be called before init which creates the Kafka Consumer"
     );
-    kafkaConsumerRunner = new KafkaConsumerRunner(this);
+    kafkaConsumerRunner = new KafkaConsumerRunner(this, context);
     executorService.scheduleWithFixedDelay(kafkaConsumerRunner, 0, 20, TimeUnit.MILLISECONDS);
     isInited = true;
   }
@@ -250,12 +286,14 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
     MessageAndOffset messageAndOffset = null;
     if(next != null) {
       updateEntry(next);
-      messageAndOffset = new MessageAndOffset(next.value(), next.offset(), next.partition());
+      messageAndOffset = getMessageAndOffset(next, isTimestampEnabled());
     }
     return messageAndOffset;
   }
 
   protected abstract void configureKafkaProperties(Properties props);
+
+  protected abstract void validateAutoOffsetReset(List<Stage.ConfigIssue> issues) throws StageException;
 
   protected abstract void handlePartitionsForException(
     List<Stage.ConfigIssue> issues,
@@ -288,9 +326,15 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
   static class KafkaConsumerRunner implements Runnable {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final BaseKafkaConsumer09 consumer;
+    private final Source.Context context;
+    private boolean isErrorReported;
+    private int countOfErrorRecords;
 
-    public KafkaConsumerRunner(BaseKafkaConsumer09 consumer) {
+    public KafkaConsumerRunner(BaseKafkaConsumer09 consumer, Source.Context context) {
       this.consumer = consumer;
+      this.context = context;
+      isErrorReported = false;
+      countOfErrorRecords = 0;
     }
 
     @Override
@@ -327,6 +371,15 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
         if (!closed.get()) {
           throw e;
         }
+      } catch (Exception e) {
+        if(!isErrorReported || countOfErrorRecords > 1000){
+          isErrorReported = true;
+          countOfErrorRecords = 0;
+          LOG.error(String.format("%s catch trying to serialize Kafka Record: %s", e.getClass().toString(),
+              e.getLocalizedMessage()));
+          context.reportError(e);
+        }
+        countOfErrorRecords++;
       }
     }
 
@@ -339,6 +392,8 @@ public abstract class BaseKafkaConsumer09 implements SdcKafkaConsumer, ConsumerR
     private boolean putConsumerRecord(ConsumerRecord<String, byte[]> record) {
       try {
         consumer.recordQueue.put(record);
+        isErrorReported = false;
+        countOfErrorRecords = 0;
         return true;
       } catch (InterruptedException e) {
         LOG.error("Failed to poll KafkaConsumer, reason : {}", e.toString(), e);

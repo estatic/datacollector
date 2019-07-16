@@ -23,22 +23,25 @@ import com.streamsets.pipeline.api.ListBeanModel;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.api.ValueChooserModel;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
+import com.streamsets.pipeline.hbase.api.common.producer.Groups;
+import com.streamsets.pipeline.hbase.api.common.producer.HBaseConnectionConfig;
+import com.streamsets.pipeline.hbase.api.common.producer.RowKeyStorageTypeChooserValues;
+import com.streamsets.pipeline.hbase.api.common.producer.StorageType;
 import com.streamsets.pipeline.lib.el.RecordEL;
 import com.streamsets.pipeline.lib.el.TimeNowEL;
-import com.streamsets.pipeline.lib.hbase.common.HBaseConnectionConfig;
 
 import java.util.List;
 
 @GenerateResourceBundle
 @StageDef(
-    version = 3,
+    version = 4,
     label = "HBase",
     description = "Writes data to HBase",
     icon = "hbase.png",
     privateClassLoader = true,
     upgrader = HBaseTargetUpgrader.class,
-    onlineHelpRefUrl = "index.html#Destinations/HBase.html#task_pyq_qx5_vr"
+    onlineHelpRefUrl ="index.html?contextID=task_pyq_qx5_vr"
 )
 @ConfigGroups(Groups.class)
 public class HBaseDTarget extends DTarget {
@@ -110,6 +113,19 @@ public class HBaseDTarget extends DTarget {
 
   @ConfigDef(
       required = false,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "true",
+      label = "Validate Table Existence",
+      description = "If enabled, write to HBase will obtain a table descriptor to determine if the table exists and"
+        + " validate column family. This requires administrator rights in HBase. Otherwise, error records will be"
+        + " generated if the target table does not exist at runtime.",
+      displayPosition = 110,
+      group = "HBASE"
+  )
+  public boolean validateTableExistence;
+
+  @ConfigDef(
+      required = false,
       type = ConfigDef.Type.STRING,
       defaultValue = "",
       label = "Time Basis",
@@ -133,6 +149,7 @@ public class HBaseDTarget extends DTarget {
         implicitFieldMapping,
         ignoreMissingFieldPath,
         ignoreInvalidColumn,
+        validateTableExistence,
         timeDriver
     );
   }

@@ -22,31 +22,34 @@ import com.streamsets.datacollector.config.RawSourceDefinition;
 import com.streamsets.datacollector.config.ServiceDependencyDefinition;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.config.StageLibraryDefinition;
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.datacollector.creation.PipelineBeanCreator;
 import com.streamsets.datacollector.creation.PipelineConfigBean;
+import com.streamsets.datacollector.creation.PipelineFragmentConfigBean;
 import com.streamsets.datacollector.creation.RuleDefinitionsConfigBean;
 import com.streamsets.datacollector.creation.StageConfigBean;
-import com.streamsets.pipeline.api.OffsetCommitTrigger;
-import com.streamsets.pipeline.api.OffsetCommitter;
-import com.streamsets.pipeline.api.PipelineLifecycleStage;
-import com.streamsets.pipeline.api.ProtoSource;
-import com.streamsets.pipeline.api.Source;
-import com.streamsets.pipeline.api.StatsAggregatorStage;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.ErrorStage;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.Executor;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.HideStage;
+import com.streamsets.pipeline.api.OffsetCommitTrigger;
+import com.streamsets.pipeline.api.OffsetCommitter;
+import com.streamsets.pipeline.api.PipelineLifecycleStage;
 import com.streamsets.pipeline.api.Processor;
+import com.streamsets.pipeline.api.ProtoSource;
+import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageDef;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.StageUpgrader;
+import com.streamsets.pipeline.api.StatsAggregatorStage;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.api.impl.ErrorMessage;
 import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.api.service.ServiceConfiguration;
 import com.streamsets.pipeline.api.service.ServiceDependency;
+import com.streamsets.pipeline.upgrader.SelectorStageUpgrader;
 import org.apache.commons.lang3.ClassUtils;
 
 import java.util.ArrayList;
@@ -118,7 +121,7 @@ public abstract class StageDefinitionExtractor {
         errors.add(new ErrorMessage(DefinitionError.DEF_302, contextMsg));
       }
       boolean errorStage = klass.getAnnotation(ErrorStage.class) != null;
-      if (type != null && errorStage && type == StageType.SOURCE) {
+      if (errorStage && type == StageType.SOURCE) {
         errors.add(new ErrorMessage(DefinitionError.DEF_303, contextMsg));
       }
       if (OffsetCommitter.class.isAssignableFrom(klass) && !Source.class.isAssignableFrom(klass)) {
@@ -211,13 +214,15 @@ public abstract class StageDefinitionExtractor {
         boolean preconditions = !errorStage && type != StageType.SOURCE &&
             ((hideConfigs == null) || !hideConfigs.preconditions());
         boolean onRecordError = !errorStage && ((hideConfigs == null) || !hideConfigs.onErrorRecord());
-        List<ConfigDefinition> configDefinitions = extractConfigDefinitions(libraryDef, klass, hideConfigs, new ArrayList<ErrorMessage>(), contextMsg);
+        List<ConfigDefinition> configDefinitions = extractConfigDefinitions(libraryDef, klass, hideConfigs, new ArrayList<>(), contextMsg);
         RawSourceDefinition rawSourceDefinition = RawSourceDefinitionExtractor.get().extract(klass, contextMsg);
         ConfigGroupDefinition configGroupDefinition = ConfigGroupExtractor.get().extract(klass, contextMsg);
         String outputStreamLabelProviderClass = (!type.isOneOf(StageType.TARGET, StageType.EXECUTOR)) ? sDef.outputStreams().getName() : null;
         boolean variableOutputStreams = StageDef.VariableOutputStreams.class.isAssignableFrom(sDef.outputStreams());
         int outputStreams = (variableOutputStreams || type.isOneOf(StageType.TARGET, StageType.EXECUTOR) )
             ? 0 : sDef.outputStreams().getEnumConstants().length;
+        int inputStreams = sDef.numberOfInputStreams();
+        String inputStreamLabelProviderClass = sDef.inputStreams().getName();
         List<ExecutionMode> executionModes = ImmutableList.copyOf(sDef.execution());
         List<ExecutionMode> executionModesLibraryOverride = libraryDef.getStageExecutionModesOverride(klass);
         if (executionModesLibraryOverride != null) {
@@ -225,12 +230,20 @@ public abstract class StageDefinitionExtractor {
         }
         List<String> libJarsRegex = ImmutableList.copyOf(sDef.libJarsRegex());
         boolean recordsByRef = sDef.recordsByRef();
+        boolean bisectable = sDef.bisectable();
         List<ServiceDependencyDefinition> services = extractServiceDependencies(sDef);
+
+        // Should the stage be hidden from canvas? If so, where else should it be displayed?
+        HideStage hideStageDef = klass.getAnnotation(HideStage.class);
+        List<HideStage.Type> hideStage = new ArrayList<>();
+        if(hideStageDef != null) {
+          hideStage.addAll(Arrays.asList(hideStageDef.value()));
+        }
 
         // If not a stage library, then dont add stage system configs
         if (!PipelineBeanCreator.PIPELINE_LIB_DEFINITION.equals(libraryDef.getName())) {
           List<ConfigDefinition> systemConfigs =
-            ConfigDefinitionExtractor.get().extract(StageConfigBean.class, Collections.<String> emptyList(),
+            ConfigDefinitionExtractor.get().extract(StageConfigBean.class, Collections.emptyList(),
               "systemConfigs");
 
           for (ConfigDefinition def : systemConfigs) {
@@ -264,7 +277,15 @@ public abstract class StageDefinitionExtractor {
 
         StageUpgrader upgrader;
         try {
-          upgrader = sDef.upgrader().newInstance();
+          if (sDef.upgraderDef().isEmpty()) {
+            upgrader = sDef.upgrader().newInstance();
+          } else {
+            upgrader = new SelectorStageUpgrader(
+                name,
+                sDef.upgrader().newInstance(),
+                klass.getClassLoader().getResource(sDef.upgraderDef())
+            );
+          }
         } catch (Exception ex) {
           throw new IllegalArgumentException(Utils.format(
               "Could not instantiate StageUpgrader for StageDefinition '{}': {}", name, ex.toString(), ex));
@@ -279,7 +300,12 @@ public abstract class StageDefinitionExtractor {
           OffsetCommitTrigger.class.isAssignableFrom(klass);
         boolean producesEvents = sDef.producesEvents();
 
+        List<Class> eventDefs = ImmutableList.copyOf(sDef.eventDefs());
+
+        String yamlUpgrader = sDef.upgraderDef();
+
         return new StageDefinition(
+            sDef,
             libraryDef,
             privateClassLoader,
             klass,
@@ -308,7 +334,15 @@ public abstract class StageDefinitionExtractor {
             pipelineLifecycleStage,
             offsetCommitController,
             producesEvents,
-            services
+            services,
+            hideStage,
+            sDef.sendsResponse(),
+            sDef.beta(),
+            inputStreams,
+            inputStreamLabelProviderClass,
+            bisectable,
+            eventDefs,
+            yamlUpgrader
         );
       } catch (Exception e) {
         throw new IllegalStateException("Exception while extracting stage definition for " + getStageName(klass), e);
@@ -328,7 +362,7 @@ public abstract class StageDefinitionExtractor {
 
     Set<String> hideConfigSet = (hideConfigs != null) ?
       new HashSet<>(Arrays.asList(hideConfigs.value())) :
-      Collections.<String>emptySet();
+      Collections.emptySet();
 
     if (!hideConfigSet.isEmpty()) {
       Iterator<ConfigDefinition> iterator = cDefs.iterator();
@@ -360,6 +394,7 @@ public abstract class StageDefinitionExtractor {
     } else if (Target.class.isAssignableFrom(klass)) {
       type = StageType.TARGET;
     } else if (PipelineConfigBean.class.isAssignableFrom(klass) ||
+        PipelineFragmentConfigBean.class.isAssignableFrom(klass) ||
         RuleDefinitionsConfigBean.class.isAssignableFrom(klass)) {
       type = StageType.PIPELINE;
     } else {
@@ -393,5 +428,4 @@ public abstract class StageDefinitionExtractor {
     }
     return errors;
   }
-
 }

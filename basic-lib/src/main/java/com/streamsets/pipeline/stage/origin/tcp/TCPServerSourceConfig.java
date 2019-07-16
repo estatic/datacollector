@@ -43,7 +43,7 @@ public class TCPServerSourceConfig {
       displayPosition = 1,
       group = "DATA_FORMAT",
       dependsOn = "tcpMode",
-      triggeredByValue = {"DELIMITED_RECORDS", "CHARACTER_BASED_LENGTH_FIELD"}
+      triggeredByValue = {"DELIMITED_RECORDS", "CHARACTER_BASED_LENGTH_FIELD", "FLUME_AVRO_IPC"}
   )
   @ValueChooserModel(DataFormatChooserValues.class)
   public DataFormat dataFormat;
@@ -67,6 +67,19 @@ public class TCPServerSourceConfig {
 
   @ConfigDef(
       required = true,
+      type = ConfigDef.Type.STRING,
+      label = "Bind Address",
+      defaultValue = "0.0.0.0",
+      description = "Bind address for opening listener.",
+      dependsOn = "tcpMode",
+      triggeredByValue = "FLUME_AVRO_IPC",
+      group = "TCP",
+      displayPosition = 4
+  )
+  public String bindAddress;
+
+  @ConfigDef(
+      required = true,
       type = ConfigDef.Type.BOOLEAN,
       label = "Enable Native Transports (Epoll)",
       description = "Enable epoll transports.  Multithreaded performance will be significantly higher with this" +
@@ -84,6 +97,7 @@ public class TCPServerSourceConfig {
       description = "Number of receiver threads for each port. It should be based on the CPU cores expected to be" +
           " dedicated to the pipeline",
       defaultValue = "1",
+      min = 1,
       group = "TCP",
       displayPosition = 20
   )
@@ -299,4 +313,17 @@ public class TCPServerSourceConfig {
       evaluation = ConfigDef.Evaluation.EXPLICIT
   )
   public String batchCompletedAckMessage;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.NUMBER,
+      defaultValue = "300",
+      label = "Read Timeout (seconds)",
+      description = "Period of time a connection can be idle. After that time, the connection is closed",
+      displayPosition = 300,
+      group = "TCP",
+      min = 1,
+      max = 3600
+  )
+  public int readTimeout;
 }

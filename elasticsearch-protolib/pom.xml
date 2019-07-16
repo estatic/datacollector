@@ -23,18 +23,18 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.1.0.0-SNAPSHOT</version>
+    <version>3.10.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-elasticsearch-protolib</artifactId>
-  <version>3.1.0.0-SNAPSHOT</version>
+  <version>3.10.0-SNAPSHOT</version>
   <description>StreamSets Data Collector Elastic Search ProtoLib</description>
   <name>StreamSets Data Collector Elastic Search ProtoLib</name>
   <packaging>jar</packaging>
 
   <properties>
-    <elasticsearch.version>5.2.0</elasticsearch.version>
+    <elasticsearch.version>5.3.0</elasticsearch.version>
     <gson.version>2.2.4</gson.version>
     <log4j2.version>2.7</log4j2.version>
   </properties>
@@ -95,6 +95,11 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-aws-support</artifactId>
+      <!-- version>${project.version}</version -->
+    </dependency>
+    <dependency>
       <groupId>log4j</groupId>
       <artifactId>log4j</artifactId>
       <scope>provided</scope>
@@ -153,6 +158,12 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-stagesupport</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -164,6 +175,18 @@
         <configuration>
           <skip>true</skip>
         </configuration>
+      </plugin>
+      <!-- create test jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>test-jar</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

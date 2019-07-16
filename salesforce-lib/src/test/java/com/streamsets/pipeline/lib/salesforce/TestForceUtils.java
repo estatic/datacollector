@@ -321,10 +321,24 @@ public class TestForceUtils {
       // SDC-7894 SOQL problem using DateTime as ${OFFSET} value
       {"SELECT * FROM Task WHERE LastModifiedDate > ${OFFSET}", "Task"},
       {"SELECT * FROM Task WHERE Id > '${OFFSET}'", "Task"},
+      // SDC-9742
+      {"SELECT Id, Name, (SELECT Id, LastName, AccountId FROM Contacts) FROM Account", "Account"},
+      {"SELECT Id, Name, (SELECT Id, LastName, AccountId FROM Contacts ORDER BY Id) FROM Account", "Account"},
+      // SDC-9143
+      {"SELECT * FROM Order WHERE SystemModstamp > ${offset} ORDER BY SystemModstamp", "Order"},
+      {"SELECT * FROM Group WHERE SystemModstamp > ${offset} ORDER BY SystemModstamp", "Group"},
+      // SDC-10649 - queries including TYPEOF clauses failed when fields were specified earlier in the query
+      {"SELECT Id,\n" +
+          "  TYPEOF What\n" +
+          "    WHEN Account THEN Phone, NumberOfEmployees\n" +
+          "    WHEN Opportunity THEN Amount, CloseDate\n" +
+          "    ELSE Name, Email\n" +
+          "  END\n" +
+          "FROM Event", "Event"},
   };
 
   @Parameterized.Parameters
-  public static Collection<Object[]> data() throws Exception {
+  public static Collection<Object[]> data() {
     return Arrays.asList(queries);
   }
 

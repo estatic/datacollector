@@ -19,6 +19,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.streamsets.pipeline.api.FileRef;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.impl.CreateByRef;
 import com.streamsets.pipeline.lib.util.ExceptionUtils;
 
 import java.io.File;
@@ -79,6 +80,12 @@ public class WrapperDataParserFactory extends DataParserFactory {
     return new WrapperDataParser(factory.getParser(id, metadata, fileRef));
   }
 
+  @Override
+  public void destroy() {
+    factory.destroy();
+    super.destroy();
+  }
+
   @VisibleForTesting
   public DataParserFactory getFactory() {
     return factory;
@@ -95,8 +102,8 @@ public class WrapperDataParserFactory extends DataParserFactory {
     @Override
     public Record parse() throws IOException, DataParserException {
       try {
-        return dataParser.parse();
-      } catch (Throwable ex) {
+        return CreateByRef.call( () -> dataParser.parse());
+      } catch (Exception ex) {
         ExceptionUtils.throwUndeclared(normalizeException(ex));
       }
       return null; //unreacheable
@@ -106,7 +113,7 @@ public class WrapperDataParserFactory extends DataParserFactory {
     public String getOffset() throws DataParserException, IOException {
       try {
         return dataParser.getOffset();
-      } catch (Throwable ex) {
+      } catch (Exception ex) {
         ExceptionUtils.throwUndeclared(normalizeException(ex));
       }
       return null; //unreacheable
@@ -121,7 +128,7 @@ public class WrapperDataParserFactory extends DataParserFactory {
     public void close() throws IOException {
       try {
         dataParser.close();
-      } catch (Throwable ex) {
+      } catch (Exception ex) {
         ExceptionUtils.throwUndeclared(normalizeException(ex));
       }
     }

@@ -18,6 +18,7 @@ package com.streamsets.pipeline.lib.generator.avro;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.lib.generator.DataGeneratorException;
+import com.streamsets.pipeline.lib.util.AvroSchemaHelper;
 import com.streamsets.pipeline.lib.util.AvroTypeUtil;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -41,9 +42,12 @@ public class AvroMessageGenerator extends BaseAvroDataGenerator {
       boolean schemaInHeader,
       OutputStream outputStream,
       Schema schema,
-      Map<String, Object> defaultValueMap
+      Map<String, Object> defaultValueMap,
+      String schemaSubject,
+      AvroSchemaHelper schemaHelper,
+      int schemaId
   ) throws IOException {
-    super(schemaInHeader, schema, defaultValueMap);
+    super(schemaInHeader, schema, defaultValueMap, schemaHelper, schemaSubject, schemaId);
     this.outputStream = outputStream;
     this.binaryEncoder = EncoderFactory.get().binaryEncoder(outputStream, null);
 
@@ -55,6 +59,14 @@ public class AvroMessageGenerator extends BaseAvroDataGenerator {
   @Override
   protected void initializeWriter() {
     datumWriter = new GenericDatumWriter<>(schema);
+  }
+
+  @Override
+  protected void postInitialize() throws IOException {
+    // If using Confluent Kafka Serializer we must write the magic byte
+    if (schemaHelper != null && schemaHelper.hasRegistryClient() && schemaId > 0) {
+      schemaHelper.writeSchemaId(outputStream, schemaId);
+    }
   }
 
   @Override

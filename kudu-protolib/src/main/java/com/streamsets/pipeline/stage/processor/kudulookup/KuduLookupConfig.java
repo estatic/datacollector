@@ -20,6 +20,8 @@ import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ListBeanModel;
 import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.lib.el.RecordEL;
+import com.streamsets.pipeline.stage.common.MissingValuesBehavior;
+import com.streamsets.pipeline.stage.common.MissingValuesBehaviorChooserValues;
 import com.streamsets.pipeline.stage.common.MultipleValuesBehavior;
 import com.streamsets.pipeline.stage.lib.kudu.KuduFieldMappingConfig;
 import com.streamsets.pipeline.stage.processor.kv.CacheConfig;
@@ -27,7 +29,7 @@ import com.streamsets.pipeline.stage.processor.kv.CacheConfig;
 import java.util.List;
 
 public class KuduLookupConfig {
-  public static final String CONF_PREFIX = "kuduLookupConfig.";
+  public static final String CONF_PREFIX = "conf.";
 
   // kudu tab
   @ConfigDef(
@@ -56,7 +58,7 @@ public class KuduLookupConfig {
   @ConfigDef(required = true,
       type = ConfigDef.Type.MODEL,
       label = "Key Columns Mapping",
-      description = "Specify the columns used as keys for the lookup. The mapping must include a primary key column",
+      description = "Specify the columns used as keys for the lookup. For best performance, include primary key columns.",
       displayPosition = 30,
       group = "KUDU"
   )
@@ -85,15 +87,26 @@ public class KuduLookupConfig {
   public boolean caseSensitive;
 
   @ConfigDef(required = false,
-      type = ConfigDef.Type.BOOLEAN,
-      defaultValue = "true",
-      label = "Ignore Missing Value",
-      description = "If set, process records even if column values are missing. If not set, send records to error",
+      type = ConfigDef.Type.MODEL,
+      defaultValue = "SEND_TO_ERROR",
+      label = "Missing Lookup Behavior",
+      description = "Behavior when lookup did not find a matching record. ",
       displayPosition = 60,
       group = "KUDU"
   )
-  @ListBeanModel
-  public boolean ignoreMissing;
+  @ValueChooserModel(MissingValuesBehaviorChooserValues.class)
+  public MissingValuesBehavior missingLookupBehavior = MissingValuesBehavior.SEND_TO_ERROR;
+
+  @ConfigDef(required = false,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "true",
+      label = "Ignore Missing Value in Matching Record",
+      description = "Ignore when matching record does not have value in the column " +
+          "specified in Column to Output Field Mapping. Otherwise send to error.",
+      displayPosition = 70,
+      group = "KUDU"
+  )
+  public boolean ignoreMissing = true;
 
   @ConfigDef(
       required = true,
@@ -108,15 +121,40 @@ public class KuduLookupConfig {
   public MultipleValuesBehavior multipleValuesBehavior = MultipleValuesBehavior.DEFAULT;
 
   @ConfigDef(
+      required = false,
+      type = ConfigDef.Type.NUMBER,
+      defaultValue = "",
+      label = "Maximum Number of Worker Threads",
+      description = "Set the maximum number of threads to perform lookup processing. If not provided or set to 0, " +
+          "the default number (2 * the number of available processors) is used.",
+      displayPosition = 20,
+      group = "ADVANCED"
+  )
+  public int numWorkers;
+
+  @ConfigDef(
       required = true,
       type = ConfigDef.Type.NUMBER,
       defaultValue = "10000",
-      label = "Operation Timeout Milliseconds",
-      description = "Sets the default timeout used for user operations (using sessions and scanners)",
+      label = "Operation Timeout (milliseconds)",
+      description = "Sets the default timeout used for user operations (using sessions and scanners). A value of 0 disables the timeout.",
       displayPosition = 30,
       group = "ADVANCED"
   )
-  public int operationTimeout;
+  public int operationTimeout = 10000;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.NUMBER,
+      defaultValue = "30000",
+      label = "Admin Operation Timeout (milliseconds)",
+      description = "Default timeout used for admin operations (openTable, getTableSchema, connectionRetry). " +
+          "A value of 0 disables the timeout.",
+      displayPosition = 35,
+      group = "ADVANCED"
+  )
+  public int adminOperationTimeout = 30000;
+
 
   @ConfigDef(
       required = true,

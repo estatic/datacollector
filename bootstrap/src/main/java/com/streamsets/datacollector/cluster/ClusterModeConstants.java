@@ -28,12 +28,14 @@ public class ClusterModeConstants {
   public static final String CLUSTER_PIPELINE_REV = "cluster.pipeline.rev";
   public static final String CLUSTER_PIPELINE_USER = "cluster.pipeline.user";
   public static final String CLUSTER_PIPELINE_REMOTE = "cluster.pipeline.remote";
+  public static final String HADOOP_PROXY_USER = "HADOOP_PROXY_USER";
 
   public static final String SPARK_KAFKA_JAR_REGEX = "spark-streaming-kafka.*";
   public static final String AVRO_MAPRED_JAR_REGEX = "avro-mapred.*";
   public static final String AVRO_JAR_REGEX = "avro-\\d+.*";
 
   public static final String EXTRA_KAFKA_CONFIG_PREFIX = "EXTRA_KAFKA_CONFIG_PREFIX_";
+  public static final String SECURE_KAFKA_IDENTIFIER = "SASL";
 
 
   private ClusterModeConstants() {}

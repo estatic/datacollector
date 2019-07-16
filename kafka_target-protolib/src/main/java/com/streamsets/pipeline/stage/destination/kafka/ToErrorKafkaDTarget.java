@@ -19,22 +19,26 @@ package com.streamsets.pipeline.stage.destination.kafka;
 import com.streamsets.pipeline.api.ErrorStage;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
+import com.streamsets.pipeline.api.HideStage;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
 import com.streamsets.pipeline.config.DataFormat;
+import com.streamsets.pipeline.stage.destination.lib.ToOriginResponseConfig;
 
 @StageDef(
-    version = 3,
+    version = 4,
     label = "Write to Kafka",
     description = "Writes records to Kafka as SDC Records",
-    onlineHelpRefUrl = "index.html#Pipeline_Configuration/ErrorHandling.html#concept_kgc_l4y_5r",
+    onlineHelpRefUrl ="index.html?contextID=concept_kgc_l4y_5r",
     upgrader = KafkaTargetUpgrader.class)
-@ErrorStage
 @HideConfigs(preconditions = true, onErrorRecord = true, value = {
     "conf.dataFormat",
     "conf.keySerializer",
-    "conf.valueSerializer"
+    "conf.valueSerializer",
+    "responseConf.sendResponseToOrigin"
 })
+@ErrorStage
+@HideStage(HideStage.Type.ERROR_STAGE)
 @GenerateResourceBundle
 public class ToErrorKafkaDTarget extends KafkaDTarget {
 
@@ -43,7 +47,7 @@ public class ToErrorKafkaDTarget extends KafkaDTarget {
     conf.dataFormat = DataFormat.SDC_JSON;
     conf.keySerializer = Serializer.STRING;
     conf.valueSerializer = Serializer.DEFAULT;
-    return new KafkaTarget(conf);
+    return new KafkaTarget(conf, new ToOriginResponseConfig());
   }
 
 }

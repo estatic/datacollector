@@ -15,7 +15,7 @@
  */
 package com.streamsets.pipeline.stage.destination;
 
-import com.google.common.collect.ImmutableList;
+import com.streamsets.pipeline.api.EventRecord;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.sdk.RecordCreator;
@@ -23,6 +23,7 @@ import com.streamsets.pipeline.sdk.TargetRunner;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 
 public class TestToEventTarget {
@@ -37,9 +38,9 @@ public class TestToEventTarget {
       Record record = RecordCreator.create();
       record.set(Field.create(Field.Type.STRING, "Catch them all!"));
 
-      runner.runWrite(ImmutableList.of(record));
+      runner.runWrite(Collections.singletonList(record));
 
-      List<Record> events = runner.getEventRecords();
+      List<EventRecord> events = runner.getEventRecords();
       Assert.assertNotNull(events);
       Assert.assertEquals(1, events.size());
       Assert.assertEquals(Field.Type.STRING, events.get(0).get().getType());

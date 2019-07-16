@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 StreamSets Inc.
+ * Copyright 2018 StreamSets Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,43 +16,14 @@
 package com.streamsets.datacollector.pipeline.executor.spark;
 
 import com.streamsets.pipeline.api.ConfigDef;
-import com.streamsets.pipeline.lib.el.VaultEL;
-import org.apache.commons.lang3.StringUtils;
-import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 
 public class CredentialsConfigBean {
-
-  @ConfigDef(
-      required = true,
-      type = ConfigDef.Type.STRING,
-      label = "Username",
-      displayPosition = 10,
-      elDefs = VaultEL.class,
-      group = "CREDENTIALS",
-      dependsOn = "clusterManager^",
-      triggeredByValue = "DATABRICKS"
-  )
-  public String username;
-
-  @ConfigDef(
-      required = true,
-      type = ConfigDef.Type.STRING,
-      label = "Password",
-      displayPosition = 20,
-      elDefs = VaultEL.class,
-      group = "CREDENTIALS",
-      dependsOn = "clusterManager^",
-      triggeredByValue = "DATABRICKS"
-  )
-  public String password;
 
   @ConfigDef(
       type = ConfigDef.Type.STRING,
       required = false,
       label = "Kerberos Principal",
-      group = "CREDENTIALS",
-      dependsOn = "clusterManager^",
-      triggeredByValue = "YARN"
+      group = "CREDENTIALS"
   )
   public String principal = "";
 
@@ -60,17 +31,8 @@ public class CredentialsConfigBean {
       type = ConfigDef.Type.STRING,
       required = false,
       label = "Kerberos Keytab",
-      group = "CREDENTIALS",
-      dependsOn = "clusterManager^",
-      triggeredByValue = "YARN"
+      group = "CREDENTIALS"
   )
   public String keytab = "";
 
-  public HttpAuthenticationFeature init() {
-    if (!StringUtils.isEmpty(username)) {
-      return HttpAuthenticationFeature.basic(username, password);
-    } else {
-      return null;
-    }
-  }
 }

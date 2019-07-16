@@ -20,8 +20,12 @@ import com.streamsets.pipeline.api.BatchMaker;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.ToErrorContext;
 import com.streamsets.pipeline.api.base.BasePushSource;
+import com.streamsets.pipeline.api.base.OnRecordErrorException;
 import com.streamsets.pipeline.lib.operation.OperationType;
+import com.streamsets.pipeline.stage.common.DefaultErrorRecordHandler;
+import com.streamsets.pipeline.stage.common.ErrorRecordHandler;
 import com.streamsets.pipeline.stage.common.HeaderAttributeConstants;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -40,9 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,12 +67,12 @@ public class MapRDBCDCSource extends BasePushSource {
   private static final String MAPR_SERVER_TIMESTAMP = "mapr.server.timestamp";
 
   private MapRDBCDCBeanConfig conf;
+  private ErrorRecordHandler errorRecordHandler;
   private AtomicBoolean shutdownCalled = new AtomicBoolean(false);
   private int batchSize;
 
   private MapRDBCDCKafkaConsumerFactory consumerFactory;
   private ExecutorService executor;
-
 
   public MapRDBCDCSource(MapRDBCDCBeanConfig conf, MapRDBCDCKafkaConsumerFactory consumerFactory) {
     this.conf = conf;
@@ -111,7 +113,7 @@ public class MapRDBCDCSource extends BasePushSource {
           ConsumerRecords<byte[], ChangeDataRecord> messages = consumer.poll(conf.batchWaitTime);
 
           for (ConsumerRecord<byte[], ChangeDataRecord> message : messages) {
-            Map<String, Object> attributes = new HashMap<>();
+            Map<String, String> attributes = new HashMap<>();
             attributes.put(HeaderAttributeConstants.TOPIC, message.topic());
             attributes.put(HeaderAttributeConstants.PARTITION, String.valueOf(message.partition()));
             attributes.put(HeaderAttributeConstants.OFFSET, String.valueOf(message.offset()));
@@ -124,6 +126,9 @@ public class MapRDBCDCSource extends BasePushSource {
           messagesProcessed += messages.count();
           LOG.info("MapRDBCDC thread {} finished processing {} messages", threadID, messages.count());
         }
+      } catch (OnRecordErrorException re) {
+        LOG.debug("Encountered record error ");
+        errorRecordHandler.onError(re);
       } catch (Exception e) {
         LOG.error("Encountered error in MapRDBCDC thread {} during read {}", threadID, e);
         handleException(MaprDBCDCErrors.MAPRDB_03, e.getMessage(), e);
@@ -137,7 +142,7 @@ public class MapRDBCDCSource extends BasePushSource {
     }
 
     private void iterateNode(
-        ChangeDataRecord changeRecord, BatchMaker batchMaker, Map<String, Object> attributes
+        ChangeDataRecord changeRecord, BatchMaker batchMaker, Map<String, String> attributes
     ) throws StageException {
       switch (changeRecord.getType()) {
         case RECORD_INSERT:
@@ -146,12 +151,9 @@ public class MapRDBCDCSource extends BasePushSource {
             String fieldPath = entry.getKey().asPathString();
             ChangeNode node = entry.getValue();
 
-            Record record = getContext().createRecord(getMessageId((String) attributes.get(HeaderAttributeConstants.TOPIC),
-                (String) attributes.get(HeaderAttributeConstants.PARTITION),
-                (String) attributes.get(HeaderAttributeConstants.OFFSET)
-            ));
+            Record record = getContext().createRecord(getMessageId(attributes));
             Record.Header recordHeader = record.getHeader();
-            recordHeader.setAllAttributes(attributes);
+            attributes.forEach((k, v) -> recordHeader.setAttribute(k, v));
             recordHeader.setAttribute(MAPR_OP_TIMESTAMP, String.valueOf(node.getOpTimestamp()));
             recordHeader.setAttribute(MAPR_SERVER_TIMESTAMP, String.valueOf(node.getServerTimestamp()));
             if(node.getType() == Value.Type.MAP) {
@@ -163,7 +165,10 @@ public class MapRDBCDCSource extends BasePushSource {
               record.set(Field.create(fields));
             }
 
-            record.set("/_id", Field.create(changeRecord.getId().getString()));
+            // set _id field based on type
+            setId(record, changeRecord.getId());
+
+            // set operation type. if fieldpath is set, it's an update. otherwise insert
             if (fieldPath == null || fieldPath.equals("")) {
               recordHeader.setAttribute(OperationType.SDC_OPERATION_TYPE,
                   String.valueOf(MaprDBCDCOperationType.INSERT.code)
@@ -179,16 +184,13 @@ public class MapRDBCDCSource extends BasePushSource {
           }
           break;
         case RECORD_DELETE:
-          Record record = getContext().createRecord(getMessageId((String) attributes.get(HeaderAttributeConstants.TOPIC),
-              (String) attributes.get(HeaderAttributeConstants.PARTITION),
-              (String) attributes.get(HeaderAttributeConstants.OFFSET)
-          ));
+          Record record = getContext().createRecord(getMessageId(attributes));
           Record.Header recordHeader = record.getHeader();
-          recordHeader.setAllAttributes(attributes);
+          attributes.forEach((k, v) -> recordHeader.setAttribute(k, v));
 
           HashMap<String, Field> root = new HashMap<>();
           record.set(Field.create(root));
-          record.set("/_id", Field.create(changeRecord.getId().getString()));
+          setId(record, changeRecord.getId());
 
           recordHeader.setAttribute(OperationType.SDC_OPERATION_TYPE,
               String.valueOf(MaprDBCDCOperationType.DELETE.code)
@@ -200,8 +202,21 @@ public class MapRDBCDCSource extends BasePushSource {
       }
     }
 
-    private String getMessageId(String topic, String partition, String offset) {
+    private String getMessageId(Map<String, String> attributes) {
+      String topic = attributes.get(HeaderAttributeConstants.TOPIC);
+      String partition = attributes.get(HeaderAttributeConstants.PARTITION);
+      String offset = attributes.get(HeaderAttributeConstants.OFFSET);
       return topic + "::" + partition + "::" + offset;
+    }
+
+    private void setId(Record record, Value id) throws StageException {
+      if(id.getType() == Value.Type.STRING) {
+        record.set("/_id", Field.create(id.getString()));
+      } else if(id.getType() == Value.Type.BINARY) {
+        record.set("/_id", Field.create(id.getBinary().array()));
+      } else {
+        throw new OnRecordErrorException(record, MaprDBCDCErrors.MAPRDB_04, id.getType().name());
+      }
     }
 
     private void handleException(MaprDBCDCErrors error, Object... args) throws StageException {
@@ -214,6 +229,8 @@ public class MapRDBCDCSource extends BasePushSource {
   @Override
   protected List<ConfigIssue> init() {
     List<ConfigIssue> issues = super.init();
+
+    errorRecordHandler = new DefaultErrorRecordHandler(getContext(), (ToErrorContext) getContext());
 
     executor = Executors.newFixedThreadPool(getNumberOfThreads());
 

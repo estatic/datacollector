@@ -18,7 +18,8 @@ package com.streamsets.pipeline.stage.processor.kudulookup;
 import com.streamsets.pipeline.api.Config;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.StageUpgrader;
-
+import com.streamsets.pipeline.api.impl.Utils;
+import com.streamsets.pipeline.stage.common.MissingValuesBehavior;
 import java.util.List;
 
 public class KuduProcessorUpgrader implements StageUpgrader {
@@ -27,6 +28,28 @@ public class KuduProcessorUpgrader implements StageUpgrader {
   public List<Config> upgrade(
       String library, String stageName, String stageInstance, int fromVersion, int toVersion, List<Config> configs
   ) throws StageException {
+    switch (fromVersion) {
+      case 1:
+        upgradeV1ToV2(configs);
+        if (toVersion == 2) {
+          break;
+        }
+        // fall through
+      case 2:
+        upgradeV2ToV3(configs);
+        break;
+      default:
+        throw new IllegalStateException(Utils.format("Unexpected fromVersion {}", fromVersion));
+    }
     return configs;
+  }
+
+  private static void upgradeV1ToV2(List<Config> configs) {
+    configs.add(new Config("conf.missingLookupBehavior", MissingValuesBehavior.SEND_TO_ERROR));
+  }
+
+  private static void upgradeV2ToV3(List<Config> configs) {
+    configs.add(new Config("conf.adminOperationTimeout", 30000));
+    configs.add(new Config("conf.numWorkers", 0)); // use default
   }
 }

@@ -33,8 +33,9 @@ import com.streamsets.pipeline.api.impl.Utils;
 import com.streamsets.pipeline.sdk.ContextInfoCreator;
 import com.streamsets.pipeline.sdk.SourceRunner;
 import com.streamsets.pipeline.sdk.StageRunner;
+import com.streamsets.pipeline.stage.common.mongodb.MongoDBConfig;
 import com.streamsets.pipeline.stage.origin.mongodb.MongoDBSource;
-import com.streamsets.pipeline.stage.origin.mongodb.MongoDBSourceUtil;
+import com.streamsets.pipeline.stage.common.mongodb.MongoDBUtil;
 import org.apache.commons.lang3.tuple.Pair;
 import org.awaitility.Awaitility;
 import org.bson.BsonTimestamp;
@@ -65,14 +66,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class MongoDBOplogSourceIT {
   private static final Logger LOG = LoggerFactory.getLogger(MongoDBOplogSourceIT.class);
   private static final String OPLOG_COLLECTION = "oplog.rs";
-  private static final int MONGO_PORT = 27017;
   private static final String LANE = "lane";
 
   private static final String DATABASE = "TEST_DB";
 
   @ClassRule
   public static GenericContainer mongoContainer = new GenericContainer("mongo:2.6")
-      .withExposedPorts(MONGO_PORT);
+      .withExposedPorts(MongoDBConfig.MONGO_DEFAULT_PORT);
 
   @Rule public TestName name = new TestName();
 
@@ -88,7 +88,7 @@ public class MongoDBOplogSourceIT {
   @BeforeClass
   public static void setUpClass() throws Exception {
     LOG.info("Initializing");
-    mongoContainerMappedPort = mongoContainer.getMappedPort(MONGO_PORT); //30000
+    mongoContainerMappedPort = mongoContainer.getMappedPort(MongoDBConfig.MONGO_DEFAULT_PORT);
     mongoContainerIp = mongoContainer.getContainerIpAddress();//192.168.99.101
     mongoClient = new MongoClient(mongoContainerIp, mongoContainerMappedPort);
   }
@@ -132,7 +132,7 @@ public class MongoDBOplogSourceIT {
     Assert.assertEquals(Field.Type.INTEGER, record.get("/" + MongoDBOplogSource.VERSION_FIELD).getType());
 
     Map<String, Field> timeStampField = record.get("/" + MongoDBOplogSource.TIMESTAMP_FIELD).getValueAsMap();
-    Assert.assertTrue(timeStampField.keySet().containsAll(Arrays.asList(MongoDBSourceUtil.BSON_TS_TIME_T_FIELD, MongoDBSourceUtil.BSON_TS_ORDINAL_FIELD)));
+    Assert.assertTrue(timeStampField.keySet().containsAll(Arrays.asList(MongoDBUtil.BSON_TS_TIME_T_FIELD, MongoDBUtil.BSON_TS_ORDINAL_FIELD)));
 
     Assert.assertEquals(2,record.get("/" + MongoDBOplogSource.VERSION_FIELD).getValueAsInteger());
 
@@ -175,7 +175,7 @@ public class MongoDBOplogSourceIT {
   }
 
   private void checkRecord(Record record, Document document) throws Exception {
-    Field expectedField = Field.create(MongoDBSourceUtil.createFieldFromDocument(document));
+    Field expectedField = Field.create(MongoDBUtil.createFieldFromDocument(document));
     walkAndCheckField("", expectedField, record.get());
   }
 

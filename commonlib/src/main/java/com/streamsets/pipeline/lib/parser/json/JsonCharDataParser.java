@@ -16,8 +16,8 @@
 package com.streamsets.pipeline.lib.parser.json;
 
 import com.streamsets.pipeline.api.Field;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.ext.ContextExtensions;
 import com.streamsets.pipeline.api.ext.JsonObjectReader;
 import com.streamsets.pipeline.api.ext.io.ObjectLengthException;
@@ -36,14 +36,20 @@ import java.util.List;
 import java.util.Map;
 
 public class JsonCharDataParser extends AbstractDataParser {
-  private final Stage.Context context;
+  private final ProtoConfigurableEntity.Context context;
   private final String readerId;
   private final int maxObjectLen;
   private final JsonObjectReader parser;
   private boolean eof;
 
-  public JsonCharDataParser(Stage.Context context, String readerId, OverrunReader reader, long readerOffset,
-                            Mode mode, int maxObjectLen) throws IOException {
+  public JsonCharDataParser(
+      ProtoConfigurableEntity.Context context,
+      String readerId,
+      OverrunReader reader,
+      long readerOffset,
+      Mode mode,
+      int maxObjectLen
+  ) throws IOException {
     this.context = context;
     this.readerId = readerId;
     this.maxObjectLen = maxObjectLen;

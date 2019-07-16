@@ -17,10 +17,11 @@ package com.streamsets.pipeline.stage.destination.eventhubs;
 
 import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
+import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 import com.streamsets.pipeline.lib.eventhubs.EventHubConfigBean;
 import com.streamsets.pipeline.lib.eventhubs.Groups;
 
@@ -30,7 +31,15 @@ import com.streamsets.pipeline.lib.eventhubs.Groups;
     description = "Writes data to Azure Event Hub",
     icon = "event-hubs.png",
     recordsByRef = true,
-    onlineHelpRefUrl = "index.html#Destinations/AzureEventHubProducer.html#task_in4_f5q_1bb"
+    execution = {
+        ExecutionMode.STANDALONE,
+        ExecutionMode.CLUSTER_BATCH,
+        ExecutionMode.CLUSTER_YARN_STREAMING,
+        ExecutionMode.CLUSTER_MESOS_STREAMING,
+        ExecutionMode.EDGE,
+        ExecutionMode.EMR_BATCH
+    },
+    onlineHelpRefUrl ="index.html?contextID=task_in4_f5q_1bb"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

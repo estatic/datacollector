@@ -18,9 +18,12 @@ package com.streamsets.pipeline.stage.processor.hbase;
 import com.streamsets.pipeline.api.ConfigDefBean;
 import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
+import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
+import com.streamsets.pipeline.hbase.api.common.processor.Groups;
+import com.streamsets.pipeline.hbase.api.common.processor.HBaseLookupConfig;
 
 @StageDef(
     version = 3,
@@ -29,11 +32,14 @@ import com.streamsets.pipeline.configurablestage.DProcessor;
     icon = "hbase.png",
     privateClassLoader = true,
     upgrader = HBaseProcessorUpgrader.class,
-    onlineHelpRefUrl = "index.html#Processors/HBaseLookup.html#task_z25_b3q_bw"
+    onlineHelpRefUrl ="index.html?contextID=task_z25_b3q_bw"
 )
 
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle
+@HideConfigs(
+  "conf.cache.retryOnCacheMiss"
+)
 public class HBaseLookupDProcessor extends DProcessor {
   @ConfigDefBean(groups = {"LOOKUP", "HBASE"})
   public HBaseLookupConfig conf;

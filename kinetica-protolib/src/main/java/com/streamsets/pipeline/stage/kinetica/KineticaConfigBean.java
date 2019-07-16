@@ -16,6 +16,9 @@
 package com.streamsets.pipeline.stage.kinetica;
 
 import com.streamsets.pipeline.api.ConfigDef;
+import com.streamsets.pipeline.api.credential.CredentialValue;
+
+import java.util.List;
 
 public class KineticaConfigBean {
 
@@ -71,6 +74,16 @@ public class KineticaConfigBean {
   )
   public String ipRegex;
 
+  @ConfigDef(
+    required = false,
+    type = ConfigDef.Type.LIST,
+    label = "Custom Worker URL List",
+    description = "Worker node URLs that will override the default worker node URLs. Worker URLs must be added in order and all ranks must be included.",
+    displayPosition = 50,
+    group = "CONNECTION"
+  )
+  public List<String> customWorkerUrlList;
+
   // Table Tab
 
   @ConfigDef(
@@ -97,22 +110,22 @@ public class KineticaConfigBean {
 
   @ConfigDef(
     required = true,
-    type = ConfigDef.Type.STRING,
+    type = ConfigDef.Type.CREDENTIAL,
     defaultValue = "",
     label = "Username",
     displayPosition = 10,
     group = "CREDENTIALS"
   )
-  public String username;
+  public CredentialValue username;
 
   @ConfigDef(
     required = true,
-    type = ConfigDef.Type.STRING,
+    type = ConfigDef.Type.CREDENTIAL,
     defaultValue = "",
     label = "Password",
     displayPosition = 20,
     group = "CREDENTIALS"
   )
-  public String password;
+  public CredentialValue password;
 
 }

@@ -15,6 +15,7 @@
  */
 package com.streamsets.datacollector.execution.preview.common;
 
+import com.streamsets.datacollector.event.dto.PipelineStartEvent;
 import com.streamsets.datacollector.execution.Previewer;
 import com.streamsets.datacollector.execution.PreviewerListener;
 import com.streamsets.datacollector.execution.manager.PreviewerProvider;
@@ -25,7 +26,9 @@ import dagger.ObjectGraph;
 
 import javax.inject.Inject;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 public class PreviewerProviderImpl implements PreviewerProvider {
 
@@ -34,11 +37,27 @@ public class PreviewerProviderImpl implements PreviewerProvider {
   }
 
   @Override
-  public Previewer createPreviewer(String user, String name, String rev, PreviewerListener listener, ObjectGraph objectGraph) {
+  public Previewer createPreviewer(
+      String user,
+      String name,
+      String rev,
+      PreviewerListener listener,
+      ObjectGraph objectGraph,
+      List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
+      Function<Object, Void> afterActionsFunction
+  ) {
 
     objectGraph = objectGraph.plus(SyncPreviewerInjectorModule.class);
-    objectGraph = objectGraph.plus(
-      new AsyncPreviewerModule(UUID.randomUUID().toString(), user, name, rev, listener, objectGraph));
+    objectGraph = objectGraph.plus(new AsyncPreviewerModule(
+        UUID.randomUUID().toString(),
+        user,
+        name,
+        rev,
+        listener,
+        objectGraph,
+        interceptorConfs,
+        afterActionsFunction
+    ));
     return objectGraph.get(Previewer.class);
   }
 }

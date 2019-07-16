@@ -18,11 +18,12 @@ package com.streamsets.datacollector.config;
 import com.streamsets.pipeline.api.Label;
 
 public enum PipelineGroups implements Label {
+  CLUSTER("Cluster"),
   PARAMETERS("Parameters"),
   NOTIFICATIONS("Notifications"),
   BAD_RECORDS("Error Records"),
-  CLUSTER("Cluster"),
   STATS("Statistics"),
+  EMR("EMR"),
   ;
 
   private final String label;

@@ -103,6 +103,8 @@ public class AggregatorUtil {
   public static final String METADATA = "metadata";
   public static final String SDC_ID = "sdcId";
   public static final String MASTER_SDC_ID = "masterSdcId";
+  public static final String TIME_SERIES_ANALYSIS = "timeSeriesAnalysis";
+  public static final String LAST_RECORD = "lastRecord";
 
   private AggregatorUtil() {
 
@@ -305,6 +307,8 @@ public class AggregatorUtil {
       String masterSdcId,
       Map<String, Object> metadata,
       boolean isAggregated,
+      boolean timeSeriesAnalysis,
+      boolean lastRecord,
       String metricsJSONStr
   ) {
     Record record = createRecord(METRIC_JSON_STRING);
@@ -314,6 +318,8 @@ public class AggregatorUtil {
     map.put(MASTER_SDC_ID, Field.create(masterSdcId));
     map.put(IS_AGGREGATED, Field.create(isAggregated));
     map.put(METADATA, getMetadataField(metadata));
+    map.put(TIME_SERIES_ANALYSIS, Field.create(timeSeriesAnalysis));
+    map.put(LAST_RECORD, Field.create(lastRecord));
     map.put(METRIC_JSON_STRING, Field.create(metricsJSONStr));
     record.set(Field.create(map));
     return record;

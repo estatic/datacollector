@@ -21,14 +21,14 @@ import com.streamsets.pipeline.api.FieldSelectorModel;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DProcessor;
+import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 
 @StageDef(
     version = 1,
     label = "JSON Parser",
     description = "Parses a string field with JSON data",
     icon = "json.png",
-    onlineHelpRefUrl = "index.html#Processors/JSONParser.html#task_kwz_lg2_zq"
+    onlineHelpRefUrl ="index.html?contextID=task_kwz_lg2_zq"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle

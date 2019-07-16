@@ -22,7 +22,7 @@ import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.HideConfigs;
 import com.streamsets.pipeline.api.Source;
 import com.streamsets.pipeline.api.StageDef;
-import com.streamsets.pipeline.configurablestage.DSource;
+import com.streamsets.pipeline.api.base.configurablestage.DSource;
 
 @StageDef(
     version = 3,
@@ -30,7 +30,7 @@ import com.streamsets.pipeline.configurablestage.DSource;
     description = "Reads data from Redis",
     icon = "redis.png",
     upgrader = RedisSourceUpgrader.class,
-    onlineHelpRefUrl = "index.html#Origins/Redis.html#task_dtz_npv_jw",
+    onlineHelpRefUrl ="index.html?contextID=task_dtz_npv_jw",
     execution = ExecutionMode.STANDALONE,
     recordsByRef = true
 

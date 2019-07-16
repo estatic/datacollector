@@ -25,9 +25,15 @@
           <a href="#" ng-click="importPipelinesFromArchive()"translate="home.header.importPipelinesFromArchive">Import Pipelines From Archive</a>
         </li>
         <li>
+          <a href="#" ng-click="importPipelinesFromHttpUrl()"translate="home.importPipelineFromHttpUrl">Import Pipelines From URL</a>
+        </li>
+        <li>
           <a href="#"
              ng-if="common.isDPMEnabled"
              ng-click="downloadRemotePipelineConfig()"translate="home.downloadRemotePipeline">Download Remote Pipeline</a>
+        </li>
+        <li>
+          <a href="#" ng-click="downloadEdgePipelines()"translate="home.downloadEdgePipelines.title">Download Edge Pipelines</a>
         </li>
       </ul>
     </div>
@@ -73,14 +79,14 @@
         <div ng-click="onSelectNode(node)"
              ng-class="{'active': selectedPipelineLabel === node.vPath}"
              class="list-group-item-wrapper"
-             style="padding-left: {{::node.level * 10}}px;">
+             style="padding-left: {{::node.level * 10}}px">
 
           <span class="list-group-icon-wrapper">
             <i ng-show="hasChildren(node) && node.isExpanded" class="fa fa-caret-down"></i>
             <i ng-show="hasChildren(node) && !node.isExpanded" class="fa fa-caret-right"></i>
           </span>
 
-          <span class="label-display">{{::node.label}}</span>
+          <span class="label-display" ng-attr-id="{{::node.label}}"></span>
         </div>
       </li>
 

@@ -16,6 +16,7 @@
 package com.streamsets.datacollector.execution.runner.common;
 
 import com.streamsets.datacollector.config.PipelineConfiguration;
+import com.streamsets.datacollector.execution.AbstractRunner;
 import com.streamsets.datacollector.execution.PipelineStatus;
 import com.streamsets.datacollector.execution.StateListener;
 import com.streamsets.datacollector.main.RuntimeModule;
@@ -43,7 +44,6 @@ import java.util.Map;
 public class ProductionPipeline {
 
   private static final Logger LOG = LoggerFactory.getLogger(ProductionPipeline.class);
-  public static final String RUNTIME_PARAMETERS_ATTR = "RUNTIME_PARAMETERS";
   private final PipelineConfiguration pipelineConf;
   private final Pipeline pipeline;
   private final ProductionPipelineRunner pipelineRunner;
@@ -105,9 +105,7 @@ public class ProductionPipeline {
         }
         if (issues.isEmpty()) {
           try {
-            Map<String, Object> attributes = new HashMap<>();
-            attributes.put(RUNTIME_PARAMETERS_ATTR, pipeline.getRuntimeParameters());
-            stateChanged(PipelineStatus.RUNNING, null, attributes);
+            stateChanged(PipelineStatus.RUNNING, null, null);
             LOG.debug("Running");
             pipeline.run();
             if (!wasStopped()) {
@@ -119,7 +117,17 @@ public class ProductionPipeline {
             if (!wasStopped()) {
               runningErrorMsg = e.toString();
               LOG.warn("Error while running: {}", runningErrorMsg, e);
-              stateChanged(PipelineStatus.RUNNING_ERROR, runningErrorMsg, null);
+
+              // Make sure that the whole error is serialized in the status file
+              Map<String, Object> extraAttributes = new HashMap<>();
+              if(e instanceof StageException) {
+                extraAttributes.put(AbstractRunner.ANTENNA_DOCTOR_MESSAGES_ATTR, ((StageException) e).getAntennaDoctorMessages());
+                runningErrorMsg = e.getMessage();
+              }
+              extraAttributes.put(AbstractRunner.ERROR_MESSAGE_ATTR, e.getMessage());
+              extraAttributes.put(AbstractRunner.ERROR_STACKTRACE_ATTR, ErrorMessage.toStackTrace(e));
+
+              stateChanged(PipelineStatus.RUNNING_ERROR, runningErrorMsg, extraAttributes);
               errorWhileRunning = true;
               isRecoverable = isRecoverableThrowable(e);
             }
@@ -127,10 +135,12 @@ public class ProductionPipeline {
           }
         } else {
           LOG.debug("Stopped due to validation error");
-          PipelineRuntimeException e = new PipelineRuntimeException(ContainerError.CONTAINER_0800, name,
-            issues.get(0).getMessage());
+          PipelineRuntimeException e = new PipelineRuntimeException(ContainerError.CONTAINER_0800, issues.size(), issues.get(0).getMessage());
           Map<String, Object> attributes = new HashMap<>();
           attributes.put("issues", new IssuesJson(new Issues(issues)));
+          attributes.put(AbstractRunner.ANTENNA_DOCTOR_MESSAGES_ATTR, issues.get(0).getAntennaDoctorMessages());
+          attributes.put(AbstractRunner.ERROR_MESSAGE_ATTR, e.getMessage());
+          attributes.put(AbstractRunner.ERROR_STACKTRACE_ATTR, ErrorMessage.toStackTrace(e));
           // We need to store the error in runningErrorMsg, so that it gets propagated to START_ERROR terminal state
           runningErrorMsg = issues.get(0).getMessage();
           stateChanged(PipelineStatus.STARTING_ERROR, runningErrorMsg, attributes);

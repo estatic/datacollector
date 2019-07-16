@@ -24,6 +24,7 @@ import com.codahale.metrics.Timer;
 import com.streamsets.datacollector.alerts.AlertsUtil;
 import com.streamsets.datacollector.config.MetricElement;
 import com.streamsets.datacollector.config.MetricType;
+import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
 import com.streamsets.datacollector.el.ELEvaluator;
 import com.streamsets.datacollector.el.ELVariables;
 import com.streamsets.datacollector.el.RuleELRegistry;
@@ -40,8 +41,9 @@ public class MetricRuleEvaluatorHelper {
 
   private static final String VAL = "value()";
   private static final String TIME_NOW = "time:now()";
+  private static final String START_TIME = "pipeline:startTime()";
   private static final ELEvaluator EL_EVALUATOR =  new ELEvaluator(
-    "condition", false,
+    "condition", false, ConcreteELDefinitionExtractor.get(),
     RuleELRegistry.getRuleELs(RuleELRegistry.GENERAL)
   );
 
@@ -244,13 +246,14 @@ public class MetricRuleEvaluatorHelper {
   }
 
 
-  public static boolean evaluate(Object value, String condition) throws ObserverException {
+  public static boolean evaluate(long pipelineStartTime, Object value, String condition) throws ObserverException {
     //predicate String is of the form "val()<200" or "val() < 200 && val() > 100" etc
     //replace val() with the actual value, append dollar and curly braces and evaluate the resulting EL expression
     // string
     String predicateWithValue = condition
       .replace(VAL, String.valueOf(value))
-      .replace(TIME_NOW, System.currentTimeMillis() + "");
+      .replace(TIME_NOW, System.currentTimeMillis() + "")
+      .replace(START_TIME, pipelineStartTime + "");
     return AlertsUtil.evaluateExpression(predicateWithValue, new ELVariables(), EL_EVALUATOR);
   }
 
@@ -351,9 +354,14 @@ public class MetricRuleEvaluatorHelper {
       Map<String, Object> runnerMetrics = (Map<String, Object>) ((Gauge)getMetric(metrics, "runner." + runnerId, MetricType.GAUGE)).getValue();
 
       // Get current value
-      long value = (long) runnerMetrics.getOrDefault(runnerMetricName, 0);
-      long runTime = currentTime - value;
+      long value = (long) runnerMetrics.getOrDefault(runnerMetricName, 0L);
 
+      // Zero means that the runner is not in use at all and thus calculating running time makes no sense
+      if(value == 0) {
+        continue;
+      }
+
+      long runTime = currentTime - value;
       if(maxTime < runTime) {
         maxTime = runTime;
       }

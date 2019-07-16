@@ -16,6 +16,7 @@
 package com.streamsets.pipeline.stage.destination.hdfs;
 
 import com.google.common.collect.ImmutableList;
+import com.streamsets.pipeline.api.EventRecord;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.OnRecordError;
@@ -30,6 +31,7 @@ import com.streamsets.pipeline.config.CsvHeader;
 import com.streamsets.pipeline.config.CsvMode;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.JsonMode;
+import com.streamsets.pipeline.lib.hdfs.common.Errors;
 import com.streamsets.pipeline.sdk.RecordCreator;
 import com.streamsets.pipeline.sdk.TargetRunner;
 import com.streamsets.pipeline.stage.destination.hdfs.util.HdfsTargetUtil;
@@ -123,7 +125,7 @@ public class TestHdfsTarget {
     runner.runDestroy();
 
     Assert.assertEquals(4, runner.getEventRecords().size());
-    Iterator<Record> eventRecordIterator = runner.getEventRecords().iterator();
+    Iterator<EventRecord> eventRecordIterator = runner.getEventRecords().iterator();
 
     while (eventRecordIterator.hasNext()) {
       Record eventRecord = eventRecordIterator.next();

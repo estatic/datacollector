@@ -16,6 +16,7 @@
 package com.streamsets.pipeline.stage.destination.hdfs;
 
 import com.google.common.collect.ImmutableList;
+import com.streamsets.pipeline.api.EventRecord;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.FileRef;
 import com.streamsets.pipeline.api.OnRecordError;
@@ -25,6 +26,8 @@ import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.impl.ErrorMessage;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.config.WholeFileExistsAction;
+import com.streamsets.pipeline.lib.event.WholeFileProcessedEvent;
+import com.streamsets.pipeline.lib.hdfs.common.Errors;
 import com.streamsets.pipeline.lib.io.fileref.FileRefUtil;
 import com.streamsets.pipeline.lib.io.fileref.LocalFileRef;
 import com.streamsets.pipeline.sdk.RecordCreator;
@@ -484,13 +487,13 @@ public class TestHDFSTargetWholeFile {
       //One whole file event
       Assert.assertEquals(1, runner.getEventRecords().size());
 
-      Iterator<Record> eventRecordIterator = runner.getEventRecords().iterator();
+      Iterator<EventRecord> eventRecordIterator = runner.getEventRecords().iterator();
 
       while (eventRecordIterator.hasNext()) {
         Record eventRecord = eventRecordIterator.next();
 
         String type = eventRecord.getHeader().getAttribute("sdc.event.type");
-        Assert.assertEquals(FileRefUtil.WHOLE_FILE_WRITE_FINISH_EVENT, type);
+        Assert.assertEquals(WholeFileProcessedEvent.WHOLE_FILE_WRITE_FINISH_EVENT, type);
 
         Assert.assertTrue(eventRecord.has(FileRefUtil.WHOLE_FILE_SOURCE_FILE_INFO_PATH));
         Assert.assertTrue(eventRecord.has(FileRefUtil.WHOLE_FILE_TARGET_FILE_INFO_PATH));

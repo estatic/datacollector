@@ -15,7 +15,6 @@
  */
 package com.streamsets.pipeline.sdk;
 
-import com.streamsets.datacollector.config.StageType;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.runner.BatchImpl;
 import com.streamsets.pipeline.api.DeliveryGuarantee;
@@ -24,6 +23,7 @@ import com.streamsets.pipeline.api.Executor;
 import com.streamsets.pipeline.api.OnRecordError;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
+import com.streamsets.pipeline.api.StageType;
 import com.streamsets.pipeline.api.impl.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,17 +36,19 @@ public class ExecutorRunner extends StageRunner<Executor> {
   private static final Logger LOG = LoggerFactory.getLogger(TargetRunner.class);
 
   @SuppressWarnings("unchecked")
-  public ExecutorRunner(Class<Executor> executorClass,
-                        Executor executor,
-                        Map<String, Object> configuration,
-                        boolean isPreview,
-                        OnRecordError onRecordError,
-                        Map<String, Object> constants,
-                        Map<String, String> stageSdcConf,
-                        ExecutionMode executionMode,
-                        DeliveryGuarantee deliveryGuarantee,
-                        String resourcesDir,
-                        RuntimeInfo runtimeInfo
+  public ExecutorRunner(
+      Class<Executor> executorClass,
+      Executor executor,
+      Map<String, Object> configuration,
+      boolean isPreview,
+      OnRecordError onRecordError,
+      Map<String, Object> constants,
+      Map<String, String> stageSdcConf,
+      ExecutionMode executionMode,
+      DeliveryGuarantee deliveryGuarantee,
+      String resourcesDir,
+      RuntimeInfo runtimeInfo,
+      List<ServiceRunner> services
   ) {
     super(executorClass,
       executor,
@@ -60,21 +62,24 @@ public class ExecutorRunner extends StageRunner<Executor> {
       executionMode,
       deliveryGuarantee,
       resourcesDir,
-      runtimeInfo
+      runtimeInfo,
+      services
     );
   }
 
   @SuppressWarnings("unchecked")
-  public ExecutorRunner(Class<Executor> executorClass,
-                        Map<String, Object> configuration,
-                        boolean isPreview,
-                        OnRecordError onRecordError,
-                        Map<String, Object> constants,
-                        Map<String, String> stageSdcConf,
-                        ExecutionMode executionMode,
-                        DeliveryGuarantee deliveryGuarantee,
-                        String resourcesDir,
-                        RuntimeInfo runtimeInfo
+  public ExecutorRunner(
+      Class<Executor> executorClass,
+      Map<String, Object> configuration,
+      boolean isPreview,
+      OnRecordError onRecordError,
+      Map<String, Object> constants,
+      Map<String, String> stageSdcConf,
+      ExecutionMode executionMode,
+      DeliveryGuarantee deliveryGuarantee,
+      String resourcesDir,
+      RuntimeInfo runtimeInfo,
+      List<ServiceRunner> services
   ) {
     super(executorClass,
       StageType.EXECUTOR,
@@ -87,7 +92,8 @@ public class ExecutorRunner extends StageRunner<Executor> {
       executionMode,
       deliveryGuarantee,
       resourcesDir,
-      runtimeInfo
+      runtimeInfo,
+      services
     );
   }
 
@@ -126,7 +132,8 @@ public class ExecutorRunner extends StageRunner<Executor> {
           executionMode,
           deliveryGuarantee,
           resourcesDir,
-          runtimeInfo
+          runtimeInfo,
+          services
         );
       } else {
         return new ExecutorRunner(
@@ -139,7 +146,8 @@ public class ExecutorRunner extends StageRunner<Executor> {
           executionMode,
           deliveryGuarantee,
           resourcesDir,
-          runtimeInfo
+          runtimeInfo,
+          services
         );
       }
     }

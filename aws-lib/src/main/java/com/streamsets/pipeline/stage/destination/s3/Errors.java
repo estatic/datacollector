@@ -28,6 +28,7 @@ public enum Errors implements ErrorCode {
   S3_05("File Name Prefix cannot be empty"),
   S3_06("File Name Suffix contains '/' or starts with '.'"),
 
+  S3_10("A problem occurred while generating JSON for the security context"),
 
   S3_20("Cannot connect to Amazon S3, reason : {}"),
   S3_21("Unable to write object to Amazon S3, reason : {}"),

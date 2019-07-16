@@ -30,11 +30,13 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLContext;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -52,16 +54,21 @@ public abstract class RuntimeInfo {
   public static final String TRANSIENT_ENVIRONMENT = "sdc.transient-env";
   public static final String UNDEF = "UNDEF";
   public static final String CALLBACK_URL = "/public-rest/v1/cluster/callbackWithResponse";
+  public static final String SCH_CONF_OVERRIDE = "control-hub-pushed.properties";
 
 
   public static final String SECURITY_PREFIX = "java.security.";
   public static final String DATA_COLLECTOR_BASE_HTTP_URL = "sdc.base.http.url";
   public static final String PIPELINE_ACCESS_CONTROL_ENABLED = "pipeline.access.control.enabled";
   public static final boolean PIPELINE_ACCESS_CONTROL_ENABLED_DEFAULT = false;
+  public static final String DPM_COMPONENT_TYPE_CONFIG = "dpm.componentType";
+  public static final String DC_COMPONENT_TYPE = "dc";
 
   private boolean DPMEnabled;
   private boolean aclEnabled;
+  private boolean remoteSsoDisabled;
   private String deploymentId;
+  private String componentType = DC_COMPONENT_TYPE;
 
   private final static String USER_ROLE = "user";
 
@@ -183,12 +190,13 @@ public abstract class RuntimeInfo {
 
   public void log(Logger log) {
     log.info("Runtime info:");
-    log.info("  Java version : {}", System.getProperty("java.runtime.version"));
-    log.info("  SDC ID       : {}", getId());
-    log.info("  Runtime dir  : {}", getRuntimeDir());
-    log.info("  Config dir   : {}", getConfigDir());
-    log.info("  Data dir     : {}", getDataDir());
-    log.info("  Log dir      : {}", getLogDir());
+    log.info("  Java version  : {}", System.getProperty("java.runtime.version"));
+    log.info("  SDC ID        : {}", getId());
+    log.info("  Runtime dir   : {}", getRuntimeDir());
+    log.info("  Config dir    : {}", getConfigDir());
+    log.info("  Data dir      : {}", getDataDir());
+    log.info("  Log dir       : {}", getLogDir());
+    log.info("  Extra Libs dir: {}", getLibsExtraDir());
   }
 
   public void setShutdownHandler(ShutdownHandler runnable) {
@@ -288,6 +296,14 @@ public abstract class RuntimeInfo {
     return DPMEnabled;
   }
 
+  public void setComponentType(String componentType) {
+    this.componentType = componentType;
+  }
+
+  public String getComponentType() {
+    return componentType;
+  }
+
   public boolean isAclEnabled() {
     return aclEnabled;
   }
@@ -296,7 +312,16 @@ public abstract class RuntimeInfo {
     this.aclEnabled = aclEnabled;
   }
 
+  public boolean isRemoteSsoDisabled() {
+    return remoteSsoDisabled;
+  }
+
+  public void setRemoteSsoDisabled(boolean remoteSsoDisabled) {
+    this.remoteSsoDisabled = remoteSsoDisabled;
+  }
+
   public static void loadOrReloadConfigs(RuntimeInfo runtimeInfo, Configuration conf) {
+    // Load main SDC configuration as specified by the SDC admin
     File configFile = new File(runtimeInfo.getConfigDir(), "sdc.properties");
     if (configFile.exists()) {
       try(FileReader reader = new FileReader(configFile)) {
@@ -306,6 +331,13 @@ public abstract class RuntimeInfo {
         runtimeInfo.setAppAuthToken(appAuthToken);
         boolean isDPMEnabled = conf.get(RemoteSSOService.DPM_ENABLED, RemoteSSOService.DPM_ENABLED_DEFAULT);
         runtimeInfo.setDPMEnabled(isDPMEnabled);
+        String componentType = conf.get(DPM_COMPONENT_TYPE_CONFIG, DC_COMPONENT_TYPE).trim();
+        runtimeInfo.setComponentType(componentType);
+        boolean skipSsoService = conf.get(
+            RemoteSSOService.SECURITY_SERVICE_REMOTE_SSO_DISABLED_CONFIG,
+            RemoteSSOService.SECURITY_SERVICE_REMOTE_SSO_DISABLED_DEFAULT
+        );
+        runtimeInfo.setRemoteSsoDisabled(skipSsoService);
         String deploymentId = conf.get(RemoteSSOService.DPM_DEPLOYMENT_ID, null);
         runtimeInfo.setDeploymentId(deploymentId);
         boolean aclEnabled = conf.get(PIPELINE_ACCESS_CONTROL_ENABLED, PIPELINE_ACCESS_CONTROL_ENABLED_DEFAULT);
@@ -322,12 +354,63 @@ public abstract class RuntimeInfo {
       LOG.error("Error did not find sdc.properties at expected location: {}", configFile);
     }
 
+    // Load separate configuration that was pushed down by control hub
+    configFile = new File(runtimeInfo.getDataDir(), SCH_CONF_OVERRIDE);
+    if(configFile.exists()) {
+      try (FileReader reader = new FileReader(configFile)) {
+        conf.load(reader);
+      } catch (IOException ex) {
+        LOG.error("Error did not find {} at expected location: {}", SCH_CONF_OVERRIDE, configFile);
+      }
+    }
+
     // Transfer all security properties to the JVM configuration
     for(Map.Entry<String, String> entry : conf.getSubSetConfiguration(SECURITY_PREFIX).getValues().entrySet()) {
       java.security.Security.setProperty(
           entry.getKey().substring(SECURITY_PREFIX.length()),
           entry.getValue()
       );
+    }
+  }
+
+  /**
+   * Store configuration from control hub in persistent manner inside data directory. This configuration will be
+   * loaded on data collector start and will override any configuration from sdc.properties.
+   *
+   * This method call is able to remove existing properties if the value is "null". Please note that the removal will
+   * only happen from the 'override' file. This method does not have the capability to remove configuration directly
+   * from sdc.properties.
+   *
+   * @param runtimeInfo RuntimeInfo instance
+   * @param newConfigs New set of config properties
+   * @throws IOException
+   */
+  public static void storeControlHubConfigs(
+      RuntimeInfo runtimeInfo,
+      Map<String, String> newConfigs
+  ) throws IOException {
+    File configFile = new File(runtimeInfo.getDataDir(), SCH_CONF_OVERRIDE);
+    Properties properties = new Properties();
+
+    // Load existing properties from disk if they exists
+    if(configFile.exists()) {
+      try (FileReader reader = new FileReader(configFile)) {
+        properties.load(reader);
+      }
+    }
+
+    // Propagate updated configuration
+    for(Map.Entry<String, String> entry : newConfigs.entrySet()) {
+      if(entry.getValue() == null) {
+        properties.remove(entry.getKey());
+      } else {
+        properties.setProperty(entry.getKey(), entry.getValue());
+      }
+    }
+
+    // Store the new updated configuration back to disk
+    try(FileWriter writer = new FileWriter(configFile)) {
+      properties.store(writer, null);
     }
   }
 

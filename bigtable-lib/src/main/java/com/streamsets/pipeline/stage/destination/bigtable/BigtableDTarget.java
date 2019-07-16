@@ -20,7 +20,7 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 
 @GenerateResourceBundle
 @StageDef(
@@ -29,7 +29,7 @@ import com.streamsets.pipeline.configurablestage.DTarget;
     description = "Writes data to Google Cloud Bigtable",
     icon = "bigtable.png",
     privateClassLoader = true,
-    onlineHelpRefUrl = "index.html#Destinations/Bigtable.html#task_op4_zmq_tx"
+    onlineHelpRefUrl ="index.html?contextID=task_op4_zmq_tx"
 )
 
 @ConfigGroups(Groups.class)

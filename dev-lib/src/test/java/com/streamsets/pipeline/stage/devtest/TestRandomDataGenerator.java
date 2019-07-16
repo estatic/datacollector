@@ -170,13 +170,13 @@ public class TestRandomDataGenerator {
       runner.runProduce(Collections.<String, String>emptyMap(), 1000, output -> runner.setStop());
       runner.waitOnProduce();
 
-      List<Record> records = runner.getEventRecords();
+      List<EventRecord> records = runner.getEventRecords();
       Assert.assertTrue(records.size() > 1);
       for(long i = 0; i < records.size(); i++) {
-        Record r = records.get((int)i);
+        EventRecord r = records.get((int)i);
 
         // Validate header
-        Assert.assertEquals("secret-name", r.getHeader().getAttribute(EventRecord.TYPE));
+        Assert.assertEquals("secret-name", r.getEventType());
 
         // Validate field
         Field field = r.get().getValueAsMap().get("event");

@@ -23,13 +23,14 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.Iterator;
 
-public class CsvParser implements Closeable, AutoCloseable {
+public class CsvParser implements DelimitedDataParser {
   private long currentPos;
   private long skipLinesPosCorrection;
   private final CSVParser parser;
@@ -91,23 +92,17 @@ public class CsvParser implements Closeable, AutoCloseable {
         headers = null;
       }
     }
+    fixNullHeaderNames();
   }
 
-  private long skipLines(Reader reader, int lines) throws IOException {
-    int count = 0;
-    int skipped = 0;
-    while (skipped < lines) {
-      int c = reader.read();
-      if (c == -1) {
-        throw new IOException(Utils.format("Could not skip '{}' lines, reached EOF", lines));
+  private void fixNullHeaderNames() {
+    // makes sure any blank column names in the header get replaced with an incremental string value
+    if (headers == null) return;
+    for (int x=0; x < headers.length; x++) {
+      if (StringUtils.isEmpty(headers[x])) {
+        headers[x] = "empty-" + x;
       }
-      // this is enough to handle \n and \r\n EOL files
-      if (c == '\n') {
-        skipped++;
-      }
-      count++;
     }
-    return count;
   }
 
   protected Reader getReader() {
@@ -115,17 +110,32 @@ public class CsvParser implements Closeable, AutoCloseable {
   }
 
   protected CSVRecord nextRecord() throws IOException {
-    return (iterator.hasNext()) ? iterator.next() : null;
+    // Since  the iterator interface doesn't allow  any checked exceptions the underlying CVS library will
+    // re-throw any IOException  as IllegalStateException. We catch it here and unwrap it. If the cause is
+    // in fact IOException we simply throw that exception instead.
+    try {
+      return (iterator.hasNext()) ? iterator.next() : null;
+    } catch (IllegalStateException  e) {
+      Throwable cause = e.getCause();
+      if(cause instanceof IOException) {
+        throw (IOException)cause;
+      }
+
+      throw e;
+    }
   }
 
+  @Override
   public String[] getHeaders() throws IOException {
     return headers;
   }
 
+  @Override
   public long getReaderPosition() {
     return currentPos;
   }
 
+  @Override
   public String[] read() throws IOException {
     if (closed) {
       throw new IOException("Parser has been closed");
@@ -160,7 +170,7 @@ public class CsvParser implements Closeable, AutoCloseable {
   }
 
   @Override
-  public void close() {
+  public void close() throws IOException {
     try {
       closed = true;
       parser.close();

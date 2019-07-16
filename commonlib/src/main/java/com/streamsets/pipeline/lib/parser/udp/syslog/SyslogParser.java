@@ -15,8 +15,8 @@
  */
 package com.streamsets.pipeline.lib.parser.udp.syslog;
 import com.streamsets.pipeline.api.Field;
+import com.streamsets.pipeline.api.ProtoConfigurableEntity;
 import com.streamsets.pipeline.api.Record;
-import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
 import com.streamsets.pipeline.lib.parser.net.syslog.SyslogDecoder;
 import com.streamsets.pipeline.lib.parser.net.syslog.SyslogMessage;
@@ -32,7 +32,7 @@ public class SyslogParser extends AbstractParser {
   private final Charset charset;
   private long recordId = 0;
 
-  public SyslogParser(Stage.Context context, Charset charset) {
+  public SyslogParser(ProtoConfigurableEntity.Context context, Charset charset) {
     super(context);
     this.charset = charset;
   }

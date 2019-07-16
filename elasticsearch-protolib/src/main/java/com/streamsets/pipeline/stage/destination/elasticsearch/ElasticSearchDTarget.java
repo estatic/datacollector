@@ -20,7 +20,7 @@ import com.streamsets.pipeline.api.ConfigGroups;
 import com.streamsets.pipeline.api.GenerateResourceBundle;
 import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.Target;
-import com.streamsets.pipeline.configurablestage.DTarget;
+import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 import com.streamsets.pipeline.stage.config.elasticsearch.ElasticsearchTargetConfig;
 import com.streamsets.pipeline.stage.config.elasticsearch.Groups;
 
@@ -28,11 +28,11 @@ import com.streamsets.pipeline.stage.config.elasticsearch.Groups;
 @StageDef(
     // We're reusing upgrader for both ToErrorElasticSearchDTarget and ElasticsearchDTargetUpgrader, make sure that you
     // upgrade both versions at the same time when changing.
-    version = 8,
+    version = 10,
     label = "Elasticsearch",
     description = "Upload data to an Elasticsearch cluster",
     icon = "elasticsearch.png",
-    onlineHelpRefUrl = "index.html#Destinations/Elasticsearch.html#task_uns_gtv_4r",
+    onlineHelpRefUrl ="index.html?contextID=task_uns_gtv_4r",
     upgrader = ElasticsearchDTargetUpgrader.class
 )
 @ConfigGroups(Groups.class)

@@ -15,12 +15,14 @@
  */
 package com.streamsets.datacollector.restapi;
 
+import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.execution.AclManager;
 import com.streamsets.datacollector.execution.Manager;
 import com.streamsets.datacollector.execution.PipelineState;
 import com.streamsets.datacollector.execution.PipelineStatus;
 import com.streamsets.datacollector.execution.Runner;
 import com.streamsets.datacollector.execution.SnapshotInfo;
+import com.streamsets.datacollector.execution.StartPipelineContextBuilder;
 import com.streamsets.datacollector.execution.alerts.AlertInfo;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.main.UserGroupManager;
@@ -42,8 +44,10 @@ import com.streamsets.datacollector.store.PipelineInfo;
 import com.streamsets.datacollector.store.PipelineStoreTask;
 import com.streamsets.datacollector.util.AuthzRole;
 import com.streamsets.datacollector.util.ContainerError;
+import com.streamsets.datacollector.util.EdgeUtil;
 import com.streamsets.datacollector.util.PipelineException;
 import com.streamsets.lib.security.http.SSOPrincipal;
+import com.streamsets.pipeline.api.Config;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.impl.Utils;
@@ -100,7 +104,7 @@ public class ManagerResource {
     this.store = store;
 
     UserJson currentUser;
-    if (runtimeInfo.isDPMEnabled()) {
+    if (runtimeInfo.isDPMEnabled() && !runtimeInfo.isRemoteSsoDisabled()) {
       currentUser = new UserJson((SSOPrincipal)principal);
     } else {
       currentUser = userGroupManager.getUser(principal);
@@ -177,8 +181,7 @@ public class ManagerResource {
 
       PipelineState pipelineState = manager.getPipelineState(pipelineId, rev);
 
-      if (pipelineState.getExecutionMode() == ExecutionMode.SLAVE ||
-          pipelineState.getExecutionMode() == ExecutionMode.EDGE) {
+      if (pipelineState.getExecutionMode() == ExecutionMode.SLAVE) {
         throw new PipelineException(
             ContainerError.CONTAINER_01601,
             pipelineId,
@@ -188,14 +191,7 @@ public class ManagerResource {
 
       try {
         Runner runner = manager.getRunner(pipelineId, rev);
-
-        if (runtimeParameters != null && !runtimeParameters.isEmpty()) {
-          Utils.checkState(runner.getState().getExecutionMode() == ExecutionMode.STANDALONE,
-              Utils.format("Using runtime constants is not supported in {} mode", runner.getState().getExecutionMode()));
-          runner.start(user, runtimeParameters);
-        } else {
-          runner.start(user);
-        }
+        runner.start(new StartPipelineContextBuilder(user).withRuntimeParameters(runtimeParameters).build());
         return Response.ok()
             .type(MediaType.APPLICATION_JSON)
             .entity(BeanHelper.wrapPipelineState(runner.getState())).build();
@@ -239,8 +235,7 @@ public class ManagerResource {
 
         PipelineState pipelineState = manager.getPipelineState(pipelineId, "0");
 
-        if (pipelineState.getExecutionMode() == ExecutionMode.SLAVE ||
-            pipelineState.getExecutionMode() == ExecutionMode.EDGE) {
+        if (pipelineState.getExecutionMode() == ExecutionMode.SLAVE) {
           errorMessages.add(Utils.format(
               ContainerError.CONTAINER_01601.getMessage(),
               pipelineId,
@@ -251,7 +246,7 @@ public class ManagerResource {
 
         Runner runner = manager.getRunner( pipelineId, "0");
         try {
-          runner.start(user);
+          runner.start(new StartPipelineContextBuilder(user).build());
           successEntities.add(runner.getState());
         } catch (Exception ex) {
           errorMessages.add("Failed starting pipeline: " + pipelineId + ". Error: " + ex.getMessage());
@@ -364,8 +359,12 @@ public class ManagerResource {
       }
     }
     Runner runner = manager.getRunner(pipelineId, rev);
-    Utils.checkState(runner.getState().getExecutionMode() == ExecutionMode.STANDALONE,
-        Utils.format("This operation is not supported in {} mode", runner.getState().getExecutionMode()));
+    Utils.checkState(
+        runner.getState().getExecutionMode() == ExecutionMode.STANDALONE ||
+            runner.getState().getExecutionMode() == ExecutionMode.STREAMING ||
+            runner.getState().getExecutionMode() == ExecutionMode.BATCH,
+        Utils.format("This operation is not supported in {} mode", runner.getState().getExecutionMode())
+    );
     runner.forceQuit(user);
     return Response.ok()
         .type(MediaType.APPLICATION_JSON)
@@ -401,8 +400,12 @@ public class ManagerResource {
 
         Runner runner = manager.getRunner(pipelineId, "0");
         try {
-          Utils.checkState(runner.getState().getExecutionMode() == ExecutionMode.STANDALONE,
-              Utils.format("This operation is not supported in {} mode", runner.getState().getExecutionMode()));
+          Utils.checkState(
+              runner.getState().getExecutionMode() == ExecutionMode.STANDALONE ||
+                  runner.getState().getExecutionMode() == ExecutionMode.STREAMING ||
+                  runner.getState().getExecutionMode() == ExecutionMode.BATCH,
+              Utils.format("This operation is not supported in {} mode", runner.getState().getExecutionMode())
+          );
           runner.forceQuit(user);
           successEntities.add(runner.getState());
 
@@ -526,16 +529,14 @@ public class ManagerResource {
     RestAPIUtils.injectPipelineInMDC(pipelineInfo.getTitle(), pipelineInfo.getPipelineId());
     if(pipelineId != null) {
       PipelineState pipelineState = manager.getPipelineState(pipelineId, rev);
-      if (pipelineState.getExecutionMode() != ExecutionMode.EDGE) {
-        Runner runner = manager.getRunner(pipelineId, rev);
-        if (runner != null && runner.getState().getStatus().isActive()) {
-          return Response.ok().type(MediaType.APPLICATION_JSON).entity(runner.getMetrics()).build();
-        }
-        if (runner != null) {
-          LOG.debug("Status is " + runner.getState().getStatus());
-        } else {
-          LOG.debug("Runner is null");
-        }
+      Runner runner = manager.getRunner(pipelineId, rev);
+      if (runner != null && runner.getState().getStatus().isActive()) {
+        return Response.ok().type(MediaType.APPLICATION_JSON).entity(runner.getMetrics()).build();
+      }
+      if (runner != null) {
+        LOG.debug("Status is " + runner.getState().getStatus());
+      } else {
+        LOG.debug("Runner is null");
       }
     }
     return Response.noContent().build();
@@ -559,7 +560,13 @@ public class ManagerResource {
     RestAPIUtils.injectPipelineInMDC(pipelineInfo.getTitle(), pipelineInfo.getPipelineId());
     Runner runner = manager.getRunner(pipelineId, rev);
     if (startPipeline && runner != null) {
-      runner.startAndCaptureSnapshot(user, runtimeParameters, snapshotName, snapshotLabel, batches, batchSize);
+      runner.startAndCaptureSnapshot(
+          new StartPipelineContextBuilder(user).withRuntimeParameters(runtimeParameters).build(),
+          snapshotName,
+          snapshotLabel,
+          batches,
+          batchSize
+        );
     } else {
       Utils.checkState(runner != null && runner.getState().getStatus() == PipelineStatus.RUNNING,
           "Pipeline doesn't exist or it is not running currently");
@@ -659,10 +666,12 @@ public class ManagerResource {
     RestAPIUtils.injectPipelineInMDC(pipelineInfo.getTitle(), pipelineInfo.getPipelineId());
     Runner runner = manager.getRunner(pipelineId, rev);
     if(runner != null) {
-      return Response.ok().type(MediaType.APPLICATION_JSON).entity(
-        BeanHelper.wrapSnapshotInfoNewAPI(runner.getSnapshot(snapshotName).getInfo())).build();
+      final SnapshotInfoJson snapshot = BeanHelper.wrapSnapshotInfoNewAPI(runner.getSnapshot(snapshotName).getInfo());
+      if (snapshot != null) {
+        return Response.ok().type(MediaType.APPLICATION_JSON).entity(snapshot).build();
+      }
     }
-    return Response.noContent().build();
+    return Response.status(Response.Status.NOT_FOUND).build();
   }
 
   @Path("/pipeline/{pipelineId}/snapshot/{snapshotName}")
@@ -766,11 +775,26 @@ public class ManagerResource {
       @PathParam("pipelineId") String pipelineId,
       @QueryParam("rev") @DefaultValue("0") String rev,
       @QueryParam ("stageInstanceName") @DefaultValue("") String stageInstanceName,
-      @QueryParam ("size") @DefaultValue("10") int size
+      @QueryParam ("size") @DefaultValue("10") int size,
+      @QueryParam ("edge") boolean edge
   ) throws PipelineException {
     PipelineInfo pipelineInfo = store.getInfo(pipelineId);
     RestAPIUtils.injectPipelineInMDC(pipelineInfo.getTitle(), pipelineInfo.getPipelineId());
     size = size > 100 ? 100 : size;
+    if (edge) {
+      PipelineConfiguration pipelineConfiguration = store.load(pipelineId, "0");
+      Config edgeHttpUrlConfig = pipelineConfiguration.getConfiguration(EdgeUtil.EDGE_HTTP_URL);
+      if (edgeHttpUrlConfig != null) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("stageInstanceName", stageInstanceName);
+        params.put("size", size);
+        return EdgeUtil.proxyRequestGET(
+            (String)edgeHttpUrlConfig.getValue(),
+            "/rest/v1/pipeline/" + pipelineId + "/errorRecords",
+            params
+        );
+      }
+    }
     Runner runner = manager.getRunner(pipelineId, rev);
     if(runner != null) {
       return Response.ok().type(MediaType.APPLICATION_JSON).entity(
@@ -794,11 +818,28 @@ public class ManagerResource {
       @PathParam("pipelineId") String pipelineId,
       @QueryParam("rev") @DefaultValue("0") String rev,
       @QueryParam ("stageInstanceName") @DefaultValue("") String stageInstanceName,
-      @QueryParam ("size") @DefaultValue("10") int size
+      @QueryParam ("size") @DefaultValue("10") int size,
+      @QueryParam ("edge") boolean edge
   ) throws PipelineException {
     PipelineInfo pipelineInfo = store.getInfo(pipelineId);
     RestAPIUtils.injectPipelineInMDC(pipelineInfo.getTitle(), pipelineInfo.getPipelineId());
     size = size > 100 ? 100 : size;
+
+    if (edge) {
+      PipelineConfiguration pipelineConfiguration = store.load(pipelineId, "0");
+      Config edgeHttpUrlConfig = pipelineConfiguration.getConfiguration(EdgeUtil.EDGE_HTTP_URL);
+      if (edgeHttpUrlConfig != null) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("stageInstanceName", stageInstanceName);
+        params.put("size", size);
+        return EdgeUtil.proxyRequestGET(
+            (String)edgeHttpUrlConfig.getValue(),
+            "/rest/v1/pipeline/" + pipelineId + "/errorMessages",
+            params
+        );
+      }
+    }
+
     Runner runner = manager.getRunner(pipelineId, rev);
     if(runner != null) {
       return Response.ok().type(MediaType.APPLICATION_JSON).entity(

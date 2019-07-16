@@ -17,6 +17,7 @@ package com.streamsets.pipeline.stage.destination.websocket;
 
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ConfigDefBean;
+import com.streamsets.pipeline.api.ListBeanModel;
 import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.config.DataFormat;
 import com.streamsets.pipeline.lib.el.RecordEL;
@@ -31,7 +32,7 @@ import java.util.List;
  * Bean specifying the configuration for an WebSocket Client Target instance.
  */
 public class WebSocketTargetConfig {
-  @ConfigDefBean(groups = {"WEB_SOCKET"})
+  @ConfigDefBean(groups = {"DATA_FORMAT"})
   public DataGeneratorFormatConfig dataGeneratorFormatConfig;
 
   @ConfigDef(
@@ -60,12 +61,13 @@ public class WebSocketTargetConfig {
 
   @ConfigDef(
       required = false,
-      type = ConfigDef.Type.MAP,
+      type = ConfigDef.Type.MODEL,
       label = "Headers",
       description = "Headers to include in the request",
       displayPosition = 70,
       group = "WEB_SOCKET"
   )
+  @ListBeanModel
   public List<HeaderBean> headers = Collections.emptyList();
 
   @ConfigDef(

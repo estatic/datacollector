@@ -38,7 +38,7 @@ public class FieldFlattenerConfig {
 
   @ConfigDef(
     required = true,
-    type = ConfigDef.Type.LIST,
+    type = ConfigDef.Type.MODEL,
     label = "Fields",
     dependsOn = "flattenType",
     description = "List of fields to be flattened",
@@ -46,6 +46,7 @@ public class FieldFlattenerConfig {
     group = "FLATTEN",
     triggeredByValue = { "SPECIFIC_FIELDS" }
   )
+  @FieldSelectorModel
   public List<String> fields = new LinkedList<>();
 
   @ConfigDef(
@@ -53,7 +54,7 @@ public class FieldFlattenerConfig {
     type = ConfigDef.Type.BOOLEAN,
     label = "Flatten in Place",
     defaultValue = "true",
-    description = "When set, each filed will be flatten in place.",
+    description = "When set, each field will be flattened in place.",
     displayPosition = 20,
     group = "FLATTEN",
     dependsOn = "flattenType",
@@ -93,7 +94,7 @@ public class FieldFlattenerConfig {
     type = ConfigDef.Type.BOOLEAN,
     label = "Remove Flattened Field",
     defaultValue = "true",
-    description = "When set, flattened filed will be removed after successful flattening.",
+    description = "When set, flattened field will be removed after successful flattening.",
     displayPosition = 35,
     group = "FLATTEN",
     dependsOn = "flattenInPlace",
