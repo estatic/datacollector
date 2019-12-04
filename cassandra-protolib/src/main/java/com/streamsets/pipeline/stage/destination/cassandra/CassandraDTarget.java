@@ -24,11 +24,12 @@ import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 
 @GenerateResourceBundle
 @StageDef(
-    version = 5,
+    version = 6,
     label = "Cassandra",
     description = "Writes data to Cassandra",
     icon = "cassandra.png",
     upgrader = CassandraTargetUpgrader.class,
+    upgraderDef = "upgrader/CassandraDTarget.yaml",
     onlineHelpRefUrl ="index.html?contextID=task_t1d_z3l_sr"
 )
 @ConfigGroups(value = Groups.class)

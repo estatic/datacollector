@@ -19,6 +19,6 @@ import com.streamsets.pipeline.api.base.BaseEnumChooserValues;
 
 public class KeyDeserializerChooserValues extends BaseEnumChooserValues<Deserializer> {
   public KeyDeserializerChooserValues() {
-    super(Deserializer.STRING, Deserializer.CONFLUENT);
+    super(Deserializer.class);
   }
 }

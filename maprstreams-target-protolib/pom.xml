@@ -23,12 +23,12 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.10.0-SNAPSHOT</version>
+    <version>3.13.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-maprstreams-target-protolib</artifactId>
-  <version>3.10.0-SNAPSHOT</version>
+  <version>3.13.0-SNAPSHOT</version>
   <description>StreamSets Data Collector MapR Streams Producer ProtoLib</description>
   <name>StreamSets Data Collector MapR Streams Producer ProtoLib</name>
   <packaging>jar</packaging>
@@ -103,6 +103,11 @@
       <groupId>com.streamsets</groupId>
       <artifactId>streamsets-datacollector-kafka_target-protolib</artifactId>
       <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 

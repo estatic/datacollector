@@ -25,8 +25,8 @@ import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingMode;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingModeChooserValues;
-import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordType;
-import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordTypeValueChooser;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordType;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordTypeValueChooser;
 
 import java.util.Map;
 
@@ -36,6 +36,7 @@ import java.util.Map;
     description = "Processes records using Jython",
     icon = "jython.png",
     upgrader = JythonProcessorUpgrader.class,
+    upgraderDef = "upgrader/JythonDProcessor.yaml",
     producesEvents = true,
     flags = StageBehaviorFlags.USER_CODE_INJECTION,
     onlineHelpRefUrl ="index.html?contextID=task_fty_jwx_nr"
@@ -103,12 +104,14 @@ public class JythonDProcessor extends DProcessor {
   public ScriptRecordType scriptRecordType = ScriptRecordType.NATIVE_OBJECTS;
 
   @ConfigDef(
-      required = false,
-      defaultValue = "{}",
-      type = ConfigDef.Type.MAP,
-      label = "User-Defined Parameters",
-      displayPosition = 80,
-      group = "ADVANCED"
+    required = false,
+    defaultValue = "{}",
+    type = ConfigDef.Type.MAP,
+    label = "Parameters in Script",
+    description = "Parameters and values for use in script.\n" +
+        "Access in user script as sdc.userParams.",
+    displayPosition = 80,
+    group = "ADVANCED"
   )
   public Map<String, String> userParams;
 

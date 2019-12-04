@@ -36,7 +36,8 @@ import java.util.List;
     icon="splitter.png",
     flags = StageBehaviorFlags.PURE_FUNCTION,
     onlineHelpRefUrl ="index.html?contextID=task_av1_5g3_yq",
-    upgrader = SplitterProcessorUpgrader.class
+    upgrader = SplitterProcessorUpgrader.class,
+    upgraderDef = "upgrader/SplitterDProcessor.yaml"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle
@@ -68,13 +69,14 @@ public class SplitterDProcessor extends DProcessor {
 
   @ConfigDef(
       required = false,
-      type = ConfigDef.Type.LIST,
+      type = ConfigDef.Type.MODEL,
       defaultValue = "[\"/fieldSplit1\", \"/fieldSplit2\"]",
       label = "New Split Fields",
       description="New fields to pass split data. The last field includes any remaining unsplit data.",
       displayPosition = 30,
       group = "FIELD_SPLITTER"
   )
+  @FieldSelectorModel(singleValued = false)
   public List<String> fieldPathsForSplits;
 
   @ConfigDef(

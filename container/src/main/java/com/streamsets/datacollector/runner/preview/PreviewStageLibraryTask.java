@@ -87,7 +87,8 @@ public class PreviewStageLibraryTask extends TaskWrapper implements StageLibrary
       null,
       false,
       Collections.emptyList(),
-      null
+      null,
+      Collections.emptyList()
   );
 
   private final StageLibraryTask library;
@@ -215,4 +216,8 @@ public class PreviewStageLibraryTask extends TaskWrapper implements StageLibrary
     return library.getEventDefinitions();
   }
 
+  @Override
+  public StageLibraryDefinition getStageLibraryDefinition(String libraryName) {
+    return library.getStageLibraryDefinition(libraryName);
+  }
 }

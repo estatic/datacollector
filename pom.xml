@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright 2017 StreamSets Inc.
+    Copyright 2019 StreamSets Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector</artifactId>
-  <version>3.10.0-SNAPSHOT</version>
+  <version>3.13.0-SNAPSHOT</version>
   <description>StreamSets Data Collector</description>
   <name>StreamSets Data Collector</name>
   <packaging>pom</packaging>
@@ -81,6 +81,7 @@
     <mleap-lib>mleap-lib</mleap-lib>
     <mysql-binlog-lib>mysql-binlog-lib</mysql-binlog-lib>
     <omniture-lib>omniture-lib</omniture-lib>
+    <orchestrator-lib>orchestrator-lib</orchestrator-lib>
     <rabbitmq-lib>rabbitmq-lib</rabbitmq-lib>
     <redis-lib>redis-lib</redis-lib>
     <salesforce-lib>salesforce-lib</salesforce-lib>
@@ -90,8 +91,8 @@
     <wholefile-transformer-lib>wholefile-transformer-lib</wholefile-transformer-lib>
     <windows-lib>windows-lib</windows-lib>
     <rootProject>true</rootProject>
-    <datacollector-api.version>3.10.0-SNAPSHOT</datacollector-api.version>
-    <datacollector-spark-api.version>3.10.0-SNAPSHOT</datacollector-spark-api.version>
+    <datacollector-api.version>3.13.0-SNAPSHOT</datacollector-api.version>
+    <datacollector-spark-api.version>3.13.0-SNAPSHOT</datacollector-spark-api.version>
     <thycotic-credentialstore-lib>thycotic-credentialstore-lib</thycotic-credentialstore-lib>
   </properties>
 
@@ -160,6 +161,7 @@
     <module>mapr_json-5_2-protolib</module>
     <module>mapr_json-6_0-protolib</module>
     <module>hive-protolib</module>
+    <module>jks-credentialstore-protolib</module>
 
     <module>dir-spooler-protolib</module>
 
@@ -256,6 +258,7 @@
     <module>mleap-lib</module>
     <module>mysql-binlog-lib</module>
     <module>omniture-lib</module>
+    <module>orchestrator-lib</module>
     <module>rabbitmq-lib</module>
     <module>redis-lib</module>
     <module>salesforce-lib</module>
@@ -375,6 +378,9 @@
             <exclude>groovy-protolib/src/main/resources/com/streamsets/pipeline/stage/processor/groovy/default_init_script.groovy</exclude>
             <exclude>groovy-protolib/src/main/resources/com/streamsets/pipeline/stage/processor/groovy/default_script.groovy</exclude>
             <exclude>groovy-protolib/src/main/resources/com/streamsets/pipeline/stage/processor/groovy/default_destroy_script.groovy</exclude>
+            <exclude>groovy-protolib/src/main/resources/com/streamsets/pipeline/stage/origin/groovy/GeneratorOriginScript.groovy</exclude>
+            <exclude>basic-lib/src/main/resources/com/streamsets/pipeline/stage/origin/javascript/GeneratorOriginScript.js</exclude>
+            <exclude>jython-protolib/src/main/resources/com/streamsets/pipeline/stage/origin/jython/GeneratorOriginScript.py</exclude>
 
           </excludes>
           <goal>run</goal>
@@ -528,12 +534,14 @@
         <cdh_6_0-lib>cdh_6_0-lib</cdh_6_0-lib>
         <cdh_6_1-lib>cdh_6_1-lib</cdh_6_1-lib>
         <cdh_6_2-lib>cdh_6_2-lib</cdh_6_2-lib>
+        <cdh_6_3-lib>cdh_6_3-lib</cdh_6_3-lib>
         <cdh_kafka_1_2-lib>cdh_kafka_1_2-lib</cdh_kafka_1_2-lib>
         <cdh_kafka_1_3-lib>cdh_kafka_1_3-lib</cdh_kafka_1_3-lib>
         <cdh_kafka_2_0-lib>cdh_kafka_2_0-lib</cdh_kafka_2_0-lib>
         <cdh_kafka_2_1-lib>cdh_kafka_2_1-lib</cdh_kafka_2_1-lib>
         <cdh_kafka_3_0-lib>cdh_kafka_3_0-lib</cdh_kafka_3_0-lib>
         <cdh_kafka_3_1-lib>cdh_kafka_3_1-lib</cdh_kafka_3_1-lib>
+        <cdh_kafka_4_1-lib>cdh_kafka_4_1-lib</cdh_kafka_4_1-lib>
         <couchbase_5-lib>couchbase_5-lib</couchbase_5-lib>
         <cdh_spark_2_1_r1-lib>cdh_spark_2_1_r1-lib</cdh_spark_2_1_r1-lib>
         <elasticsearch_5-lib>elasticsearch_5-lib</elasticsearch_5-lib>
@@ -611,12 +619,14 @@
         <module>cdh_6_0-lib</module>
         <module>cdh_6_1-lib</module>
         <module>cdh_6_2-lib</module>
+        <module>cdh_6_3-lib</module>
         <module>cdh_kafka_1_2-lib</module>
         <module>cdh_kafka_1_3-lib</module>
         <module>cdh_kafka_2_0-lib</module>
         <module>cdh_kafka_2_1-lib</module>
         <module>cdh_kafka_3_0-lib</module>
         <module>cdh_kafka_3_1-lib</module>
+        <module>cdh_kafka_4_1-lib</module>
         <module>cdh_spark_2_1_r1-lib</module>
         <module>cdh-spark_2_1-lib</module>
         <module>cdh-spark_2_2-lib</module>
@@ -682,8 +692,8 @@
         <cassandra_3-lib>cassandra_3-lib</cassandra_3-lib>
         <cdh-spark_2_3-lib>cdh-spark_2_3-lib</cdh-spark_2_3-lib>
         <cdh_5_16-lib>cdh_5_16-lib</cdh_5_16-lib>
-        <cdh_6_2-lib>cdh_6_2-lib</cdh_6_2-lib>
-        <cdh_kafka_3_1-lib>cdh_kafka_3_1-lib</cdh_kafka_3_1-lib>
+        <cdh_6_3-lib>cdh_6_3-lib</cdh_6_3-lib>
+        <cdh_kafka_4_1-lib>cdh_kafka_4_1-lib</cdh_kafka_4_1-lib>
         <cdh_spark_2_1_r1-lib>cdh_spark_2_1_r1-lib</cdh_spark_2_1_r1-lib>
         <couchbase_5-lib>couchbase_5-lib</couchbase_5-lib>
         <elasticsearch_5-lib>elasticsearch_5-lib</elasticsearch_5-lib>
@@ -718,8 +728,8 @@
         <module>cassandra_3-lib</module>
         <module>cdh-spark_2_1-lib</module>
         <module>cdh_5_16-lib</module>
-        <module>cdh_6_2-lib</module>
-        <module>cdh_kafka_3_1-lib</module>
+        <module>cdh_6_3-lib</module>
+        <module>cdh_kafka_4_1-lib</module>
         <module>cdh-spark_2_3-lib</module>
         <module>couchbase_5-lib</module>
         <module>elasticsearch_5-lib</module>

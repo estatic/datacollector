@@ -25,13 +25,13 @@ import com.streamsets.pipeline.api.StageDef;
 import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.lib.http.Groups;
 
-@StageDef(
-    version = 11,
+@StageDef(version = 12,
     label = "HTTP Client",
     description = "Uses an HTTP client to make arbitrary requests.",
     icon = "httpclient.png",
     recordsByRef = true,
     upgrader = HttpProcessorUpgrader.class,
+    upgraderDef = "upgrader/HttpDProcessor.yaml",
     execution = {
         ExecutionMode.STANDALONE,
         ExecutionMode.CLUSTER_BATCH,

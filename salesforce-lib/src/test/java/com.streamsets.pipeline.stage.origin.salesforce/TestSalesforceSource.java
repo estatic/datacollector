@@ -15,17 +15,14 @@
  */
 package com.streamsets.pipeline.stage.origin.salesforce;
 
-import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.lib.salesforce.Errors;
 import com.streamsets.pipeline.lib.salesforce.ForceRepeatQuery;
 import com.streamsets.pipeline.lib.salesforce.ForceSourceConfigBean;
 import com.streamsets.pipeline.sdk.SourceRunner;
-import com.streamsets.pipeline.sdk.StageRunner;
 import com.streamsets.testing.NetworkUtils;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,9 +35,7 @@ import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -56,13 +51,13 @@ public class TestSalesforceSource {
   private static final String offsetColumn = "Id";
   private static final String query = "SELECT Id, Name FROM Account WHERE Id > '${offset}' ORDER BY Id";
   private static final String SOQL_QUERY_MUST_INCLUDE = "SOQL query must include";
+  public static final String ERROR_PARSING_SOQL_QUERY = "Error parsing SOQL query";
 
   private int port;
   private String authEndpoint;
   private MockSalesforceApiServer mockServer;
 
-  // Skip until Mock Server supports metadata
-  @Ignore
+  // Set up mock server to respond to connection attempts
   @Before
   public void setUp() throws NoSuchAlgorithmException, KeyManagementException {
     SSLContext sc = SSLContext.getInstance("TLS");
@@ -81,160 +76,9 @@ public class TestSalesforceSource {
   }
 
   // Skip until Mock Server supports metadata
-  @Ignore
   @After
   public void tearDown() {
     mockServer.stop();
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  private void testAPI(ForceSource origin, String secondOffset) throws Exception {
-    SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
-        .addOutputLane("lane")
-        .build();
-
-    runner.runInit();
-
-    try {
-      // Check that existing rows are loaded.
-      StageRunner.Output output = runner.runProduce(null, 2);
-      Map<String, List<Record>> recordMap = output.getRecords();
-      List<Record> parsedRecords = recordMap.get("lane");
-
-      assertEquals(2, parsedRecords.size());
-      assertEquals("recordId:001000000000002", output.getNewOffset());
-
-      // Check that the remaining rows in the initial cursor are read.
-      output = runner.runProduce(output.getNewOffset(), 100);
-      parsedRecords = output.getRecords().get("lane");
-      assertEquals(2, parsedRecords.size());
-      assertEquals(secondOffset, output.getNewOffset());
-    } finally {
-      runner.runDestroy();
-    }
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  private void addFourRowsBulk() {
-    LinkedHashMap<String, String> record1 = new LinkedHashMap<>();
-    record1.put("Name", "Pat");
-    LinkedHashMap<String, String> record2 = new LinkedHashMap<>();
-    record2.put("Name", "Arvind");
-    LinkedHashMap<String, String> record3 = new LinkedHashMap<>();
-    record3.put("Name", "Adam");
-    LinkedHashMap<String, String> record4 = new LinkedHashMap<>();
-    record4.put("Name", "Natty");
-
-    LinkedHashMap<String,LinkedHashMap<String,String>> initFourRecords = new LinkedHashMap<>();
-    initFourRecords.put("001000000000001", record1);
-    initFourRecords.put("001000000000002", record2);
-    initFourRecords.put("001000000000003", record3);
-    initFourRecords.put("001000000000004", record4);
-
-    mockServer.asyncApi().insert(initFourRecords);
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testBulkAPINoRepeat() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.useBulkAPI = true;
-    conf.repeatQuery = ForceRepeatQuery.NO_REPEAT;
-
-    addFourRowsBulk();
-
-    testAPI(new ForceSource(conf), null);
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testBulkAPIFull() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.useBulkAPI = true;
-    conf.repeatQuery = ForceRepeatQuery.FULL;
-
-    addFourRowsBulk();
-
-    testAPI(new ForceSource(conf), "recordId:"+initialOffset);
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testBulkAPIIncremental() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.useBulkAPI = true;
-    conf.repeatQuery = ForceRepeatQuery.INCREMENTAL;
-
-    addFourRowsBulk();
-
-    testAPI(new ForceSource(conf), "recordId:001000000000004");
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  private void addFourRowsSoap() {
-    mockServer.sforceApi().query().returnResults()
-        .withRow().withField("Id", "001000000000001").withField("Name", "Pat")
-        .withRow().withField("Id", "001000000000002").withField("Name", "Arvind")
-        .withRow().withField("Id", "001000000000003").withField("Name", "Adam")
-        .withRow().withField("Id", "001000000000004").withField("Name", "Natty");
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testSoapAPINoRepeat() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.repeatQuery = ForceRepeatQuery.NO_REPEAT;
-
-    addFourRowsSoap();
-
-    testAPI(new ForceSource(conf), null);
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testSoapAPIFull() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.repeatQuery = ForceRepeatQuery.FULL;
-
-    addFourRowsSoap();
-
-    testAPI(new ForceSource(conf), "recordId:"+initialOffset);
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testSoapAPIIncremental() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.repeatQuery = ForceRepeatQuery.INCREMENTAL;
-
-    addFourRowsSoap();
-
-    testAPI(new ForceSource(conf), "recordId:001000000000004");
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testBadConnectionString() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.authEndpoint = "badhost:"+port;
-    ForceSource origin = new ForceSource(conf);
-
-    SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
-        .addOutputLane("lane")
-        .build();
-
-    List<Stage.ConfigIssue> issues = runner.runValidateConfigs();
-    assertEquals(1, issues.size());
   }
 
   @Test
@@ -427,79 +271,11 @@ public class TestSalesforceSource {
     assertTrue(issues.get(0).toString().contains("A configuration is invalid"));
   }
 
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testEmptyResultSetBulk() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.useBulkAPI = true;
-    conf.subscribeToStreaming = false;
-    ForceSource origin = new ForceSource(conf);
-
-    SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
-        .addOutputLane("lane")
-        .build();
-
-    runner.runInit();
-
-    try {
-      // Check that existing rows are loaded.
-      StageRunner.Output output = runner.runProduce(null, 1000);
-      Map<String, List<Record>> recordMap = output.getRecords();
-      List<Record> parsedRecords = recordMap.get("lane");
-
-      assertEquals(0, parsedRecords.size());
-      assertEquals(null, output.getNewOffset());
-    } finally {
-      runner.runDestroy();
-    }
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testStreaming() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.queryExistingData = false;
-    conf.subscribeToStreaming = true;
-    conf.pushTopic = "Test";
-    ForceSource origin = new ForceSource(conf);
-
-    mockServer.sforceApi().query().returnResults()
-        .withRow().withField("Id", "001000000000001").withField("Query", "SELECT Id, Name FROM Account");
-
-    SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
-        .addOutputLane("lane")
-        .build();
-
-    List<Stage.ConfigIssue> issues = runner.runValidateConfigs();
-    assertEquals(0, issues.size());
-  }
-
   @Test
   public void testStreamingNoPushTopic() throws Exception {
     ForceSourceConfigBean conf = getForceSourceConfig();
     conf.queryExistingData = false;
     conf.subscribeToStreaming = true;
-    ForceSource origin = new ForceSource(conf);
-
-    SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
-        .addOutputLane("lane")
-        .build();
-
-    List<Stage.ConfigIssue> issues = runner.runValidateConfigs();
-    assertEquals(1, issues.size());
-    assertTrue(issues.get(0).toString().contains("A configuration is invalid"));
-  }
-
-  // Skip until Mock Server supports metadata
-  @Ignore
-  @Test
-  public void testStreamingBadPushTopic() throws Exception {
-    ForceSourceConfigBean conf = getForceSourceConfig();
-    conf.queryExistingData = false;
-    conf.subscribeToStreaming = true;
-    conf.pushTopic = "Test";
     ForceSource origin = new ForceSource(conf);
 
     SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
@@ -535,5 +311,38 @@ public class TestSalesforceSource {
     conf.showTrace = true;
 
     return conf;
+  }
+
+  // SDC-12932 - The Salesforce Origin fails and gives cryptic error message
+  @Test
+  public void testSoqlQueryParseError() throws Exception {
+    ForceSourceConfigBean conf = getForceSourceConfig();
+    conf.soqlQuery = "FirstName, LastName, Email, LeadSource FROM Contact";
+    ForceSource origin = new ForceSource(conf);
+
+    SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
+        .addOutputLane("lane")
+        .build();
+
+    List<Stage.ConfigIssue> issues = runner.runValidateConfigs();
+    assertEquals(1, issues.size());
+    assertTrue(issues.get(0).toString().contains(ERROR_PARSING_SOQL_QUERY));
+  }
+
+  // SDC-12935 - Valid SOQL queries are giving validation errors
+  @Test
+  public void testSoqlQueryObjectName() throws Exception {
+    ForceSourceConfigBean conf = getForceSourceConfig();
+    conf.soqlQuery = "select contact.id, firstname, lastname, email from Contact " +
+        "where Contact.Id <> '0036g000002s3cqAAA' and Account.Id = '0016g0000036KRCAA2' order by Contact.Id";
+    conf.disableValidation = true;
+    ForceSource origin = new ForceSource(conf);
+
+    SourceRunner runner = new SourceRunner.Builder(ForceDSource.class, origin)
+        .addOutputLane("lane")
+        .build();
+
+    List<Stage.ConfigIssue> issues = runner.runValidateConfigs();
+    assertEquals(0, issues.size());
   }
 }

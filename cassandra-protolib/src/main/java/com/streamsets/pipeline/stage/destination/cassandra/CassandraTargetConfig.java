@@ -88,12 +88,40 @@ public class CassandraTargetConfig {
 
   @ConfigDef(
       required = true,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "true",
+      label = "Enable Batches",
+      description = "Enables the use of Cassandra batches",
+      displayPosition = 51,
+      group = "CASSANDRA"
+  )
+  public boolean enableBatches = true;
+
+  @ConfigDef(
+      required = true,
+      type = ConfigDef.Type.NUMBER,
+      defaultValue = "5000", // from SocketOptions.DEFAULT_CONNECT_TIMEOUT_MILLIS
+      min = 1,
+      max = Integer.MAX_VALUE,
+      label = "Write Timeout",
+      description = "The timeout for each write request (in milliseconds)",
+      displayPosition = 52,
+      group = "CASSANDRA",
+      dependsOn = "enableBatches",
+      triggeredByValue = "false"
+  )
+  public int writeTimeout = 5000;
+
+  @ConfigDef(
+      required = true,
       type = ConfigDef.Type.MODEL,
       defaultValue = "LOGGED",
       label = "Batch Type",
       description = "Un-logged batches do not use the Cassandra distributed batch log and as such as nonatomic.",
       displayPosition = 60,
-      group = "CASSANDRA"
+      group = "CASSANDRA",
+      dependsOn = "enableBatches",
+      triggeredByValue = "true"
   )
   @ValueChooserModel(BatchTypeChooserValues.class)
   public BatchStatement.Type batchType = BatchStatement.Type.LOGGED;

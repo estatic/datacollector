@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -41,9 +40,9 @@ import static com.streamsets.pipeline.lib.dirspooler.PathMatcherMode.REGEX;
 
 public class HdfsFileSystem implements WrappedFileSystem {
   private final static Logger LOG = LoggerFactory.getLogger(HdfsFileSystem.class);
-  private final FileSystem fs;
+  protected final FileSystem fs;
   private final String filePattern;
-  private final boolean processSubdirectories;
+  protected final boolean processSubdirectories;
   private PathFilter filter;
 
   public HdfsFileSystem(String filePattern, PathMatcherMode mode, boolean processSubdirectories, FileSystem fs) {
@@ -208,7 +207,7 @@ public class HdfsFileSystem implements WrappedFileSystem {
 
   public WrappedFile getFile(String dirPath, String filePath) {
     if (isAbsolutePath(dirPath, filePath)) {
-      return getFile(dirPath, filePath);
+      return getFile(filePath);
     }
     if (filePath.startsWith(File.separator)) {
       filePath = filePath.replaceFirst(File.separator, "");
@@ -223,11 +222,18 @@ public class HdfsFileSystem implements WrappedFileSystem {
    * We want to check whether the filePath already includes the directory path
    */
   private boolean isAbsolutePath(String dirPath, String filePath) {
-    return filePath.startsWith(dirPath);
+    return filePath != null && filePath.startsWith(dirPath);
   }
 
   public void mkdir(WrappedFile filePath) {
-    new File(filePath.getAbsolutePath()).mkdir();
+    try {
+      boolean result = fs.mkdirs(new Path(filePath.getAbsolutePath()));
+      if (!result) {
+        LOG.error("Could not create directory '{}", filePath.getAbsolutePath());
+      }
+    } catch (IOException ex) {
+      LOG.error("Could not create directory '{}'", filePath.getAbsolutePath(), ex);
+    }
   }
 
   public boolean patternMatches(String fileName) {

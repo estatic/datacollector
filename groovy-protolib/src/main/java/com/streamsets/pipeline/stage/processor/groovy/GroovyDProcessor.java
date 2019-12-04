@@ -25,8 +25,8 @@ import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingMode;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingModeChooserValues;
-import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordType;
-import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordTypeValueChooser;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordType;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordTypeValueChooser;
 
 import java.util.Map;
 
@@ -42,6 +42,7 @@ import static com.streamsets.pipeline.stage.processor.groovy.GroovyProcessor.GRO
     producesEvents = true,
     flags = StageBehaviorFlags.USER_CODE_INJECTION,
     upgrader = GroovyProcessorUpgrader.class,
+    upgraderDef = "upgrader/GroovyDProcessor.yaml",
     onlineHelpRefUrl ="index.html?contextID=task_asl_bpt_gv"
 )
 @ConfigGroups(Groups.class)
@@ -126,7 +127,9 @@ public class GroovyDProcessor extends DProcessor {
     required = false,
     defaultValue = "{}",
     type = ConfigDef.Type.MAP,
-    label = "User-Defined Parameters",
+    label = "Parameters in Script",
+    description = "Parameters and values for use in script.\n" +
+        "Access in user script as sdc.userParams.",
     displayPosition = 80,
     group = "ADVANCED"
   )

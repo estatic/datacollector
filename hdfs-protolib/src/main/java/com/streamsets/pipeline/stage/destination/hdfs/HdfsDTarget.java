@@ -25,12 +25,13 @@ import com.streamsets.pipeline.api.base.configurablestage.DTarget;
 import com.streamsets.pipeline.lib.event.WholeFileProcessedEvent;
 
 @StageDef(
-    version = 4,
+    version = 5,
     label = "Hadoop FS",
     description = "Writes to a Hadoop file system",
     icon = "hdfs.png",
     privateClassLoader = true,
     upgrader = HdfsTargetUpgrader.class,
+    upgraderDef = "upgrader/HdfsDTarget.yaml",
     producesEvents = true,
     eventDefs = {WholeFileProcessedEvent.class},
     onlineHelpRefUrl ="index.html?contextID=task_m2m_skm_zq"

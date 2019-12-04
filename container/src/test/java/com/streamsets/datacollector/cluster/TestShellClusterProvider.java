@@ -187,7 +187,13 @@ public class TestShellClusterProvider {
     sourceInfo = new HashMap<>();
     sourceInfo.put(ClusterModeConstants.NUM_EXECUTORS_KEY, "64");
     URLClassLoader emptyCL = new URLClassLoader(new URL[0]);
-    RuntimeInfo runtimeInfo = new StandaloneRuntimeInfo(SDC_TEST_PREFIX, null, Arrays.asList(emptyCL), tempDir);
+    RuntimeInfo runtimeInfo = new StandaloneRuntimeInfo(
+        RuntimeInfo.SDC_PRODUCT,
+        SDC_TEST_PREFIX,
+        null,
+        Arrays.asList(emptyCL),
+        tempDir
+    );
     File configFile = new File(runtimeInfo.getConfigDir(), SDC_TEST_PREFIX + RuntimeInfo.LOG4J_PROPERTIES);
     File f = new File(runtimeInfo.getConfigDir());
     Assert.assertTrue(f.mkdirs());
@@ -612,7 +618,13 @@ public class TestShellClusterProvider {
         "aaa", null, null, null, true, null, "x", "y"));
 
     URLClassLoader emptyCL = new URLClassLoader(new URL[0]);
-    RuntimeInfo runtimeInfo = new StandaloneRuntimeInfo(SDC_TEST_PREFIX, null, Arrays.asList(emptyCL), tempDir);
+    RuntimeInfo runtimeInfo = new StandaloneRuntimeInfo(
+        RuntimeInfo.SDC_PRODUCT,
+        SDC_TEST_PREFIX,
+        null,
+        Arrays.asList(emptyCL),
+        tempDir
+    );
 
     Configuration conf = new Configuration();
     conf.set(SecurityConfiguration.KERBEROS_ENABLED_KEY, true);
@@ -771,7 +783,7 @@ public class TestShellClusterProvider {
     sdcProperties.put("stay", "Don't try to touch me!");
     sdcProperties.put("remove.me", "Yes please!");
     sdcProperties.put("remove.me.too", "Yes please!");
-    sdcProperties.put(RuntimeInfo.DATA_COLLECTOR_BASE_HTTP_URL, "Yes please!");
+    sdcProperties.put(RuntimeInfo.getBaseHttpUrlAttr(RuntimeInfo.SDC_PRODUCT), "Yes please!");
     sdcProperties.put("http.bindHost", "Yes please!");
     sdcProperties.put("cluster.slave.configs.remove", "remove.me,remove.me.too");
     File etcDir = tempFolder.newFolder();
@@ -799,7 +811,7 @@ public class TestShellClusterProvider {
       Assert.assertFalse(updatedProperties.containsValue("remove.me"));
       Assert.assertFalse(updatedProperties.containsValue("remove.me.too"));
       Assert.assertFalse(updatedProperties.containsValue("http.bindHost"));
-      Assert.assertFalse(updatedProperties.containsValue(RuntimeInfo.DATA_COLLECTOR_BASE_HTTP_URL));
+      Assert.assertFalse(updatedProperties.containsValue(RuntimeInfo.getBaseHttpUrlAttr(RuntimeInfo.SDC_PRODUCT)));
     }
   }
 

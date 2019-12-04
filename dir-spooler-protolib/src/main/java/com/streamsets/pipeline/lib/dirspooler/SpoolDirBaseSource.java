@@ -53,6 +53,7 @@ public abstract class SpoolDirBaseSource extends BasePushSource {
   private int numberOfThreads;
   private ExecutorService executorService;
   private WrappedFileSystem fs;
+  protected SpoolDirBaseContext spoolDirBaseContext;
 
   abstract public WrappedFileSystem getFs();
 
@@ -71,6 +72,7 @@ public abstract class SpoolDirBaseSource extends BasePushSource {
     fs = getFs();
 
     numberOfThreads = conf.numberOfThreads;
+    this.spoolDirBaseContext = new SpoolDirBaseContext(getContext(), numberOfThreads);
     lastSourceFileName = null;
 
     conf.dataFormatConfig.checkForInvalidAvroSchemaLookupMode(conf.dataFormat,
@@ -169,7 +171,7 @@ public abstract class SpoolDirBaseSource extends BasePushSource {
         conf.poolingTimeoutSecs = 1;
       }
 
-      DirectorySpooler.Builder builder = DirectorySpooler.builder()
+      DirectorySpooler.Builder builder = getDirectorySpoolerBuilder()
           .setWrappedFileSystem(getFs())
           .setDir(conf.spoolDir)
           .setFilePattern(conf.filePattern)
@@ -195,6 +197,10 @@ public abstract class SpoolDirBaseSource extends BasePushSource {
     }
 
     return issues;
+  }
+
+  protected DirectorySpooler.Builder getDirectorySpoolerBuilder() {
+    return new DirectorySpooler.Builder();
   }
 
   private boolean validateDir(
@@ -328,7 +334,10 @@ public abstract class SpoolDirBaseSource extends BasePushSource {
               e.getMessage(),
               e
           );
-          final Throwable rootCause = Throwables.getRootCause(e);
+          Throwable rootCause = Throwables.getRootCause(e);
+          if(spooler!=null && spooler.getDestroyCause() != null)
+            rootCause = spooler.getDestroyCause();
+
           if (rootCause instanceof StageException) {
             throw (StageException) rootCause;
           }
@@ -367,6 +376,7 @@ public abstract class SpoolDirBaseSource extends BasePushSource {
         .spooler(getSpooler())
         .conf(conf)
         .wrappedFileSystem(getFs())
+        .spoolDirBaseContext(spoolDirBaseContext)
         .build();
   }
 }

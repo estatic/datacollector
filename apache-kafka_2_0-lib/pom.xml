@@ -23,20 +23,22 @@
     <parent>
         <groupId>com.streamsets</groupId>
         <artifactId>streamsets-datacollector-stage-lib-parent</artifactId>
-        <version>3.10.0-SNAPSHOT</version>
+        <version>3.13.0-SNAPSHOT</version>
         <relativePath>../stage-lib-parent</relativePath>
     </parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-apache-kafka_2_0-lib</artifactId>
-    <version>3.10.0-SNAPSHOT</version>
+    <version>3.13.0-SNAPSHOT</version>
     <description>StreamSets Data Collector Apache Kafka 2.0 Lib</description>
     <name>StreamSets Data Collector Apache Kafka 2.0 Lib</name>
     <packaging>jar</packaging>
 
     <properties>
-        <kafka.version>2.0.0</kafka.version>
+        <avro.version>1.8.1</avro.version>
+        <kafka.version>2.0.1</kafka.version>
         <h2.version>1.4.187</h2.version>
         <tec.version>0.7</tec.version>
+        <confluent.version>5.0.3</confluent.version>
     </properties>
 
     <dependencies>
@@ -72,7 +74,7 @@
         </dependency>
         <dependency>
             <groupId>com.streamsets</groupId>
-            <artifactId>streamsets-datacollector-sdc-kafka-1_0</artifactId>
+            <artifactId>streamsets-datacollector-sdc-kafka-2_0</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
             <exclusions>
@@ -135,6 +137,34 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${confluent.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro-mapred</artifactId>
+            <version>${avro.version}</version>
+            <scope>compile</scope>
+            <classifier>hadoop2</classifier>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.codehaus.jackson</groupId>
+                    <artifactId>jackson-mapper-asl</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.mortbay.jetty</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <scope>test</scope>
@@ -174,7 +204,7 @@
         </dependency>
         <dependency>
             <groupId>com.streamsets</groupId>
-            <artifactId>streamsets-datacollector-sdc-kafka-1_0</artifactId>
+            <artifactId>streamsets-datacollector-sdc-kafka-2_0</artifactId>
             <version>${project.version}</version>
             <type>test-jar</type>
             <scope>test</scope>

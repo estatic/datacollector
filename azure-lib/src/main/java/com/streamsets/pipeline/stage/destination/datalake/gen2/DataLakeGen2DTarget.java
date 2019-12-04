@@ -30,8 +30,8 @@ import com.streamsets.pipeline.api.base.configurablestage.DTarget;
     description = "Writes data to Azure Data Lake Storage Gen2",
     icon = "data-lake-store-gen2.png",
     producesEvents = true,
-    onlineHelpRefUrl ="index.html?contextID=task_vk2_j45_rhb",
-    beta = true
+    upgraderDef = "upgrader/DataLakeGen2DTarget.yaml",
+    onlineHelpRefUrl ="index.html?contextID=task_vk2_j45_rhb"
 )
 @ConfigGroups(DataLakeGen2TargetGroups.class)
 @HideConfigs(value = {

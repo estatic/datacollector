@@ -54,6 +54,7 @@ import com.streamsets.pipeline.lib.salesforce.SoapRecordCreator;
 import com.streamsets.pipeline.lib.salesforce.SobjectRecordCreator;
 import com.streamsets.pipeline.lib.salesforce.SubscriptionType;
 import com.streamsets.pipeline.lib.util.ThreadUtil;
+import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -136,7 +137,9 @@ public class ForceSource extends BaseSource {
   private ForceStreamConsumer forceConsumer;
   private ForceRecordCreator recordCreator;
 
-  private boolean shouldSendNoMoreDataEvent = false;
+  private boolean queryComplete = false;   // true if there are no more records to read from the current query
+  private boolean noRecordsCreated = true; // true if we haven't created any records from the current query
+  private boolean eventFired = false;      // true if we have fired an event since the last query
   private AtomicBoolean destroyed = new AtomicBoolean(false);
   private XMLInputFactory xmlInputFactory = XMLInputFactory.newFactory();
 
@@ -201,37 +204,46 @@ public class ForceSource extends BaseSource {
       }
 
       if (!conf.disableValidation) {
-        SOQLParser.StatementContext statementContext = ForceUtils.getStatementContext(conf.soqlQuery);
-        SOQLParser.ConditionExpressionsContext conditionExpressions = statementContext.conditionExpressions();
-        SOQLParser.FieldOrderByListContext fieldOrderByList = statementContext.fieldOrderByList();
+        try {
+          SOQLParser.StatementContext statementContext = ForceUtils.getStatementContext(conf.soqlQuery);
+          SOQLParser.ConditionExpressionsContext conditionExpressions = statementContext.conditionExpressions();
+          SOQLParser.FieldOrderByListContext fieldOrderByList = statementContext.fieldOrderByList();
 
-        if (conf.usePKChunking) {
-          if (fieldOrderByList != null) {
-            issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
-                ForceConfigBean.CONF_PREFIX + "soqlQuery", Errors.FORCE_31
-            ));
-          }
+          String sobject = statementContext.objectList().getText().toLowerCase();
 
-          if (conditionExpressions != null && checkConditionExpressions(conditionExpressions, ID)) {
-            issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
-                ForceConfigBean.CONF_PREFIX + "soqlQuery",
-                Errors.FORCE_32
-            ));
-          }
+          if (conf.usePKChunking) {
+            if (fieldOrderByList != null) {
+              issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
+                  ForceConfigBean.CONF_PREFIX + "soqlQuery", Errors.FORCE_31
+              ));
+            }
 
-          if (conf.repeatQuery == ForceRepeatQuery.INCREMENTAL) {
-            issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
-                ForceConfigBean.CONF_PREFIX + "repeatQuery", Errors.FORCE_33
-            ));
+            if (conditionExpressions != null && checkConditionExpressions(conditionExpressions, sobject, ID)) {
+              issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
+                  ForceConfigBean.CONF_PREFIX + "soqlQuery",
+                  Errors.FORCE_32
+              ));
+            }
+
+            if (conf.repeatQuery == ForceRepeatQuery.INCREMENTAL) {
+              issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
+                  ForceConfigBean.CONF_PREFIX + "repeatQuery", Errors.FORCE_33
+              ));
+            }
+          } else {
+            if (conditionExpressions == null || !checkConditionExpressions(conditionExpressions, sobject,
+                conf.offsetColumn
+            ) || fieldOrderByList == null || !checkFieldOrderByList(fieldOrderByList, sobject, conf.offsetColumn)) {
+              issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
+                  ForceConfigBean.CONF_PREFIX + "soqlQuery", Errors.FORCE_07, conf.offsetColumn
+              ));
+            }
           }
-        } else {
-          if (conditionExpressions == null || !checkConditionExpressions(conditionExpressions,
-              conf.offsetColumn
-          ) || fieldOrderByList == null || !checkFieldOrderByList(fieldOrderByList, conf.offsetColumn)) {
-            issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
-                ForceConfigBean.CONF_PREFIX + "soqlQuery", Errors.FORCE_07, conf.offsetColumn
-            ));
-          }
+        } catch (ParseCancellationException e) {
+          LOG.error(Errors.FORCE_27.getMessage(), conf.soqlQuery, e);
+          issues.add(getContext().createConfigIssue(Groups.QUERY.name(),
+              ForceConfigBean.CONF_PREFIX + "soqlQuery", Errors.FORCE_27, conf.soqlQuery, e
+          ));
         }
       }
     }
@@ -313,6 +325,10 @@ public class ForceSource extends BaseSource {
       }
     }
 
+    queryComplete = false;
+    noRecordsCreated = true;
+    eventFired = false;
+
     // If issues is not empty, the UI will inform the user of each configuration issue in the list.
     return issues;
   }
@@ -353,19 +369,26 @@ public class ForceSource extends BaseSource {
   }
 
   // Returns true if the first ORDER BY field matches fieldName
-  private boolean checkFieldOrderByList(SOQLParser.FieldOrderByListContext fieldOrderByList, String fieldName) {
-    return fieldOrderByList.fieldOrderByElement(0).fieldElement().getText().equalsIgnoreCase(fieldName);
+  private boolean checkFieldOrderByList(SOQLParser.FieldOrderByListContext fieldOrderByList, String objectName, String fieldName) {
+    String objectFieldName = objectName + "." + fieldName;
+    String orderByField = fieldOrderByList.fieldOrderByElement(0).fieldElement().getText();
+
+    return orderByField.equalsIgnoreCase(fieldName) || orderByField.equalsIgnoreCase(objectFieldName);
   }
 
-  // Returns true if any of the nested conditions contains fieldName
+  // Returns true if any of the nested conditions contains fieldName, optionally preceded by objectName
   private boolean checkConditionExpressions(
-      SOQLParser.ConditionExpressionsContext conditionExpressions,
-      String fieldName
+      SOQLParser.ConditionExpressionsContext conditionExpressions, String objectName, String fieldName
   ) {
+    String objectFieldName = objectName + "." + fieldName;
+
     for (SOQLParser.ConditionExpressionContext ce : conditionExpressions.conditionExpression()) {
-      if ((ce.conditionExpressions() != null && checkConditionExpressions(ce.conditionExpressions(), fieldName))
-          || (ce.fieldExpression() != null && ce.fieldExpression().fieldElement().getText().equalsIgnoreCase(fieldName))) {
+      if (ce.conditionExpressions() != null && checkConditionExpressions(ce.conditionExpressions(), objectName, fieldName)) {
         return true;
+      } else if (ce.fieldExpression() != null){
+        String conditionField = ce.fieldExpression().fieldElement().getText();
+
+        return conditionField.equalsIgnoreCase(fieldName) || conditionField.equalsIgnoreCase(objectFieldName);
       }
     }
 
@@ -465,13 +488,6 @@ public class ForceSource extends BaseSource {
 
     LOG.debug("lastSourceOffset: {}", lastSourceOffset);
 
-    // send event only once for each time we run out of data.
-    if(shouldSendNoMoreDataEvent) {
-      NoMoreDataEvent.EVENT_CREATOR.create(getContext()).createAndSend();
-      shouldSendNoMoreDataEvent = false;
-      return lastSourceOffset;
-    }
-
     int batchSize = Math.min(conf.basicConfig.maxBatchSize, maxBatchSize);
 
     if (!conf.queryExistingData ||
@@ -506,6 +522,13 @@ public class ForceSource extends BaseSource {
       nextSourceOffset = READ_EVENTS_FROM_NOW;
     }
 
+    // If we're not repeating the query, then send the event
+    // If we ARE repeating, wait for a query with no records (SDC-12418)
+    if (queryComplete && !eventFired && (conf.repeatQuery == ForceRepeatQuery.NO_REPEAT || noRecordsCreated)) {
+      NoMoreDataEvent.EVENT_CREATOR.create(getContext()).createAndSend();
+      eventFired = true;
+    }
+
     LOG.debug("nextSourceOffset: {}", nextSourceOffset);
 
     return nextSourceOffset;
@@ -522,6 +545,9 @@ public class ForceSource extends BaseSource {
     if (job == null) {
       // No job in progress - start from scratch
       try {
+        noRecordsCreated = true;
+        queryComplete = false;
+
         String id = (lastSourceOffset == null) ? null : lastSourceOffset.substring(lastSourceOffset.indexOf(':') + 1);
         final String preparedQuery = prepareQuery(conf.soqlQuery, id);
         LOG.info("SOQL Query is: {}", preparedQuery);
@@ -640,6 +666,8 @@ public class ForceSource extends BaseSource {
             String offset = ((BulkRecordCreator) recordCreator).createRecord(xmlEventReader, batchMaker, numRecords);
             nextSourceOffset = RECORD_ID_OFFSET_PREFIX + offset;
             ++numRecords;
+            noRecordsCreated = false;
+            eventFired = false;
           }
         } catch (XMLStreamException e) {
           throw new StageException(Errors.FORCE_37, e);
@@ -670,7 +698,7 @@ public class ForceSource extends BaseSource {
             }
             LOG.info("Partial batch of {} records", numRecords);
             job = null;
-            shouldSendNoMoreDataEvent = true;
+            queryComplete = true;
             if (conf.subscribeToStreaming) {
               // Switch to processing events
               nextSourceOffset = READ_EVENTS_FROM_NOW;
@@ -715,6 +743,8 @@ public class ForceSource extends BaseSource {
             ? partnerConnection.queryAll(preparedQuery)
             : partnerConnection.query(preparedQuery);
         recordIndex = 0;
+        noRecordsCreated = true;
+        queryComplete = false;
       } catch (ConnectionException e) {
         throw new StageException(Errors.FORCE_08, e);
       }
@@ -731,6 +761,8 @@ public class ForceSource extends BaseSource {
       map.put(COUNT, Field.create(Field.Type.INTEGER, queryResult.getSize()));
       rec.set(Field.createListMap(map));
       rec.getHeader().setAttribute(ForceRecordCreator.SOBJECT_TYPE_ATTRIBUTE, sobjectType);
+      noRecordsCreated = false;
+      eventFired = false;
 
       batchMaker.addRecord(rec);
     } else {
@@ -754,6 +786,8 @@ public class ForceSource extends BaseSource {
         }
         final String sourceId = StringUtils.substring(conf.soqlQuery.replaceAll("[\n\r]", " "), 0, 100) + "::rowCount:" + recordIndex + (StringUtils.isEmpty(conf.offsetColumn) ? "" : ":" + offset);
         Record rec = recordCreator.createRecord(sourceId, record);
+        noRecordsCreated = false;
+        eventFired = false;
 
         batchMaker.addRecord(rec);
       }
@@ -766,7 +800,7 @@ public class ForceSource extends BaseSource {
           queryResult = null;
           lastQueryCompletedTime = System.currentTimeMillis();
           LOG.info("Query completed at: {}", lastQueryCompletedTime);
-          shouldSendNoMoreDataEvent = true;
+          queryComplete = true;
           if (conf.subscribeToStreaming) {
             // Switch to processing events
             nextSourceOffset = READ_EVENTS_FROM_NOW;
@@ -820,6 +854,9 @@ public class ForceSource extends BaseSource {
       }
     } else if (!message.isSuccessful()) {
       String error = (String) message.get("error");
+      if (error == null) {
+        error = message.get("failure").toString();
+      }
       LOG.info("Bayeux error message: {}", error);
 
       if (AUTHENTICATION_INVALID.equals(error)) {

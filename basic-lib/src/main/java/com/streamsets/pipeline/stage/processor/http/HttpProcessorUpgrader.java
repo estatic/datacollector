@@ -24,6 +24,7 @@ import com.streamsets.pipeline.config.upgrade.DataFormatUpgradeHelper;
 import com.streamsets.pipeline.lib.http.HttpCompressionType;
 import com.streamsets.pipeline.lib.http.JerseyClientUtil;
 import com.streamsets.pipeline.lib.http.logging.HttpConfigUpgraderUtil;
+import com.streamsets.pipeline.stage.common.MultipleValuesBehavior;
 import com.streamsets.pipeline.stage.util.tls.TlsConfigBeanUpgradeUtil;
 
 import java.util.ArrayList;
@@ -98,6 +99,12 @@ public class HttpProcessorUpgrader implements StageUpgrader {
         // fall through
       case 10:
         upgradeV10ToV11(configs);
+        if (toVersion == 11) {
+          break;
+        }
+      // fall through
+      case 11:
+        upgradeV11ToV12(configs);
         break;
       default:
         throw new IllegalStateException(Utils.format("Unexpected fromVersion {}", fromVersion));
@@ -169,5 +176,9 @@ public class HttpProcessorUpgrader implements StageUpgrader {
 
   private void upgradeV10ToV11(List<Config> configs) {
     HttpConfigUpgraderUtil.addDefaultRequestLoggingConfigs(configs, "conf.client");
+  }
+
+  private void upgradeV11ToV12(List<Config> configs) {
+    configs.add(new Config(joiner.join(CONF, "multipleValuesBehavior"), MultipleValuesBehavior.FIRST_ONLY));
   }
 }

@@ -723,7 +723,7 @@ public class PipelineStoreResource {
     }
     RestAPIUtils.injectPipelineInMDC(pipelineTitle + "/" + pipelineId);
     PipelineConfiguration pipelineConfig = store.create(user, pipelineId, pipelineTitle, description, false, draft,
-        new HashMap<String, Object>()
+        new HashMap<>()
     );
 
     if (pipelineType.equals(DATA_COLLECTOR_EDGE)) {
@@ -862,6 +862,7 @@ public class PipelineStoreResource {
       @PathParam("pipelineFragmentTitle") String pipelineFragmentTitle,
       @QueryParam("description") @DefaultValue("") String description,
       @QueryParam("draft") @DefaultValue("true") boolean draft,
+      @QueryParam("executionMode") ExecutionMode executionMode,
       List<StageConfigurationJson> stageConfigurations
   ) throws PipelineException {
     String pipelineId = pipelineFragmentTitle.replaceAll(PIPELINE_ID_REGEX, "") + UUID.randomUUID().toString();
@@ -873,6 +874,14 @@ public class PipelineStoreResource {
         description,
         draft
     );
+
+    if (executionMode != null) {
+      List<Config> newConfigs = createWithNewConfig(
+          pipelineFragmentConfig.getConfiguration(),
+          ImmutableMap.of("executionMode", new Config("executionMode", executionMode.name()))
+      );
+      pipelineFragmentConfig.setConfiguration(newConfigs);
+    }
 
     if (!CollectionUtils.isEmpty(stageConfigurations)) {
       List<StageConfiguration> stageInstances = BeanHelper.unwrapStageConfigurations(stageConfigurations);
@@ -1776,10 +1785,12 @@ public class PipelineStoreResource {
         .add(ImmutableMap.of("key", "spark.driver.cores", "value","1"))
         .add(ImmutableMap.of("key", "spark.executor.memory", "value","2G"))
         .add(ImmutableMap.of("key", "spark.executor.cores", "value","1"))
-        .add(ImmutableMap.of("key", "spark.executor.instances", "value","5"))
+        .add(ImmutableMap.of("key", "spark.dynamicAllocation.enabled", "value", "true"))
+        .add(ImmutableMap.of("key", "spark.shuffle.service.enabled", "value", "true"))
+        .add(ImmutableMap.of("key", "spark.dynamicAllocation.minExecutors", "value", "1"))
         .build();
     Map<String, Config> replacementConfigs = ImmutableMap.<String, Config>builder()
-        .put("executionMode", new Config("executionMode", ExecutionMode.STREAMING.name()))
+        .put("executionMode", new Config("executionMode", ExecutionMode.BATCH.name()))
         .put("sparkConfigs", new Config("sparkConfigs", sparkConfigsDefault))
         .put("logLevel", new Config("logLevel", "ERROR"))
         .put(

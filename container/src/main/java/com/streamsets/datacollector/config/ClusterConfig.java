@@ -37,7 +37,7 @@ public class ClusterConfig {
       }
   )
   @ValueChooserModel(SparkClusterTypeChooserValues.class)
-  public SparkClusterType clusterType;
+  public SparkClusterType clusterType = SparkClusterType.LOCAL;
 
   @ConfigDef(
       required = true,
@@ -48,9 +48,9 @@ public class ClusterConfig {
       defaultValue = "local[*]",
       displayPosition = 102,
       dependsOn = "clusterType",
-      triggeredByValue = "LOCAL"
+      triggeredByValue = {"LOCAL", "STANDALONE_SPARK_CLUSTER"}
   )
-  public String sparkMasterUrl;
+  public String sparkMasterUrl = "local[*]";
 
   @ConfigDef(
       required = true,
@@ -61,10 +61,10 @@ public class ClusterConfig {
       defaultValue = "CLIENT",
       displayPosition = 103,
       dependsOn = "clusterType",
-      triggeredByValue = "YARN"
+      triggeredByValue = {"YARN", "STANDALONE_SPARK_CLUSTER", "KUBERNETES"}
   )
   @ValueChooserModel(SparkDeployModeChooserValues.class)
-  public SparkDeployMode deployMode;
+  public SparkDeployMode deployMode = SparkDeployMode.CLIENT;
 
   @ConfigDef(
       required = false,
@@ -94,20 +94,20 @@ public class ClusterConfig {
           )
       }
   )
-  public String sparkAppName;
+  public String sparkAppName = "${pipeline:title()}" ;
 
   @ConfigDef(
       required = true,
       type = ConfigDef.Type.STRING,
       label = "Staging Directory",
-      description = "Staging directory path for copying StreamSets resources",
+      description = "Staging directory on the remote system for copying StreamSets resources",
       group = "CLUSTER",
       defaultValue = "/streamsets",
       displayPosition = 106,
       dependsOn = "clusterType",
-      triggeredByValue = "DATABRICKS"
+      triggeredByValue = {"DATABRICKS", "SQL_SERVER_BIG_DATA_CLUSTER", "AZURE_HD_INSIGHT"}
   )
-  public String stagingDir;
+  public String stagingDir = "/streamsets";
 
   @ConfigDef(
       required = true,
@@ -134,7 +134,7 @@ public class ClusterConfig {
       triggeredByValue = "true"
   )
   @ValueChooserModel(KeytabSourceChooserValues.class)
-  public KeytabSource yarnKerberosKeytabSource;
+  public KeytabSource yarnKerberosKeytabSource = KeytabSource.PROPERTIES_FILE;
 
   @ConfigDef(
       required = true,
@@ -160,6 +160,6 @@ public class ClusterConfig {
       dependsOn = "yarnKerberosKeytabSource",
       triggeredByValue = "PIPELINE"
   )
-  public String yarnKerberosPrincipal;
+  public String yarnKerberosPrincipal = "name@DOMAIN";
 
 }

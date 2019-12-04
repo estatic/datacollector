@@ -102,7 +102,8 @@ public class TestConfigDefinitionExtractor {
         lines = 2,
         evaluation = ConfigDef.Evaluation.EXPLICIT,
         mode = ConfigDef.Mode.JAVA,
-        elDefs = ELs.class
+        elDefs = ELs.class,
+        displayMode = ConfigDef.DisplayMode.ADVANCED
     )
     public String config;
   }
@@ -158,6 +159,7 @@ public class TestConfigDefinitionExtractor {
     Assert.assertNull(config.getModel());
     Assert.assertEquals("", config.getDependsOn());
     Assert.assertNull(config.getTriggeredByValues());
+    Assert.assertEquals(ConfigDef.DisplayMode.BASIC, config.getDisplayMode());
   }
 
   @Test
@@ -170,6 +172,8 @@ public class TestConfigDefinitionExtractor {
     Assert.assertNull(config.getDefaultValue());
     Assert.assertTrue(config.getElFunctionDefinitions().isEmpty());
     Assert.assertTrue(config.getElConstantDefinitions().isEmpty());
+
+    Assert.assertEquals(ConfigDef.DisplayMode.ADVANCED, config.getDisplayMode());
   }
 
   @Test
@@ -641,6 +645,42 @@ public class TestConfigDefinitionExtractor {
     }
     Assert.assertEquals(expectedNames, gotNames);
     Assert.assertEquals(expectedFieldNames, gotFieldNames);
+  }
+
+  public static class BeanA {
+
+    @ConfigDef(
+        label = "L",
+        required = true,
+        type = ConfigDef.Type.STRING
+    )
+    public String prop;
+
+  }
+
+  public static class BeanASubClass extends BeanA {
+
+    @ConfigDef(
+        label = "LShadow",
+        required = false,
+        type = ConfigDef.Type.STRING
+    )
+    public String prop;
+  }
+
+  @Test
+  public void testConfigBeanSubclassPropertyShadowing() {
+    List<ErrorMessage> errors = ConfigDefinitionExtractor.get().validate(BeanASubClass.class, ImmutableList.of(), "x");
+    Assert.assertTrue(errors.isEmpty());
+    List<ConfigDefinition> configs = ConfigDefinitionExtractor.get().extract(
+        BeanASubClass.class,
+        ImmutableList.of(),
+        "x"
+    );
+    Assert.assertEquals(1, configs.size());
+    Assert.assertEquals("prop", configs.get(0).getFieldName());
+    Assert.assertEquals("LShadow", configs.get(0).getLabel());
+    Assert.assertEquals(false, configs.get(0).isRequired());
   }
 
   @Test

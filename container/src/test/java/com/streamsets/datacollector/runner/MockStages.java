@@ -20,8 +20,10 @@ import com.streamsets.datacollector.classpath.ClasspathValidatorResult;
 import com.streamsets.datacollector.cluster.ClusterModeConstants;
 import com.streamsets.datacollector.config.ConfigDefinition;
 import com.streamsets.datacollector.config.CredentialStoreDefinition;
+import com.streamsets.datacollector.config.CredentialType;
 import com.streamsets.datacollector.config.InterceptorDefinition;
 import com.streamsets.datacollector.config.LineagePublisherDefinition;
+import com.streamsets.datacollector.config.LogLevel;
 import com.streamsets.datacollector.config.ModelDefinition;
 import com.streamsets.datacollector.config.ModelType;
 import com.streamsets.datacollector.config.PipelineConfiguration;
@@ -31,11 +33,13 @@ import com.streamsets.datacollector.config.PipelineFragmentDefinition;
 import com.streamsets.datacollector.config.PipelineRulesDefinition;
 import com.streamsets.datacollector.config.RawSourceDefinition;
 import com.streamsets.datacollector.config.ServiceDefinition;
+import com.streamsets.datacollector.config.SparkClusterType;
 import com.streamsets.datacollector.config.StageConfiguration;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.config.StageLibraryDefinition;
 import com.streamsets.datacollector.config.StageLibraryDelegateDefinitition;
 import com.streamsets.datacollector.creation.PipelineConfigBean;
+import com.streamsets.datacollector.definition.TestStageDefinitionExtractor;
 import com.streamsets.datacollector.el.ElConstantDefinition;
 import com.streamsets.datacollector.el.ElFunctionDefinition;
 import com.streamsets.datacollector.restapi.bean.EventDefinitionJson;
@@ -80,7 +84,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class MockStages {
 
@@ -616,6 +622,9 @@ public class MockStages {
     return new MockStageLibraryTask.ClusterBatchBuilder(cl).build();
   }
 
+  public static StageLibraryTask createStreamingStageLibrary(ClassLoader cl) {
+    return new MockStageLibraryTask.StreamingBuilder(cl).build();
+  }
 
   public static StageLibraryTask createStageLibrary() {
     return createStageLibrary(Thread.currentThread().getContextClassLoader());
@@ -627,6 +636,7 @@ public class MockStages {
 
   public static class MockStageLibraryTask implements StageLibraryTask {
     private final List<StageDefinition> stages;
+    private StageLibraryDefinition stageLibraryDefinition;
 
     private MockStageLibraryTask(Collection<StageDefinition> stages) {
       this.stages = ImmutableList.copyOf(stages);
@@ -771,6 +781,15 @@ public class MockStages {
       return Collections.emptyMap();
     }
 
+    public void setLibraryDefinition(StageLibraryDefinition stageLibraryDefinition) {
+      this.stageLibraryDefinition = stageLibraryDefinition;
+    }
+
+    @Override
+    public StageLibraryDefinition getStageLibraryDefinition(String libraryName) {
+      return stageLibraryDefinition;
+    }
+
     @Override
     public void releaseStageClassLoader(ClassLoader classLoader) {
     }
@@ -787,11 +806,11 @@ public class MockStages {
         ConfigDefinition brokerHostConfig = new ConfigDefinition("brokerHost", ConfigDef.Type.STRING, "brokerHost", "",
           "", true, "", "brokerHost", null, "", null, 10, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), 0, 0,
-          "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap());
+          "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap(), ConfigDef.DisplayMode.BASIC);
         ConfigDefinition brokerPortConfig = new ConfigDefinition("brokerPort", ConfigDef.Type.NUMBER, "brokerPort", "",
           "", true, "", "brokerPort", null, "", null, 10, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), 0, 0,
-          "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap());
+          "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap(), ConfigDef.DisplayMode.BASIC);
 
         RawSourceDefinition rawSourceDefinition = new RawSourceDefinition(MockRawSourcePreviewer.class.getName(), "*/*",
           Arrays.asList(brokerHostConfig, brokerPortConfig));
@@ -821,12 +840,23 @@ public class MockStages {
           .withStageDef(Mockito.mock(StageDef.class))
           .build();
 
-        ModelDefinition m = new ModelDefinition(ModelType.FIELD_SELECTOR_MULTI_VALUE, null, Collections.<String>emptyList(),
+
+        ModelDefinition singleFieldModelDef = new ModelDefinition(ModelType.FIELD_SELECTOR, null, Collections.<String>emptyList(),
+                Collections.<String>emptyList(), null, null, null);
+        ModelDefinition multiFieldModelDef = new ModelDefinition(ModelType.FIELD_SELECTOR_MULTI_VALUE, null, Collections.<String>emptyList(),
           Collections.<String>emptyList(), null, null, null);
+
+        StageDefinition fieldPDef = new StageDefinitionBuilder(cl, MProcessor.class, "fieldProcessorName")
+          .withStageDef(Mockito.mock(StageDef.class))
+          .withConfig(
+            createFieldDef("singleField", ConfigDef.Type.MODEL, singleFieldModelDef),
+            createFieldDef("multiField", ConfigDef.Type.MODEL, multiFieldModelDef))
+          .build();
+
         ConfigDefinition stageReqField = new ConfigDefinition("stageRequiredFields", ConfigDef.Type.MODEL, "stageRequiredFields",
-          "stageRequiredFields", null, false, "groupName", "stageRequiredFieldName", m, "", null, 0, Collections.<ElFunctionDefinition>emptyList(),
+          "stageRequiredFields", null, false, "groupName", "stageRequiredFieldName", multiFieldModelDef, "", null, 0, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0, Collections.<Class> emptyList(),
-          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
+          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>(), ConfigDef.DisplayMode.BASIC);
 
         StageDefinition tDef = new StageDefinitionBuilder(cl, MTarget.class, "targetName")
           .withStageDef(Mockito.mock(StageDef.class))
@@ -865,7 +895,7 @@ public class MockStages {
           "requiredFieldConfName", ConfigDef.Type.STRING, "requiredFieldLabel", "requiredFieldDesc", 10, true,
           "groupName", "requiredFieldFieldName", null, "", null, 0, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0, Collections.<Class> emptyList(),
-          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
+          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>(), ConfigDef.DisplayMode.BASIC);
 
         StageDefinition targetWithReqField = new StageDefinitionBuilder(cl, MTarget.class, "targetWithReqField")
           .withStageDef(Mockito.mock(StageDef.class))
@@ -893,7 +923,8 @@ public class MockStages {
             0,
             Collections.<Class> emptyList(),
             ConfigDef.Evaluation.IMPLICIT,
-            new HashMap<>()
+            new HashMap<>(),
+            ConfigDef.DisplayMode.BASIC
         );
 
         StageDefinition targetWithRequiredMapField = new StageDefinitionBuilder(cl, MTarget.class, "targetWithRequiredMapField")
@@ -906,7 +937,7 @@ public class MockStages {
           "errorTargetConfName", ConfigDef.Type.STRING, "errorTargetConfLabel", "errorTargetConfDesc",
           "/SDC_HOME/errorDir", true, "groupName", "errorTargetConfFieldName", null, "", null , 0,
           Collections.<ElFunctionDefinition>emptyList(), Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0,
-          Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
+          Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>(), ConfigDef.DisplayMode.BASIC);
 
         StageDefinition eDef = new StageDefinitionBuilder(cl, ETarget.class, "errorTarget")
           .withStageDef(Mockito.mock(StageDef.class))
@@ -941,7 +972,7 @@ public class MockStages {
           "dependencyConfName", ConfigDef.Type.NUMBER, "dependencyConfLabel", "dependencyConfDesc", 5, true,
           "groupName", "dependencyConfFieldName", null, "", null, 0, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0, Collections.<Class> emptyList(),
-          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
+          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>(), ConfigDef.DisplayMode.BASIC);
         List<Object> triggeredBy = new ArrayList<>();
         triggeredBy.add(1);
         Map<String, List<Object>> triggered = new HashMap<>(1);
@@ -952,7 +983,7 @@ public class MockStages {
           "triggeredConfName", ConfigDef.Type.NUMBER, "triggeredConfLabel", "triggeredConfDesc", 10, true,
           "groupName", "triggeredConfFieldName", null, "dependencyConfName", triggeredBy, 0,
           Collections.<ElFunctionDefinition>emptyList(), Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0,
-          Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, triggered);
+          Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, triggered, ConfigDef.DisplayMode.BASIC);
 
         StageDefinition swcDef = new StageDefinitionBuilder(cl, MSource.class, "sourceWithConfigsName")
           .withStageDef(Mockito.mock(StageDef.class))
@@ -988,7 +1019,7 @@ public class MockStages {
           "regularConfName", ConfigDef.Type.NUMBER, "regularConfLabel", "regularConfDesc", 10, true,
           "groupName", "regularConfFieldName", null, "", null, 0, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0, Collections.<Class> emptyList(),
-          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
+          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>(), ConfigDef.DisplayMode.BASIC);
 
         List<ConfigDefinition> list = new ArrayList<>();
         list.add(regularConf);
@@ -999,7 +1030,7 @@ public class MockStages {
           "complexConfName", ConfigDef.Type.MODEL, "complexConfLabel", "complexConfDesc", null, true,
           "groupName", "complexConfFieldName", modelDefinition, "", null, 0, Collections.<ElFunctionDefinition>emptyList(),
           Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0, Collections.<Class> emptyList(),
-          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>());
+          ConfigDef.Evaluation.IMPLICIT, new HashMap<String, List<Object>>(), ConfigDef.DisplayMode.BASIC);
 
         StageDefinition complexStage = new StageDefinitionBuilder(cl,ComplexSource.class, "complexStageName")
           .withStageDef(Mockito.mock(StageDef.class))
@@ -1025,6 +1056,7 @@ public class MockStages {
               pushSourceDef,
               hiddenPDef,
               pDef,
+              fieldPDef,
               tDef,
               tEventDef,
               teDef,
@@ -1098,7 +1130,8 @@ public class MockStages {
               null,
               false,
               Collections.emptyList(),
-              null
+              null,
+              oldDef.getTags()
           );
           stages.put(name, newDef);
         } else {
@@ -1112,15 +1145,24 @@ public class MockStages {
       }
     }
 
+    private static ConfigDefinition createFieldDef(String configName,
+                                                   ConfigDef.Type configType,
+                                                   ModelDefinition modelDefinition) {
+      return new ConfigDefinition(configName, configType, configName + "Label", configName + "Desc",
+              "", true, "", configName + "FieldName", modelDefinition, "", null, 10, Collections.<ElFunctionDefinition>emptyList(),
+              Collections.<ElConstantDefinition>emptyList(), 0, 0,
+              "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap(), ConfigDef.DisplayMode.BASIC);
+    }
+
     public static RawSourceDefinition getRawSourceDefinition() {
       ConfigDefinition brokerHostConfig = new ConfigDefinition("brokerHost", ConfigDef.Type.STRING, "brokerHost", "",
         "", true, "", "brokerHost", null, "", null, 10, Collections.<ElFunctionDefinition>emptyList(),
         Collections.<ElConstantDefinition>emptyList(), 0, 0,
-        "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap());
+        "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap(), ConfigDef.DisplayMode.BASIC);
       ConfigDefinition brokerPortConfig = new ConfigDefinition("brokerPort", ConfigDef.Type.NUMBER, "brokerPort", "",
         "", true, "", "brokerPort", null, "", null, 10, Collections.<ElFunctionDefinition>emptyList(),
         Collections.<ElConstantDefinition>emptyList(), 0, 0,
-        "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap());
+        "", 0, Collections.<Class>emptyList(), ConfigDef.Evaluation.IMPLICIT, Collections.<String, List<Object>>emptyMap(), ConfigDef.DisplayMode.BASIC);
 
       RawSourceDefinition rawSourceDefinition = new RawSourceDefinition(MockRawSourcePreviewer.class.getName(), "*/*",
         Arrays.asList(brokerHostConfig, brokerPortConfig));
@@ -1133,7 +1175,7 @@ public class MockStages {
         "errorTargetConfName", ConfigDef.Type.STRING, "errorTargetConfLabel", "errorTargetConfDesc",
         "/SDC_HOME/errorDir", true, "groupName", "errorTargetConfFieldName", null, "", null , 0,
         Collections.<ElFunctionDefinition>emptyList(), Collections.<ElConstantDefinition>emptyList(), Long.MIN_VALUE, Long.MAX_VALUE, "text/plain", 0,
-        Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, null);
+        Collections.<Class> emptyList(), ConfigDef.Evaluation.IMPLICIT, null, ConfigDef.DisplayMode.BASIC);
 
       return new StageDefinitionBuilder(cl, ETarget.class, "errorTarget")
         .withStageDef(Mockito.mock(StageDef.class))
@@ -1245,6 +1287,90 @@ public class MockStages {
         return new MockStageLibraryTask(ImmutableList.of(clusterStageDef, errorTargetStageDef, statsTargetStageDef));
       }
     }
+
+    public static class StreamingBuilder {
+      private final StageDefinition streamingSourceDef;
+      private final StageDefinition streamingTargetDef;
+
+      public StreamingBuilder() {
+        this(Thread.currentThread().getContextClassLoader());
+      }
+
+      public StreamingBuilder(ClassLoader cl) {
+        streamingSourceDef = new StageDefinitionBuilder(cl, MSource.class, "streamingSource")
+            .withStageDef(Mockito.mock(StageDef.class))
+            .withExecutionModes(ExecutionMode.STREAMING, ExecutionMode.BATCH)
+            .withRawSourceDefintion(getRawSourceDefinition())
+            .build();
+
+        streamingTargetDef = new StageDefinitionBuilder(cl, MTarget.class, "streamingTarget")
+            .withStageDef(Mockito.mock(StageDef.class))
+            .withExecutionModes(ExecutionMode.STREAMING, ExecutionMode.BATCH)
+            .withRawSourceDefintion(getRawSourceDefinition())
+            .build();
+      }
+
+      public StageLibraryTask build() {
+        MockStageLibraryTask libraryTask =  new MockStageLibraryTask(ImmutableList.of(
+            streamingSourceDef,
+            streamingTargetDef
+        ));
+        Properties props = new Properties();
+        props.put(StageLibraryDefinition.CLUSTER_CONFIG_CLUSTER_TYPES, "LOCAL,YARN");
+        StageLibraryDefinition libDef = new StageLibraryDefinition(
+            TestStageDefinitionExtractor.class.getClassLoader(),
+            "mock",
+            "MOCK",
+            props,
+            null,
+            null,
+            null
+        );
+        libraryTask.setLibraryDefinition(libDef);
+        return libraryTask;
+      }
+    }
+  }
+
+  public static PipelineConfiguration createPipelineConfigurationWithStreamingOnlyStage(
+      ExecutionMode executionMode,
+      SparkClusterType clusterType
+  ) {
+    List<StageConfiguration> stages = new ArrayList<>();
+    StageConfiguration source = new StageConfigurationBuilder("s", "streamingSource")
+        .withOutputLanes("a")
+        .build();
+    stages.add(source);
+    StageConfiguration target = new StageConfigurationBuilder("t", "streamingTarget")
+        .withInputLanes("a")
+        .build();
+    stages.add(target);
+    return new PipelineConfiguration(
+        PipelineStoreTask.SCHEMA_VERSION,
+        PipelineConfigBean.VERSION,
+        "pipelineId",
+        UUID.randomUUID(),
+        "label",
+        null,
+        Arrays.asList(
+            new Config("executionMode", executionMode.name()),
+            new Config("clusterConfig.clusterType", clusterType.name()),
+            new Config("logLevel", LogLevel.ERROR.name()),
+            new Config("clusterConfig.sparkAppName", "sparkAppName"),
+            new Config("databricksConfig.baseUrl", "baseUrl"),
+            new Config("databricksConfig.credentialType", CredentialType.TOKEN.name()),
+            new Config("databricksConfig.token", "token"),
+            new Config("clusterConfig.sparkAppName", "sparkAppName"),
+            new Config("retryAttempts", 3),
+            new Config("webhookConfigs", Collections.emptyList())
+        ),
+        null,
+        stages,
+        null,
+        null,
+        Collections.emptyList(),
+        Collections.emptyList()
+    );
   }
 
   @SuppressWarnings("unchecked")
@@ -2090,6 +2216,28 @@ public class MockStages {
       .withConfig(new Config("stageRequiredFields", Arrays.asList("dummy")))
       .withInputLanes("a")
       .build();
+    stages.add(target);
+    return pipeline(stages);
+  }
+
+  public static PipelineConfiguration createPipelineConfigurationWithFieldNames(String fieldName,
+                                                                                String ... multiFieldNames) {
+    List<StageConfiguration> stages = new ArrayList<>();
+    StageConfiguration source = new StageConfigurationBuilder("s", "sourceName")
+            .withOutputLanes("s")
+            .build();
+    stages.add(source);
+    StageConfiguration processor = new StageConfigurationBuilder("p", "fieldProcessorName")
+            .withInputLanes("s")
+            .withOutputLanes("p")
+            .withConfig(
+                    new Config("singleField", fieldName),
+                    new Config("multiField", Arrays.stream(multiFieldNames).collect(Collectors.toList())))
+            .build();
+    stages.add(processor);
+    StageConfiguration target = new StageConfigurationBuilder("t", "targetName")
+            .withInputLanes("p")
+            .build();
     stages.add(target);
     return pipeline(stages);
   }

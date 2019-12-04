@@ -23,18 +23,18 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root</artifactId>
-    <version>3.10.0-SNAPSHOT</version>
+    <version>3.13.0-SNAPSHOT</version>
     <relativePath>../root</relativePath>
   </parent>
   <artifactId>streamsets-datacollector-cluster-bootstrap-api</artifactId>
-  <version>3.10.0-SNAPSHOT</version>
+  <version>3.13.0-SNAPSHOT</version>
   <description>StreamSets Data Collector Cluster Bootstrap API</description>
   <name>StreamSets Data Collector Cluster Bootstrap API</name>
   <packaging>jar</packaging>
 
   <properties>
     <avro.version>1.7.7</avro.version>
-    <confluent.version>2.0.1</confluent.version>
+    <confluent.version>5.3.1</confluent.version>
     <spark.version>2.1.0</spark.version>
     <kafka.version>0.8.2.0</kafka.version>
   </properties>

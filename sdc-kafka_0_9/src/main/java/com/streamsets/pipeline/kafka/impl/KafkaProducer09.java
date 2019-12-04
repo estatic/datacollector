@@ -21,6 +21,7 @@ import com.streamsets.pipeline.kafka.api.PartitionStrategy;
 import com.streamsets.pipeline.lib.kafka.KafkaConstants;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -56,14 +57,16 @@ public class KafkaProducer09 extends BaseKafkaProducer09 {
   }
 
   @Override
-  protected KafkaProducer<String, byte[]> createKafkaProducer() {
+  protected Producer<Object, byte[]> createKafkaProducer() {
     Properties props = new Properties();
     // bootstrap servers
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, metadataBrokerList);
     // request.required.acks
     props.put(ProducerConfig.ACKS_CONFIG, ACKS_DEFAULT);
     // partitioner.class
-    props.put(KafkaConstants.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    props.put(
+        KafkaConstants.KEY_SERIALIZER_CLASS_CONFIG,
+        kafkaProducerConfigs.get(KafkaConstants.KEY_SERIALIZER_CLASS_CONFIG));
     props.put(KafkaConstants.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
     configurePartitionStrategy(props, partitionStrategy);
     addUserConfiguredProperties(kafkaProducerConfigs, props);

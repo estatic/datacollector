@@ -29,7 +29,7 @@ import com.streamsets.pipeline.api.impl.ClusterSource;
 import com.streamsets.pipeline.kafka.api.KafkaOriginGroups;
 
 @StageDef(
-  version = 7,
+  version = 9,
   label = "Kafka Consumer",
   description = "Reads data from Kafka",
   execution = {ExecutionMode.CLUSTER_YARN_STREAMING, ExecutionMode.CLUSTER_MESOS_STREAMING, ExecutionMode.STANDALONE},
@@ -37,6 +37,7 @@ import com.streamsets.pipeline.kafka.api.KafkaOriginGroups;
   icon = "kafka.png",
   recordsByRef = true,
   upgrader = KafkaSourceUpgrader.class,
+  upgraderDef = "upgrader/KafkaDSource.yaml",
   onlineHelpRefUrl ="index.html?contextID=task_npx_xgf_vq"
 )
 @RawSource(rawSourcePreviewer = KafkaRawSourcePreviewer.class, mimeType = "*/*")

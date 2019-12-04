@@ -26,8 +26,8 @@ import com.streamsets.pipeline.api.ValueChooserModel;
 import com.streamsets.pipeline.api.base.configurablestage.DProcessor;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingMode;
 import com.streamsets.pipeline.stage.processor.scripting.ProcessingModeChooserValues;
-import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordType;
-import com.streamsets.pipeline.stage.processor.scripting.config.ScriptRecordTypeValueChooser;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordType;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordTypeValueChooser;
 
 import java.util.Map;
 
@@ -45,6 +45,7 @@ import java.util.Map;
         ExecutionMode.EMR_BATCH
     },
     upgrader = JavaScriptProcessorUpgrader.class,
+    upgraderDef = "upgrader/JavaScriptDProcessor.yaml",
     producesEvents = true,
     flags = StageBehaviorFlags.USER_CODE_INJECTION,
     onlineHelpRefUrl ="index.html?contextID=task_mzc_1by_nr"
@@ -117,7 +118,9 @@ public class JavaScriptDProcessor extends DProcessor {
     required = false,
     defaultValue = "{}",
     type = ConfigDef.Type.MAP,
-    label = "User-Defined Parameters",
+    label = "Parameters in Script",
+    description = "Parameters and values for use in script.\n" +
+        "Access in user script as sdc.userParams.",
     displayPosition = 80,
     group = "ADVANCED"
   )

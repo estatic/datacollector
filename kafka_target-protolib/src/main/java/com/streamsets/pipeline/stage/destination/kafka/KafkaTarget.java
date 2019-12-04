@@ -24,6 +24,7 @@ import com.streamsets.pipeline.api.lineage.EndPointType;
 import com.streamsets.pipeline.api.lineage.LineageEvent;
 import com.streamsets.pipeline.api.lineage.LineageEventType;
 import com.streamsets.pipeline.api.lineage.LineageSpecificAttribute;
+import com.streamsets.pipeline.kafka.api.PartitionStrategy;
 import com.streamsets.pipeline.kafka.api.SdcKafkaProducer;
 import com.streamsets.pipeline.lib.generator.DataGenerator;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
@@ -163,6 +164,7 @@ public class KafkaTarget extends BaseTarget {
               currentRecord = null;
               generator.close();
               byte[] bytes = baos.toByteArray();
+              // multiple records squashed.. so using partition as the message key
               kafkaProducer.enqueueMessage(entryTopic, bytes, partition);
             } catch (StageException ex) {
               errorRecordHandler.onError(
@@ -224,13 +226,20 @@ public class KafkaTarget extends BaseTarget {
     long count = 0;
     Iterator<Record> records = batch.getRecords();
     List<Record> recordList = new ArrayList<>();
+
     while (records.hasNext()) {
       Record record = records.next();
       recordList.add(record);
       try {
         String topic = conf.getTopic(record);
-        Object partitionKey = conf.getPartitionKey(record, topic);
-        kafkaProducer.enqueueMessage(topic, serializeRecord(record), partitionKey);
+        Object messageKey = conf.getMessageKey(record);
+        if(messageKey == null || messageKey.toString().isEmpty()
+            || conf.partitionStrategy == PartitionStrategy.EXPRESSION){
+
+          messageKey = conf.getPartitionKey(record, topic);
+        }
+
+        kafkaProducer.enqueueMessage(topic, serializeRecord(record), messageKey);
         count++;
         sendLineageEventIfNeeded(topic);
       } catch (KafkaConnectionException ex) {

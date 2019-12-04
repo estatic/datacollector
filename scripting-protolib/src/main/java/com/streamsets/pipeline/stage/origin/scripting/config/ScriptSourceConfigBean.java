@@ -17,6 +17,8 @@ package com.streamsets.pipeline.stage.origin.scripting.config;
 
 import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.ValueChooserModel;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordType;
+import com.streamsets.pipeline.stage.util.scripting.config.ScriptRecordTypeValueChooser;
 
 import java.util.Map;
 
@@ -27,7 +29,8 @@ public class ScriptSourceConfigBean {
       type = ConfigDef.Type.NUMBER,
       defaultValue = "1000",
       label = "Batch Size",
-      description = "Number of records that will be generated for single batch.",
+      description = "Number of records to generate in a single batch.\n" +
+          "Access in user script with sdc.batchSize.",
       min = 1,
       max = Integer.MAX_VALUE,
       group = "PERFORMANCE"
@@ -39,7 +42,8 @@ public class ScriptSourceConfigBean {
       type = ConfigDef.Type.NUMBER,
       defaultValue = "1",
       label = "Number of Threads",
-      description = "Number of concurrent threads that will be generating data in parallel.",
+      description = "Number of concurrent threads that generate data in parallel.\n" +
+          "Access in user script with sdc.numThreads.",
       min = 1,
       max = Integer.MAX_VALUE,
       group = "PERFORMANCE"
@@ -62,7 +66,9 @@ public class ScriptSourceConfigBean {
       required = false,
       defaultValue = "{}",
       type = ConfigDef.Type.MAP,
-      label = "Parameters for User Code",
+      label = "Parameters in Script",
+      description = "Parameters and values for use in script.\n" +
+          "Access in user script as sdc.userParams.",
       displayPosition = 80,
       group = "ADVANCED"
   )

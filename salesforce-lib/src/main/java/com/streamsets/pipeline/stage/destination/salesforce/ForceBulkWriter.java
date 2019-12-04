@@ -27,6 +27,8 @@ import com.sforce.async.ContentType;
 import com.sforce.async.JobInfo;
 import com.sforce.async.JobStateEnum;
 import com.sforce.async.OperationEnum;
+import com.sforce.soap.partner.PartnerConnection;
+import com.sforce.ws.ConnectionException;
 import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
@@ -49,6 +51,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -59,6 +62,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 
 public class ForceBulkWriter extends ForceWriter {
   private static final Logger LOG = LoggerFactory.getLogger(ForceBulkWriter.class);
@@ -74,6 +78,11 @@ public class ForceBulkWriter extends ForceWriter {
       OperationType.UPSERT_CODE, OperationEnum.upsert
   );
 
+  private static final TimeZone TZ = TimeZone.getTimeZone("GMT");
+  private final SimpleDateFormat datetimeFormat = new SimpleDateFormat("yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z\'");
+  private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+  private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
+
   class JobBatches {
     final JobInfo job;
     final List<BatchInfo> batchInfoList;
@@ -86,10 +95,20 @@ public class ForceBulkWriter extends ForceWriter {
     }
   }
 
-  public ForceBulkWriter(Map<String, String> fieldMappings, BulkConnection bulkConnection, Target.Context context) {
-    super(fieldMappings);
+  public ForceBulkWriter(
+      PartnerConnection partnerConnection,
+      String sObject,
+      Map<String, String> customMappings,
+      BulkConnection bulkConnection,
+      Target.Context context
+  ) throws ConnectionException {
+    super(partnerConnection, sObject, customMappings);
     this.bulkConnection = bulkConnection;
     this.context = context;
+
+    datetimeFormat.setTimeZone(TZ);
+    dateFormat.setTimeZone(TZ);
+    timeFormat.setTimeZone(TZ);
   }
 
   @Override
@@ -286,7 +305,21 @@ public class ForceBulkWriter extends ForceWriter {
           (op == OperationEnum.update || op == OperationEnum.upsert)) {
         field = Field.create(NA);
       }
-      map.put(sFieldName, field);
+
+      switch (field.getType()) {
+        case DATE:
+          map.put(sFieldName, Field.create(dateFormat.format(field.getValue())));
+          break;
+        case TIME:
+          map.put(sFieldName, Field.create(timeFormat.format(field.getValue())));
+          break;
+        case DATETIME:
+          map.put(sFieldName, Field.create(datetimeFormat.format(field.getValue())));
+          break;
+        default:
+          map.put(sFieldName, field);
+          break;
+      }
     }
 
     outRecord.set(Field.createListMap(map));

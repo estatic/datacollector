@@ -39,9 +39,9 @@ import com.streamsets.datacollector.execution.metrics.MetricsEventRunnable;
 import com.streamsets.datacollector.json.ObjectMapperFactory;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.metrics.MetricsConfigurator;
-import com.streamsets.datacollector.restapi.bean.HistogramJson;
-import com.streamsets.datacollector.restapi.bean.MeterJson;
-import com.streamsets.datacollector.restapi.bean.MetricRegistryJson;
+import com.streamsets.datacollector.event.json.HistogramJson;
+import com.streamsets.datacollector.event.json.MeterJson;
+import com.streamsets.datacollector.event.json.MetricRegistryJson;
 import com.streamsets.datacollector.runner.BatchContextImpl;
 import com.streamsets.datacollector.runner.BatchImpl;
 import com.streamsets.datacollector.runner.BatchListener;
@@ -59,7 +59,7 @@ import com.streamsets.datacollector.runner.PushSourceContextDelegate;
 import com.streamsets.datacollector.runner.RunnerPool;
 import com.streamsets.datacollector.runner.SourceOffsetTracker;
 import com.streamsets.datacollector.runner.SourcePipe;
-import com.streamsets.datacollector.runner.SourceResponseSink;
+import com.streamsets.datacollector.runner.SourceResponseSinkImpl;
 import com.streamsets.datacollector.runner.StageContext;
 import com.streamsets.datacollector.runner.StageOutput;
 import com.streamsets.datacollector.runner.StagePipe;
@@ -352,7 +352,8 @@ public class ProductionPipelineRunner implements PipelineRunner, PushSourceConte
       stageRuntime.getDefinition().getType().isOneOf(StageType.EXECUTOR, StageType.TARGET),
       "Invalid lifecycle event stage type: " + stageRuntime.getDefinition().getType()
     );
-    stageRuntime.execute(null, 1000, batch, null, errorSink, new EventSink(), new ProcessedSink(), new SourceResponseSink());
+    stageRuntime.execute(null, 1000, batch, null, errorSink, new EventSink(),
+        new ProcessedSink(), new SourceResponseSinkImpl());
 
     // Pipeline lifecycle stage generating error record is fatal error
     if(!errorSink.getErrorRecords().isEmpty()) {
@@ -497,6 +498,8 @@ public class ProductionPipelineRunner implements PipelineRunner, PushSourceConte
     Map<String, Object> stageBatchMetrics = new HashMap<>();
 
     try {
+      batchContext.ensureState();
+
       Map<String, Object> batchMetrics = originPipe.finishBatchContext(batchContext);
 
       if (isStatsAggregationEnabled()) {
@@ -535,6 +538,7 @@ public class ProductionPipelineRunner implements PipelineRunner, PushSourceConte
       // Returning false so that origin can properly communicate back that this request wasn't processed
       return false;
     } finally {
+      batchContext.setProcessed(true);
       PipelineEL.unsetConstantsInContext();
       JobEL.unsetConstantsInContext();
     }

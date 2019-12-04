@@ -22,7 +22,7 @@ import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.kafka.api.SdcKafkaProducer;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -35,7 +35,7 @@ import java.util.concurrent.Future;
 
 public abstract class BaseKafkaProducer09 implements SdcKafkaProducer {
 
-  private KafkaProducer producer;
+  private Producer producer;
   private final List<Future<RecordMetadata>> futureList;
   private final boolean sendWriteResponse;
 
@@ -58,8 +58,8 @@ public abstract class BaseKafkaProducer09 implements SdcKafkaProducer {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void enqueueMessage(String topic, Object message, Object partitionKey) {
-    ProducerRecord e = new ProducerRecord<>(topic, partitionKey, message);
+  public void enqueueMessage(String topic, Object message, Object messageKey) {
+    ProducerRecord e = new ProducerRecord<>(topic, messageKey, message);
     // send will place this record in the buffer to be batched later
     futureList.add(producer.send(e));
   }
@@ -112,7 +112,7 @@ public abstract class BaseKafkaProducer09 implements SdcKafkaProducer {
     return Kafka09Constants.KAFKA_VERSION;
   }
 
-  protected abstract KafkaProducer<String, byte[]> createKafkaProducer();
+  protected abstract Producer<Object, byte[]> createKafkaProducer();
 
   protected abstract StageException createWriteException(Exception e);
 

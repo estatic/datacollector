@@ -136,8 +136,12 @@ public class TestStandalonePipelineManager {
 
     @Provides @Singleton
     public RuntimeInfo providesRuntimeInfo() {
-      RuntimeInfo runtimeInfo = new StandaloneRuntimeInfo(RuntimeModule.SDC_PROPERTY_PREFIX, new MetricRegistry(),
-        Arrays.asList(TestStandalonePipelineManager.class.getClassLoader()));
+      RuntimeInfo runtimeInfo = new StandaloneRuntimeInfo(
+          RuntimeInfo.SDC_PRODUCT,
+          RuntimeModule.SDC_PROPERTY_PREFIX,
+          new MetricRegistry(),
+          Arrays.asList(TestStandalonePipelineManager.class.getClassLoader())
+      );
 
       File targetDir = new File("target", UUID.randomUUID().toString());
       targetDir.mkdir();
@@ -239,7 +243,8 @@ public class TestStandalonePipelineManager {
             PreviewerListener listener,
             ObjectGraph objectGraph,
             List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
-            Function<Object, Void> afterActionsFunction
+            Function<Object, Void> afterActionsFunction,
+            boolean remote
         ) {
           Previewer mock = Mockito.mock(Previewer.class);
           Mockito.when(mock.getId()).thenReturn(UUID.randomUUID().toString());
@@ -331,7 +336,7 @@ public class TestStandalonePipelineManager {
     Previewer previewer = pipelineManager.createPreviewer("user", "abcd", "0", interceptorConfs, p -> {
       this.afterActionsFunctionCallParam = p;
       return null;
-    });
+    }, false);
     assertEquals(previewer, pipelineManager.getPreviewer(previewer.getId()));
     assertEquals(interceptorConfs, previewer.getInterceptorConfs());
     ((StandaloneAndClusterPipelineManager)pipelineManager).outputRetrieved(previewer.getId());

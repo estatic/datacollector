@@ -20,6 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.streamsets.datacollector.config.ConfigDefinition;
+import com.streamsets.datacollector.config.KeytabSource;
 import com.streamsets.datacollector.config.PipelineGroups;
 import com.streamsets.datacollector.config.ServiceConfiguration;
 import com.streamsets.datacollector.config.ServiceDefinition;
@@ -36,7 +37,6 @@ import com.streamsets.datacollector.el.ELVariables;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.record.PathElement;
 import com.streamsets.datacollector.record.RecordImpl;
-import com.streamsets.datacollector.security.HadoopConfigConstants;
 import com.streamsets.datacollector.security.SecurityConfiguration;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
 import com.streamsets.datacollector.util.Configuration;
@@ -63,6 +63,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -70,6 +71,15 @@ import java.util.stream.Collectors;
  */
 public class ValidationUtil {
   private static final Logger LOG = LoggerFactory.getLogger(ValidationUtil.class);
+
+  //Have to be kept in sync with hadoop-common
+  //This is to avoid adding a dependency to hadoop-common
+  public static final String IMPERSONATION_ALWAYS_CURRENT_USER = "hadoop.always.impersonate.current.user";
+
+  public static final String ALLOW_KEYTAB_PROPERTY = "kerberos.pipeline.keytab.allowed";
+  public static final boolean ALLOW_KEYTAB_DEFAULT = true;
+
+  private static final Pattern CONTAINS_EXPRESSION_PATTERN = Pattern.compile(".*\\$\\{.*}.*");
 
   /**
    * Resolve stage aliases (e.g. when a stage is renamed).
@@ -143,6 +153,35 @@ public class ValidationUtil {
           stageConf.addConfig(config);
         }
       }
+
+      for(ServiceConfiguration serviceConf : stageConf.getServices()) {
+        addMissingConfigsToService(stageLibrary, stageConf, serviceConf);
+      }
+    }
+  }
+
+  /**
+   * Add any missing configs to the service configuration.
+   */
+  public static void addMissingConfigsToService(StageLibraryTask stageLibrary, StageConfiguration stageConf, ServiceConfiguration serviceConf) {
+    ServiceDefinition serviceDef = stageLibrary.getServiceDefinition(serviceConf.getService(), false);
+    if (serviceDef != null) {
+      for (ConfigDefinition configDef : serviceDef.getConfigDefinitions()) {
+        String configName = configDef.getName();
+        Config config = serviceConf.getConfig(configName);
+        if (config == null) {
+          Object defaultValue = configDef.getDefaultValue();
+          LOG.warn(
+            "Service {} of stage '{}' missing configuration '{}', adding with '{}' as default",
+            serviceConf.getService().getName(),
+            stageConf.getInstanceName(),
+            configName,
+            defaultValue
+          );
+          config = new Config(configName, defaultValue);
+          serviceConf.addConfig(config);
+        }
+      }
     }
   }
 
@@ -166,16 +205,19 @@ public class ValidationUtil {
         false
     );
     if (stageDef == null) {
-      // stage configuration refers to an undefined stage definition
-      issues.add(
-          issueCreator.create(
-              stageConf.getInstanceName(),
-              ValidationError.VALIDATION_0006,
-              stageConf.getLibrary(),
-              stageConf.getStageName(),
-              stageConf.getStageVersion()
-          )
-      );
+      if(stageLibrary.getLegacyStageLibs().contains(stageConf.getLibrary())) {
+        issues.add(issueCreator.create(
+          ValidationError.VALIDATION_0095,
+          stageConf.getLibrary()
+        ));
+      } else {
+        issues.add(issueCreator.create(
+          ValidationError.VALIDATION_0006,
+          stageConf.getLibrary(),
+          stageConf.getStageName(),
+          stageConf.getStageVersion()
+        ));
+      }
       preview = false;
     } else {
       if (shouldBeSource) {
@@ -257,9 +299,10 @@ public class ValidationUtil {
       // -1: Means that framework is fully in control on how many input lanes should be present
       //  0: Means that the stage supports unlimited number of input lanes
       // >0: Means that stage needs exactly that amount of lanes which we will validate here
-      // Ignore validation for Pipeline Fragments
+      // For Pipeline Fragments validate only if contains more than expected lanes
       if (stageDef.getInputStreams() > 0) {
-        if (stageDef.getInputStreams() != stageConf.getInputLanes().size() && !isPipelineFragment) {
+        if ((stageDef.getInputStreams() != stageConf.getInputLanes().size() && !isPipelineFragment) ||
+            (stageConf.getInputLanes().size() > stageDef.getInputStreams() && isPipelineFragment)) {
            issues.add(
               issueCreator.create(
                   stageConf.getInstanceName(),
@@ -739,6 +782,24 @@ public class ValidationUtil {
           preview = false;
         }
         break;
+      case FIELD_SELECTOR:
+        if (!(conf.getValue() instanceof String)) {
+          // stage configuration must be a model
+          issues.add(
+                  issueCreator.create(
+                          confDef.getGroup(),
+                          confDef.getName(),
+                          ValidationError.VALIDATION_0009,
+                          "String")
+          );
+          preview = false;
+        } else {
+          //validate all the field names for proper syntax
+          String fieldPath = (String) conf.getValue();
+          preview &= validatePath(confDef, issueCreator, issues, fieldPath);
+          break;
+        }
+        break;
       case FIELD_SELECTOR_MULTI_VALUE:
         if (!(conf.getValue() instanceof List)) {
           // stage configuration must be a model
@@ -754,18 +815,8 @@ public class ValidationUtil {
           //validate all the field names for proper syntax
           List<String> fieldPaths = (List<String>) conf.getValue();
           for (String fieldPath : fieldPaths) {
-            try {
-              PathElement.parse(fieldPath, true);
-            } catch (IllegalArgumentException e) {
-              issues.add(
-                  issueCreator.create(
-                      confDef.getGroup(),
-                      confDef.getName(),
-                      ValidationError.VALIDATION_0033,
-                      e.toString()
-                  )
-              );
-              preview = false;
+            preview &= validatePath(confDef, issueCreator, issues, fieldPath);
+            if (! preview) {
               break;
             }
           }
@@ -926,14 +977,32 @@ public class ValidationUtil {
           }
         }
         break;
-      case FIELD_SELECTOR:
-        // fall through
       case MULTI_VALUE_CHOOSER:
         break;
       default:
         throw new RuntimeException("Unknown model type: " + confDef.getModel().getModelType().name());
     }
     return preview;
+  }
+
+  private static boolean validatePath(ConfigDefinition confDef, IssueCreator issueCreator, List<Issue> issues, String fieldPath) {
+    if (CONTAINS_EXPRESSION_PATTERN.matcher(fieldPath).matches()) {
+      return true; // don't try and validate expressions statically
+    }
+    try {
+      PathElement.parse(fieldPath, true);
+    } catch (IllegalArgumentException e) {
+      issues.add(
+              issueCreator.create(
+                      confDef.getGroup(),
+                      confDef.getName(),
+                      ValidationError.VALIDATION_0033,
+                      e.toString()
+              )
+      );
+      return false;
+    }
+    return true;
   }
 
   private static boolean validateComplexConfig(
@@ -994,7 +1063,17 @@ public class ValidationUtil {
                 runtimeInfo,
                 dataCollectorConfiguration
             );
-            validateYarnClusterConfigs(dataCollectorConfiguration, securityConfiguration, issueCreator, errors, config);
+            validateYarnClusterConfigs(
+                dataCollectorConfiguration,
+                securityConfiguration,
+                issueCreator,
+                errors,
+                config,
+                runtimeInfo
+            );
+            break;
+          case STANDALONE_SPARK_CLUSTER:
+            validateStandaloneClusterConfigs(issueCreator, errors, config);
             break;
           default:
             //nothing to validate for now
@@ -1009,76 +1088,96 @@ public class ValidationUtil {
       SecurityConfiguration securityConfig,
       IssueCreator issueCreator,
       List<Issue> errors,
+      PipelineConfigBean config,
+      RuntimeInfo runtimeInfo
+  ) {
+    final boolean keytabEnabled = config.clusterConfig.useYarnKerberosKeytab;
+    final boolean keytabAllowed = dataCollectorConfiguration.get(
+        ALLOW_KEYTAB_PROPERTY,
+        ALLOW_KEYTAB_DEFAULT
+    );
+
+    if (keytabEnabled && !keytabAllowed) {
+      errors.add(issueCreator.create(
+          PipelineGroups.CLUSTER.name(),
+          "clusterConfig.useYarnKerberosKeytab",
+          ValidationError.VALIDATION_0401,
+          ALLOW_KEYTAB_PROPERTY,
+          keytabAllowed
+      ));
+    }
+
+    if (keytabEnabled && !runtimeInfo.isEmbedded()) {
+      // only validate the keytab if not in embedded mode (since otherwise, we already validated in the launcher)
+      String keytabPathStr = null;
+      String errorMsgSuffix = null;
+      switch (config.clusterConfig.yarnKerberosKeytabSource) {
+        case PIPELINE:
+          keytabPathStr = config.clusterConfig.yarnKerberosKeytab;
+          // no suffix needed, since the validation error will show up directly next to the UI config
+          errorMsgSuffix = "";
+          break;
+        case PROPERTIES_FILE:
+          keytabPathStr = securityConfig.getKerberosKeytab();
+          errorMsgSuffix = " via the " + SecurityConfiguration.KERBEROS_KEYTAB_KEY + " configuration property";
+          break;
+      }
+      final Path keytabPath = Paths.get(keytabPathStr);
+      if (!keytabPath.isAbsolute()) {
+        errors.add(issueCreator.create(
+            PipelineGroups.CLUSTER.name(),
+            "clusterConfig.yarnKerberosKeytab",
+            ValidationError.VALIDATION_0302,
+            keytabPath.toString(),
+            errorMsgSuffix
+        ));
+      } else if (!Files.exists(keytabPath)) {
+        errors.add(issueCreator.create(
+            PipelineGroups.CLUSTER.name(),
+            "clusterConfig.yarnKerberosKeytab",
+            ValidationError.VALIDATION_0303,
+            keytabPath.toString(),
+            errorMsgSuffix
+        ));
+      } else if (!Files.isRegularFile(keytabPath)) {
+        errors.add(issueCreator.create(
+            PipelineGroups.CLUSTER.name(),
+            "clusterConfig.yarnKerberosKeytab",
+            ValidationError.VALIDATION_0304,
+            keytabPath.toString(),
+            errorMsgSuffix
+        ));
+      }
+      // TODO: actually check that the keytab file is valid and contains the principal?
+    }
+
+    // Kerberos client is disabled via configuration
+    // keytab could still come from properties (we just don't log in from our own code)
+    final boolean alwaysImpersonate = dataCollectorConfiguration.get(
+        IMPERSONATION_ALWAYS_CURRENT_USER,
+        false
+    );
+    if (alwaysImpersonate && StringUtils.isNotBlank(config.clusterConfig.hadoopUserName)) {
+      errors.add(issueCreator.create(
+          PipelineGroups.CLUSTER.name(),
+          "clusterConfig.hadoopUserName",
+          ValidationError.VALIDATION_0305,
+          IMPERSONATION_ALWAYS_CURRENT_USER
+      ));
+    }
+  }
+
+  private static void validateStandaloneClusterConfigs(
+      IssueCreator issueCreator,
+      List<Issue> errors,
       PipelineConfigBean config
   ) {
-    final boolean kerbConfigEnabled = securityConfig.isKerberosEnabled();
-    final boolean keytabEnabled = config.clusterConfig.useYarnKerberosKeytab;
-    if (kerbConfigEnabled) {
-      if (keytabEnabled) {
-        String keytabPathStr = null;
-        String errorMsgSuffix = null;
-        switch (config.clusterConfig.yarnKerberosKeytabSource) {
-          case PIPELINE:
-            keytabPathStr = config.clusterConfig.yarnKerberosKeytab;
-            // no suffix needed, since the validation error will show up directly next to the UI config
-            errorMsgSuffix = "";
-            break;
-          case PROPERTIES_FILE:
-            keytabPathStr = securityConfig.getKerberosKeytab();
-            errorMsgSuffix = " via the " + SecurityConfiguration.KERBEROS_KEYTAB_KEY + " configuration property";
-            break;
-        }
-        final Path keytabPath = Paths.get(keytabPathStr);
-        if (!keytabPath.isAbsolute()) {
-          errors.add(issueCreator.create(
-              PipelineGroups.CLUSTER.name(),
-              "clusterConfig.yarnKerberosKeytab",
-              ValidationError.VALIDATION_0302,
-              keytabPath.toString(),
-              errorMsgSuffix
-          ));
-        } else if (!Files.exists(keytabPath)) {
-          errors.add(issueCreator.create(
-              PipelineGroups.CLUSTER.name(),
-              "clusterConfig.yarnKerberosKeytab",
-              ValidationError.VALIDATION_0303,
-              keytabPath.toString(),
-              errorMsgSuffix
-          ));
-        } else if (!Files.isRegularFile(keytabPath)) {
-          errors.add(issueCreator.create(
-              PipelineGroups.CLUSTER.name(),
-              "clusterConfig.yarnKerberosKeytab",
-              ValidationError.VALIDATION_0304,
-              keytabPath.toString(),
-              errorMsgSuffix
-          ));
-        }
-        // TODO: actually check that the keytab file is valid and contains the principal?
-      }
-    } else {
-      // Kerberos is disabled via configuration
-      if (keytabEnabled) {
-        // make sure keytab option is not selected, since Kerberos is disabled
-        errors.add(issueCreator.create(
-            PipelineGroups.CLUSTER.name(),
-            "clusterConfig.useYarnKerberosKeytab",
-            ValidationError.VALIDATION_0301,
-            SecurityConfiguration.KERBEROS_ENABLED_KEY
-        ));
-      }
-      final boolean alwaysImpersonate = dataCollectorConfiguration.get(
-          HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER,
-          false
-      );
-      if (alwaysImpersonate && StringUtils.isNotBlank(config.clusterConfig.hadoopUserName)) {
-        errors.add(issueCreator.create(
-            PipelineGroups.CLUSTER.name(),
-            "clusterConfig.hadoopUserName",
-            ValidationError.VALIDATION_0305,
-            HadoopConfigConstants.IMPERSONATION_ALWAYS_CURRENT_USER
-        ));
-      }
+    if (!config.clusterConfig.sparkMasterUrl.startsWith("spark://")) {
+      errors.add(issueCreator.create(
+          PipelineGroups.CLUSTER.name(),
+          "clusterConfig.sparkMasterUrl",
+          ValidationError.VALIDATION_0306
+      ));
     }
   }
 }

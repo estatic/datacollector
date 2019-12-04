@@ -508,28 +508,27 @@ public class ClusterRunner extends AbstractRunner {
         JobEL.setConstantsInContext(pipelineConfigBean.constants);
       }
 
+      // Find a list of BlobStore resource to ship to a cluster job
       InterceptorCreatorContextBuilder contextBuilder = new InterceptorCreatorContextBuilder(blobStoreTask, getConfiguration(), context.getInterceptorConfigurations());
       ClusterSourceInfo sourceInfo = getClusterSourceInfo(context, getName(), getRev(), pipelineConf);
-      // Find a list of BlobStore resource to ship to a cluster job
       List<BlobStoreDef> listOfResources = new ArrayList<>();
       ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-      for(PipelineStartEvent.InterceptorConfiguration conf : context.getInterceptorConfigurations()) {
-        for (InterceptorDefinition def : getStageLibrary().getInterceptorDefinitions()) {
-          String className = def.getKlass().getName();
-          String stageLib = def.getLibraryDefinition().getName();
-          if (conf.getStageLibrary().equals(stageLib) && conf.getInterceptorClassName().equals(className)) {
-            try {
-              Thread.currentThread().setContextClassLoader(def.getStageClassLoader());
-              InterceptorCreator creator = def.getDefaultCreator().newInstance();
-              listOfResources.addAll(creator.blobStoreResource(conf.getParameters()));
-            } catch (IllegalAccessException | InstantiationException ex) {
-              throw new RuntimeException("Error while getting BlobStore resource from Interceptor ", ex);
-            } finally {
-              Thread.currentThread().setContextClassLoader(classLoader);
-            }
-          }
+      // Give chance for each registered interceptor to push whatever it needs to the cluster
+      for (InterceptorDefinition def : getStageLibrary().getInterceptorDefinitions()) {
+        String className = def.getKlass().getName();
+        String stageLib = def.getLibraryDefinition().getName();
+
+        try {
+          Thread.currentThread().setContextClassLoader(def.getStageClassLoader());
+          InterceptorCreator creator = def.getDefaultCreator().newInstance();
+          listOfResources.addAll(creator.blobStoreResource(contextBuilder.buildBaseContext(stageLib, className)));
+        } catch (IllegalAccessException | InstantiationException ex) {
+          throw new RuntimeException("Error while getting BlobStore resource from Interceptor ", ex);
+        } finally {
+          Thread.currentThread().setContextClassLoader(classLoader);
         }
       }
+
       List<String> files = null;
       if (!listOfResources.isEmpty()) {
         files = new ArrayList<>();

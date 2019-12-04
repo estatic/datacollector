@@ -34,7 +34,8 @@ import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
     "writes them to Kafka",
   icon="sdcipctokafka.png",
   onlineHelpRefUrl ="index.html?contextID=task_il5_gtl_pw",
-  upgrader = SdcIpcToKafkaUpgrader.class
+  upgrader = SdcIpcToKafkaUpgrader.class,
+  upgraderDef = "upgrader/SdcIpcToKafkaDSource.yaml"
 )
 @ConfigGroups(Groups.class)
 @GenerateResourceBundle
@@ -58,6 +59,8 @@ import com.streamsets.pipeline.stage.destination.kafka.KafkaTargetConfig;
         "conf.dataGeneratorFormatConfig.subject",
         "conf.dataGeneratorFormatConfig.subjectToRegister",
         "conf.dataGeneratorFormatConfig.schemaRegistryUrlsForRegistration",
+        "conf.dataGeneratorFormatConfig.basicAuthUserInfo",
+        "conf.dataGeneratorFormatConfig.basicAuthUserInfoForRegistration",
         "conf.dataGeneratorFormatConfig.registerSchema",
         "conf.dataGeneratorFormatConfig.schemaId",
         "conf.dataGeneratorFormatConfig.includeSchema",

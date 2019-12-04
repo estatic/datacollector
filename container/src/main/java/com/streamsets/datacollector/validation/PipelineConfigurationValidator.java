@@ -20,10 +20,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.streamsets.datacollector.config.ConfigDefinition;
 import com.streamsets.datacollector.config.PipelineConfiguration;
-import com.streamsets.datacollector.config.PipelineFragmentConfiguration;
 import com.streamsets.datacollector.config.PipelineGroups;
 import com.streamsets.datacollector.config.ServiceConfiguration;
 import com.streamsets.datacollector.config.ServiceDependencyDefinition;
+import com.streamsets.datacollector.config.SparkClusterType;
 import com.streamsets.datacollector.config.StageConfiguration;
 import com.streamsets.datacollector.config.StageDefinition;
 import com.streamsets.datacollector.configupgrade.PipelineConfigurationUpgrader;
@@ -54,7 +54,6 @@ import java.util.stream.Stream;
 @SuppressWarnings("Duplicates")
 public class PipelineConfigurationValidator extends PipelineFragmentConfigurationValidator {
   private static final Logger LOG = LoggerFactory.getLogger(PipelineConfigurationValidator.class);
-  private static final String TO_ERROR_NULL_TARGET = "com_streamsets_pipeline_stage_destination_devnull_ToErrorNullDTarget";
 
   private final Configuration dataCollectorConfiguration;
   private final RuntimeInfo runtimeInfo;
@@ -289,6 +288,19 @@ public class PipelineConfigurationValidator extends PipelineFragmentConfiguratio
       }
       for (StageConfiguration stageConf : pipelineConf.getStages()) {
         canPreview &= validateStageExecutionMode(stageConf, pipelineExecutionMode, errors, null, null);
+
+        if (pipelineExecutionMode.equals(ExecutionMode.BATCH) ||
+            pipelineExecutionMode.equals(ExecutionMode.STREAMING)) {
+          // validate Stage library cluster type for Batch and Streaming mode
+          SparkClusterType clusterType = PipelineBeanCreator.get().getClusterType(pipelineConf, errors);
+          canPreview &= validateStageLibraryClusterType(
+              stageConf,
+              clusterType,
+              errors,
+              null,
+              null
+          );
+        }
       }
     } else {
       canPreview = false;
@@ -351,7 +363,7 @@ public class PipelineConfigurationValidator extends PipelineFragmentConfiguratio
       issues.add(IssueCreator.getPipeline().create(ValidationError.VALIDATION_0093));
     }
 
-    if (dataCollectorConfiguration != null && runtimeInfo != null) {
+    if (dataCollectorConfiguration != null && runtimeInfo != null && pipelineBean != null) {
       ValidationUtil.validateClusterConfigs(
           pipelineBean,
           dataCollectorConfiguration,

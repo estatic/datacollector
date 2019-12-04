@@ -142,6 +142,7 @@ public class HttpClientSource extends BaseSource {
   private Map<Integer, HttpResponseActionConfigBean> statusToActionConfigs = new HashMap<>();
   private HttpResponseActionConfigBean timeoutActionConfig;
   private final HttpClientCommon clientCommon;
+  private boolean endOfTheBatch = false;
 
   /**
    * @param conf Configuration object for the HTTP client
@@ -434,7 +435,7 @@ public class HttpClientSource extends BaseSource {
         lastRequestTimedOut = false;
         final int status = response.getStatus();
         final boolean statusOk = status >= 200 && status < 300;
-        if (conf.client.useOAuth2 && status == 403) { // Token may have expired
+        if (conf.client.useOAuth2 && (status == 403 || status == 401)) { // Token may have expired
           if (gotNewToken) {
             LOG.error(HTTP_21.getMessage());
             throw new StageException(HTTP_21);
@@ -570,6 +571,7 @@ public class HttpClientSource extends BaseSource {
     shouldMakeRequest |= now > lastRequestCompletedTime + conf.pollingInterval &&
         conf.httpMode == HttpClientMode.POLLING;
     shouldMakeRequest |= now > lastRequestCompletedTime && conf.httpMode == HttpClientMode.STREAMING && conf.httpMethod != HttpMethod.HEAD;
+    shouldMakeRequest &= !endOfTheBatch;
 
     return shouldMakeRequest;
   }
@@ -923,6 +925,8 @@ public class HttpClientSource extends BaseSource {
       // Handle HEAD only requests, which have no body, by creating a blank record for output with headers.
       newSourceOffset = Optional.of(parseHeadersOnly(batchMaker));
 
+    }else if(conf.httpMode == HttpClientMode.BATCH){
+      endOfTheBatch = true;
     }
     return newSourceOffset;
   }

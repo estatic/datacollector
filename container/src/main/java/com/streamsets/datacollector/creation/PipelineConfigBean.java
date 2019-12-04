@@ -63,7 +63,7 @@ import java.util.Map;
 @ConfigGroups(PipelineGroups.class)
 public class PipelineConfigBean implements Stage {
 
-  public static final int VERSION = 14;
+  public static final int VERSION = 16;
 
   public static final String DEFAULT_STATS_AGGREGATOR_LIBRARY_NAME = "streamsets-datacollector-basic-lib";
 
@@ -184,6 +184,20 @@ public class PipelineConfigBean implements Stage {
   @ConfigDef(
       required = false,
       type = ConfigDef.Type.NUMBER,
+      defaultValue = "2000",
+      label = "Trigger Interval (millis)",
+      description = "Time interval between generation of batches",
+      min = 1,
+      dependencies = {
+          @Dependency(configName = "executionMode", triggeredByValues = {"STREAMING"})
+      },
+      displayPosition = 35
+  )
+  public long triggerInterval = 1; // default so tests don't wait forever
+
+  @ConfigDef(
+      required = false,
+      type = ConfigDef.Type.NUMBER,
       defaultValue = "-1",
       label = "Retry Attempts",
       dependsOn = "shouldRetry",
@@ -198,12 +212,38 @@ public class PipelineConfigBean implements Stage {
       required = false,
       type = ConfigDef.Type.BOOLEAN,
       defaultValue = "false",
-      label = "Advanced Error Handling",
+      label = "Enable Ludicrous Mode",
+      description = "Ludicrous mode may significantly improve performance, but metrics will be limited",
       dependencies = {
-          @Dependency(configName = "shouldRetry", triggeredByValues = "false"),
           @Dependency(configName = "executionMode", triggeredByValues = {"BATCH", "STREAMING"})
       },
-      displayPosition = 30
+      displayPosition = 40
+  )
+  public boolean ludicrousMode;
+
+  @ConfigDef(
+      required = false,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "false",
+      label = "Collect Input Metrics",
+      description = "Collects and displays input metrics. Can result in rereading data unless origins are configured to cache data",
+      dependencies = {
+          @Dependency(configName = "ludicrousMode", triggeredByValues = "true")
+      },
+      displayPosition = 50
+  )
+  public boolean ludicrousModeInputCount;
+
+  @ConfigDef(
+      required = false,
+      type = ConfigDef.Type.BOOLEAN,
+      defaultValue = "false",
+      label = "Advanced Error Handling",
+      description = "Reports the record that generates an error, when possible. Supported in single-origin pipelines",
+      dependencies = {
+          @Dependency(configName = "executionMode", triggeredByValues = {"BATCH", "STREAMING"})
+      },
+      displayPosition = 60
   )
   public boolean advancedErrorHandling;
 
@@ -456,8 +496,35 @@ public class PipelineConfigBean implements Stage {
   )
   public Map<String, String> sparkConfigs;
 
+  @ConfigDef(
+      required = false,
+      type = ConfigDef.Type.TEXT,
+      mode = ConfigDef.Mode.SCALA,
+      defaultValue = "" +
+          "/*\n" +
+          "The following script define a method\n" +
+          "that increments an integer by 1 \n" +
+          "and registers it as a UDF with \n" +
+          "the SparkSession, which can be accessed\n" +
+          "using the variable named \"spark\":\n" +
+          "def inc(i: Integer): Integer = {\n" +
+          "  i + 1\n" +
+          "}\n" +
+          "spark.udf.register (\"inc\", inc _)\n" +
+          "\n" +
+          "*/",
+      label = "Preprocessing Script",
+      description = "Scala script to run on the driver before starting the pipeline. " +
+          "Can be used to register user defined functions, etc. Use the 'spark' variable to access the Spark session",
+      displayPosition = 10,
+      group = "ADVANCED",
+      dependsOn = "executionMode",
+      triggeredByValue = {"BATCH", "STREAMING"}
+  )
+  public String preprocessScript;
+
   @ConfigDefBean
-  public ClusterConfig clusterConfig;
+  public ClusterConfig clusterConfig = new ClusterConfig();
 
   @ConfigDefBean
   public DatabricksConfig databricksConfig;

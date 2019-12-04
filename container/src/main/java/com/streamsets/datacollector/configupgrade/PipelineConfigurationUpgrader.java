@@ -173,8 +173,12 @@ public class PipelineConfigurationUpgrader {
     // Added new attributes:
     // * statEventStages
     // * stopEventStages
-    pipelineConf.setStartEventStages(Collections.emptyList());
-    pipelineConf.setStopEventStages(Collections.emptyList());
+    if(pipelineConf.getStartEventStages() == null) {
+      pipelineConf.setStartEventStages(Collections.emptyList());
+    }
+    if(pipelineConf.getStopEventStages() == null) {
+      pipelineConf.setStopEventStages(Collections.emptyList());
+    }
   }
 
   private void upgradeSchema4to5(PipelineConfiguration pipelineConf, List<Issue> issues) {
@@ -294,6 +298,23 @@ public class PipelineConfigurationUpgrader {
       upgrade |= needsUpgrade(library, errorStageConf, issues);
     }
 
+    // Pipeline start and stop events
+    if(pipelineConf.getStartEventStages() != null) {
+      for(StageConfiguration conf : pipelineConf.getStartEventStages()) {
+        upgrade |= needsUpgrade(library, conf, issues);
+      }
+    }
+    if(pipelineConf.getStopEventStages() != null) {
+      for(StageConfiguration conf : pipelineConf.getStopEventStages()) {
+        upgrade |= needsUpgrade(library, conf, issues);
+      }
+    }
+
+    // Test origin
+    if(pipelineConf.getTestOriginStage() != null) {
+      upgrade |= needsUpgrade(library, pipelineConf.getTestOriginStage(), issues);
+    }
+
     // pipeline stages confs
     for (StageConfiguration conf : pipelineConf.getStages()) {
       upgrade |= needsUpgrade(library, conf, issues);
@@ -309,11 +330,18 @@ public class PipelineConfigurationUpgrader {
   static boolean needsUpgrade(StageLibraryTask library, StageDefinition def, StageConfiguration conf, List<Issue> issues) {
     boolean upgrade = false;
     if (def == null) {
-      issues.add(IssueCreator.getStage(conf.getInstanceName()).create(
+      if(library.getLegacyStageLibs().contains(conf.getLibrary())) {
+        issues.add(IssueCreator.getStage(conf.getInstanceName()).create(
+          ContainerError.CONTAINER_0905,
+          conf.getLibrary()
+        ));
+      } else {
+        issues.add(IssueCreator.getStage(conf.getInstanceName()).create(
           ContainerError.CONTAINER_0901,
           conf.getLibrary(),
           conf.getStageName()
-      ));
+        ));
+      }
     } else {
       // Go over services first
       for(ServiceConfiguration serviceConf: conf.getServices()) {
@@ -412,6 +440,27 @@ public class PipelineConfigurationUpgrader {
       errorStageConf = upgradeIfNeeded(library, errorStageConf, ownIssues);
     }
 
+    // Pipeline start and stop events
+    List<StageConfiguration> startEventStages = new ArrayList<>();
+    if(pipelineConf.getStartEventStages() != null) {
+      for(StageConfiguration conf : pipelineConf.getStartEventStages()) {
+        StageConfiguration upgradedConf = upgradeIfNeeded(library, conf, ownIssues);
+        startEventStages.add(upgradedConf);
+      }
+    }
+    List<StageConfiguration> stopEventStages = new ArrayList<>();
+    if(pipelineConf.getStopEventStages() != null) {
+      for(StageConfiguration conf : pipelineConf.getStopEventStages()) {
+        StageConfiguration upgradedConf = upgradeIfNeeded(library, conf, ownIssues);
+        stopEventStages.add(upgradedConf);
+      }
+    }
+
+    // Test origin
+    StageConfiguration testOrigin = pipelineConf.getTestOriginStage();
+    if(testOrigin != null) {
+      testOrigin = upgradeIfNeeded(library, testOrigin, ownIssues);
+    }
     // upgrade stages;
     for (StageConfiguration stageConf : pipelineConf.getStages()) {
       stageConf = upgradeIfNeeded(library, stageConf, issues);
@@ -422,17 +471,41 @@ public class PipelineConfigurationUpgrader {
 
     // if ownIssues > 0 we had an issue upgrading, we wont touch the pipelineConf and return null
     if (ownIssues.isEmpty()) {
-      pipelineConf.setConfiguration(pipelineConfs.getConfiguration());
-      pipelineConf.setVersion(pipelineConfs.getStageVersion());
       pipelineConf.setErrorStage(errorStageConf);
       pipelineConf.setStatsAggregatorStage(statsAggregatorStageConf);
+      pipelineConf.setStartEventStages(startEventStages);
+      pipelineConf.setStopEventStages(stopEventStages);
+      pipelineConf.setTestOriginStage(testOrigin);
       pipelineConf.setStages(stageConfs);
+
+      if(errorStageConf != null) {
+        pipelineConfs.addConfig(new Config("badRecordsHandling", stageToUISelect(errorStageConf)));
+      }
+      if(statsAggregatorStageConf != null) {
+        pipelineConfs.addConfig(new Config("statsAggregatorStage", stageToUISelect(statsAggregatorStageConf)));
+      }
+      if(startEventStages.size() == 1) {
+        pipelineConfs.addConfig(new Config("startEventStage", stageToUISelect(startEventStages.get(0))));
+      }
+      if(stopEventStages.size() == 1) {
+        pipelineConfs.addConfig(new Config("stopEventStage", stageToUISelect(stopEventStages.get(0))));
+      }
+      if(testOrigin != null) {
+        pipelineConfs.addConfig(new Config("testOriginStage", stageToUISelect(testOrigin)));
+      }
+
+      pipelineConf.setConfiguration(pipelineConfs.getConfiguration());
+      pipelineConf.setVersion(pipelineConfs.getStageVersion());
     } else {
       issues.addAll(ownIssues);
       pipelineConf = null;
     }
 
     return pipelineConf;
+  }
+
+  private static String stageToUISelect(StageConfiguration stageConf) {
+    return stageConf.getLibrary() + "::" + stageConf.getStageName() + "::" + stageConf.getStageVersion();
   }
 
   /**

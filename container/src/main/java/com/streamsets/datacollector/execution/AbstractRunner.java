@@ -151,7 +151,7 @@ public abstract  class AbstractRunner implements Runner {
 
   @Override
   public PipelineConfiguration getPipelineConfiguration() throws PipelineException {
-    return pipelineStore.load(getName(), getRev());
+    return getPipelineConf(getName(), getRev());
   }
 
   @Override
@@ -172,7 +172,9 @@ public abstract  class AbstractRunner implements Runner {
   @Override
   public Map<String, Object> createStateAttributes() throws PipelineStoreException {
     Map<String, Object> attributes = new HashMap<>(getState().getAttributes());
-    attributes.put(RUNTIME_PARAMETERS_ATTR, startPipelineContext.getRuntimeParameters());
+    if(startPipelineContext != null) {
+      attributes.put(RUNTIME_PARAMETERS_ATTR, startPipelineContext.getRuntimeParameters());
+    }
 
     List<String> interceptors = new ArrayList<>();
     try {

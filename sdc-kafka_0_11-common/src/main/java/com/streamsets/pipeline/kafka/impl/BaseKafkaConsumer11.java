@@ -24,6 +24,7 @@ import com.streamsets.pipeline.lib.kafka.KafkaAutoOffsetReset;
 import com.streamsets.pipeline.lib.kafka.KafkaErrors;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -95,14 +96,16 @@ public abstract class BaseKafkaConsumer11 extends KafkaConsumer09 {
   MessageAndOffset getMessageAndOffset(ConsumerRecord message, boolean isEnabled) {
     MessageAndOffset messageAndOffset;
     if (message.timestampType() != TimestampType.NO_TIMESTAMP_TYPE && message.timestamp() > 0 && isEnabled) {
-      messageAndOffset = new MessageAndOffsetWithTimestamp(message.value(),
+      messageAndOffset = new MessageAndOffsetWithTimestamp(
+          message.key(),
+          message.value(),
           message.offset(),
           message.partition(),
           message.timestamp(),
           message.timestampType().toString()
       );
     } else {
-      messageAndOffset = new MessageAndOffset(message.value(), message.offset(), message.partition());
+      messageAndOffset = new MessageAndOffset(message.key(), message.value(), message.offset(), message.partition());
     }
     return messageAndOffset;
   }
@@ -123,7 +126,7 @@ public abstract class BaseKafkaConsumer11 extends KafkaConsumer09 {
   }
 
   private boolean firstConnection() throws StageException {
-    try (KafkaConsumer kafkaAuxiliaryConsumer = new KafkaConsumer(auxiliaryKafkaConsumerProperties)) {
+    try (Consumer kafkaAuxiliaryConsumer = new KafkaConsumer(auxiliaryKafkaConsumerProperties)) {
       List<PartitionInfo> partitionInfoList = kafkaAuxiliaryConsumer.partitionsFor(topic);
       for (PartitionInfo partitionInfo : partitionInfoList) {
         TopicPartition topicPartition = new TopicPartition(topic, partitionInfo.partition());

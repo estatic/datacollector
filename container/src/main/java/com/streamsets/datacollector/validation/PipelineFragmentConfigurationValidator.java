@@ -16,58 +16,44 @@
 package com.streamsets.datacollector.validation;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
-import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.streamsets.datacollector.config.ConfigDefinition;
+import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.config.PipelineFragmentConfiguration;
-import com.streamsets.datacollector.config.ServiceConfiguration;
-import com.streamsets.datacollector.config.ServiceDefinition;
+import com.streamsets.datacollector.config.SparkClusterType;
 import com.streamsets.datacollector.config.StageConfiguration;
 import com.streamsets.datacollector.config.StageDefinition;
-import com.streamsets.datacollector.config.UserConfigurable;
+import com.streamsets.datacollector.config.StageLibraryDefinition;
 import com.streamsets.datacollector.configupgrade.FragmentConfigurationUpgrader;
 import com.streamsets.datacollector.creation.PipelineBeanCreator;
-import com.streamsets.datacollector.creation.StageConfigBean;
-import com.streamsets.datacollector.definition.ConcreteELDefinitionExtractor;
-import com.streamsets.datacollector.el.ELEvaluator;
-import com.streamsets.datacollector.el.ELVariables;
-import com.streamsets.datacollector.record.PathElement;
-import com.streamsets.datacollector.record.RecordImpl;
+import com.streamsets.datacollector.creation.PipelineConfigBean;
 import com.streamsets.datacollector.stagelibrary.StageLibraryTask;
+import com.streamsets.datacollector.store.impl.FilePipelineStoreTask;
 import com.streamsets.datacollector.util.ElUtil;
+import com.streamsets.datacollector.util.PipelineConfigurationUtil;
 import com.streamsets.pipeline.api.Config;
-import com.streamsets.pipeline.api.ConfigDef;
 import com.streamsets.pipeline.api.DeliveryGuarantee;
 import com.streamsets.pipeline.api.ExecutionMode;
-import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageType;
-import com.streamsets.pipeline.api.el.ELEval;
-import com.streamsets.pipeline.api.el.ELEvalException;
-import com.streamsets.pipeline.api.impl.TextUtils;
-import com.streamsets.pipeline.lib.el.RecordEL;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @SuppressWarnings("Duplicates")
 public class PipelineFragmentConfigurationValidator {
   private static final Logger LOG = LoggerFactory.getLogger(PipelineFragmentConfigurationValidator.class);
+  static final String TO_ERROR_NULL_TARGET = "com_streamsets_pipeline_stage_destination_devnull_ToErrorNullDTarget";
 
   protected final StageLibraryTask stageLibrary;
   protected final String name;
@@ -264,14 +250,7 @@ public class PipelineFragmentConfigurationValidator {
       }
     } else {
       canPreview = false;
-      issues.add(
-          issueCreator.create(
-              ValidationError.VALIDATION_0006,
-              stageConf.getLibrary(),
-              stageConf.getStageName(),
-              stageConf.getStageVersion()
-          )
-      );
+      // StageDef missing is already handled in validateStageConfiguration, no need to issue the same error again
     }
     return canPreview;
   }
@@ -291,8 +270,89 @@ public class PipelineFragmentConfigurationValidator {
     return canPreview;
   }
 
+  boolean validateStageLibraryClusterType(
+      StageConfiguration stageConf,
+      SparkClusterType clusterType,
+      List<Issue> issues,
+      String configGroup,
+      String configName
+  ) {
+    boolean canPreview = true;
+    IssueCreator issueCreator = IssueCreator.getStage(stageConf.getInstanceName());
+    StageLibraryDefinition stageLibraryDef = stageLibrary.getStageLibraryDefinition(stageConf.getLibrary());
+    StageDefinition stageDef = stageLibrary.getStage(stageConf.getLibrary(), stageConf.getStageName(), false);
+    if (stageDef != null && stageLibraryDef != null) {
+      if (stageLibraryDef.getClusterTypes() != null && !stageLibraryDef.getClusterTypes().contains(clusterType)) {
+        canPreview = false;
+        if (configGroup != null && configName != null) {
+          issues.add(
+              IssueCreator.getPipeline().create(
+                  configGroup,
+                  configName,
+                  ValidationError.VALIDATION_0300,
+                  stageDef.getLabel(),
+                  stageDef.getLibraryLabel(),
+                  clusterType.getLabel()
+              )
+          );
+        } else {
+          issues.add(
+              issueCreator.create(
+                  ValidationError.VALIDATION_0300,
+                  stageDef.getLabel(),
+                  stageDef.getLibraryLabel(),
+                  clusterType.getLabel()
+              )
+          );
+        }
+      }
+    } else if (stageDef == null) {
+      canPreview = false;
+      // StageDef missing is already handled in validateStageConfiguration, no need to issue the same error again
+    }
+    return canPreview;
+  }
+
   private boolean loadAndValidatePipelineFragmentConfig() {
     List<Issue> errors = new ArrayList<>();
+
+    // to validate EL values in the pipeline and stage configuration create Pipeline bean from Pipeline Fragment
+    StageConfiguration errorStageInstance = PipelineConfigurationUtil.getStageConfigurationWithDefaultValues(
+        stageLibrary,
+        PipelineConfigBean.DEFAULT_STATS_AGGREGATOR_LIBRARY_NAME,
+        TO_ERROR_NULL_TARGET,
+        "errorStageInstance",
+        "Error Stage"
+    );
+    if (errorStageInstance != null) {
+      errorStageInstance.setOutputLanes(
+          ImmutableList.of(errorStageInstance.getInstanceName() + "OutputLane1")
+      );
+    }
+    PipelineConfiguration pipelineConfiguration = new PipelineConfiguration(
+        FilePipelineStoreTask.SCHEMA_VERSION,
+        PipelineConfigBean.VERSION,
+        pipelineFragmentConfiguration.getPipelineId(),
+        pipelineFragmentConfiguration.getUuid(),
+        pipelineFragmentConfiguration.getTitle(),
+        pipelineFragmentConfiguration.getDescription(),
+        new ArrayList<>(pipelineFragmentConfiguration.getConfiguration()),
+        Collections.emptyMap(),
+        null,
+        pipelineFragmentConfiguration.getStages(),
+        errorStageInstance,
+        null,
+        Collections.emptyList(),
+        Collections.emptyList(),
+        null
+    );
+    PipelineBeanCreator.get().create(
+        false,
+        stageLibrary,
+        pipelineConfiguration,
+        null,
+        errors
+    );
     if (pipelineFragmentConfiguration.getTitle() != null && pipelineFragmentConfiguration.getTitle().isEmpty()) {
       issues.add(IssueCreator.getPipeline().create(ValidationError.VALIDATION_0093));
     }
@@ -523,15 +583,7 @@ public class PipelineFragmentConfigurationValidator {
         }
       } else {
         valid = false;
-        IssueCreator issueCreator = IssueCreator.getStage(stageConf.getStageName());
-        issues.add(
-          issueCreator.create(
-              ValidationError.VALIDATION_0006,
-              stageConf.getLibrary(),
-              stageConf.getStageName(),
-              stageConf.getStageVersion()
-          )
-        );
+        // Validation for missing StageDef is already in validateStageConfiguration(), not producing duplicate errors
       }
     }
     // If a pipeline contains a target that triggers offset commit then,

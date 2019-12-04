@@ -541,8 +541,12 @@ public class TestUtil {
 
     @Provides @Singleton
     public RuntimeInfo provideRuntimeInfo() {
-      RuntimeInfo info = new StandaloneRuntimeInfo(RuntimeModule.SDC_PROPERTY_PREFIX, new MetricRegistry(),
-        Arrays.asList(getClass().getClassLoader()));
+      RuntimeInfo info = new StandaloneRuntimeInfo(
+          RuntimeInfo.SDC_PRODUCT,
+          RuntimeModule.SDC_PROPERTY_PREFIX,
+          new MetricRegistry(),
+          Arrays.asList(getClass().getClassLoader())
+      );
       return info;
     }
 
@@ -796,7 +800,8 @@ public class TestUtil {
             PreviewerListener listener,
             ObjectGraph objectGraph,
             List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
-            Function<Object, Void> afterActionsFunction
+            Function<Object, Void> afterActionsFunction,
+            boolean remote
         ) {
           Previewer mock = Mockito.mock(Previewer.class);
           Mockito.when(mock.getId()).thenReturn(UUID.randomUUID().toString());

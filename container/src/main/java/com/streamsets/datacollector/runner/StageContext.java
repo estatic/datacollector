@@ -24,6 +24,7 @@ import com.streamsets.datacollector.config.ConfigDefinition;
 import com.streamsets.datacollector.email.EmailSender;
 import com.streamsets.datacollector.lineage.LineageEventImpl;
 import com.streamsets.datacollector.lineage.LineagePublisherDelegator;
+import com.streamsets.datacollector.main.DataCollectorBuildInfo;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.record.EventRecordImpl;
 import com.streamsets.datacollector.record.HeaderImpl;
@@ -44,6 +45,7 @@ import com.streamsets.pipeline.api.Processor;
 import com.streamsets.pipeline.api.PushSource;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.Source;
+import com.streamsets.pipeline.api.SourceResponseSink;
 import com.streamsets.pipeline.api.Stage;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.StageType;
@@ -177,7 +179,7 @@ public class StageContext extends ProtoContext implements
     this.services = services;
     this.isErrorStage = false;
 
-    this.sourceResponseSink = new SourceResponseSink();
+    this.sourceResponseSink = new SourceResponseSinkImpl();
 
     // sample all records while testing
     this.startTime = System.currentTimeMillis();
@@ -301,6 +303,11 @@ public class StageContext extends ProtoContext implements
   @Override
   public Stage.Info getStageInfo() {
     return stageInfo;
+  }
+
+  @Override
+  public String getEnvironmentVersion() {
+    return new DataCollectorBuildInfo().getVersion();
   }
 
   @Override

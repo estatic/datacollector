@@ -23,19 +23,18 @@
   <parent>
     <groupId>com.streamsets</groupId>
     <artifactId>streamsets-datacollector-root-lib</artifactId>
-    <version>3.10.0-SNAPSHOT</version>
+    <version>3.13.0-SNAPSHOT</version>
     <relativePath>../root-lib</relativePath>
   </parent>
   <groupId>com.streamsets</groupId>
   <artifactId>streamsets-datacollector-kafka_source-protolib</artifactId>
-  <version>3.10.0-SNAPSHOT</version>
+  <version>3.13.0-SNAPSHOT</version>
   <description>StreamSets Data Collector Kafka Source ProtoLib</description>
   <name>StreamSets Data Collector Kafka Source ProtoLib</name>
   <packaging>jar</packaging>
 
   <properties>
     <kafka.version>0.8.1.1</kafka.version>
-    <confluent.version>2.0.1</confluent.version>
     <tec.version>0.3</tec.version>
   </properties>
 
@@ -154,6 +153,12 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.streamsets</groupId>
+      <artifactId>streamsets-datacollector-stagesupport</artifactId>
+      <type>test-jar</type>
       <scope>test</scope>
     </dependency>
   </dependencies>

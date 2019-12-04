@@ -35,8 +35,8 @@ import com.streamsets.pipeline.stage.conf.DataLakeSourceGroups;
     execution = ExecutionMode.STANDALONE,
     recordsByRef = true,
     resetOffset = true,
-    onlineHelpRefUrl = "index.html?contextID=task_t13_ht5_5hb",
-    beta = true
+    upgraderDef = "upgrader/DataLakeDSource.yaml",
+    onlineHelpRefUrl = "index.html?contextID=task_t13_ht5_5hb"
 )
 @ConfigGroups(value = DataLakeSourceGroups.class)
 @HideConfigs(value = {
@@ -44,7 +44,15 @@ import com.streamsets.pipeline.stage.conf.DataLakeSourceGroups;
     "dataLakeConfig.hdfsUser",
     "dataLakeConfig.hdfsKerberos",
     "dataLakeConfig.hdfsConfDir",
-    "dataLakeConfig.hdfsConfigs"
+    "dataLakeConfig.hdfsConfigs",
+    "spoolDirConfig.allowLateDirectory",
+    "spoolDirConfig.dataFormatConfig.verifyChecksum",
+    "spoolDirConfig.dataFormatConfig.avroSchemaSource",
+    "spoolDirConfig.dataFormatConfig.avroSchema",
+    "spoolDirConfig.dataFormatConfig.schemaRegistryUrls",
+    "spoolDirConfig.dataFormatConfig.schemaLookupMode",
+    "spoolDirConfig.dataFormatConfig.subject",
+    "spoolDirConfig.dataFormatConfig.schemaId"
 })
 @GenerateResourceBundle
 public class DataLakeDSource extends DPushSource {

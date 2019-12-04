@@ -34,6 +34,7 @@ import com.streamsets.pipeline.stage.origin.jdbc.table.TableJdbcConfigBean;
     resetOffset = true,
     producesEvents = true,
     upgrader = SQLServerCDCSourceUpgrader.class,
+    upgraderDef = "upgrader/SQLServerCDCDSource.yaml",
     onlineHelpRefUrl ="index.html?contextID=task_nsg_fxc_v1b"
 )
 @GenerateResourceBundle
@@ -61,6 +62,7 @@ public class SQLServerCDCDSource extends DPushSource {
     tableJdbcConfigBean.timeZoneID = "UTC";
     tableJdbcConfigBean.numberOfThreads = cdcTableJdbcConfigBean.numberOfThreads;
     tableJdbcConfigBean.tableOrderStrategy = cdcTableJdbcConfigBean.tableOrderStrategy;
+    tableJdbcConfigBean.unknownTypeAction = cdcTableJdbcConfigBean.unknownTypeAction;
 
     return tableJdbcConfigBean;
   }

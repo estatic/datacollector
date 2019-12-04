@@ -27,6 +27,7 @@ import com.streamsets.pipeline.lib.http.SslConfigBean;
 import com.streamsets.pipeline.lib.http.logging.JulLogLevelChooserValues;
 import com.streamsets.pipeline.lib.http.logging.RequestLoggingConfigBean;
 import com.streamsets.pipeline.lib.http.logging.VerbosityChooserValues;
+import com.streamsets.pipeline.stage.common.MultipleValuesBehavior;
 import com.streamsets.pipeline.stage.util.tls.TlsConfigBeanUpgraderTestUtil;
 import org.glassfish.jersey.client.RequestEntityProcessing;
 import org.junit.Assert;
@@ -321,11 +322,24 @@ public class TestHttpProcessorUpgrader {
   }
 
   private static Map<String, Object> getConfigsAsMap(List<Config> configs) {
-    HashMap<String, Object> map = new HashMap<>();
+  HashMap<String, Object> map = new HashMap<>();
     for (Config c : configs) {
       map.put(c.getName(), c.getValue());
     }
     return map;
   }
 
+  @Test
+  public void testV11ToV12() throws Exception {
+    List<Config> configs = new ArrayList<>();
+
+    HttpProcessorUpgrader upgrader = new HttpProcessorUpgrader();
+    upgrader.upgrade("lib", "stage", "inst", 11, 12, configs);
+
+    UpgraderTestUtils.assertExists(
+        configs,
+        "conf.multipleValuesBehavior",
+        MultipleValuesBehavior.FIRST_ONLY
+    );
+  }
 }

@@ -19,6 +19,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.sforce.soap.partner.DeleteResult;
+import com.sforce.soap.partner.DescribeSObjectResult;
 import com.sforce.soap.partner.Error;
 import com.sforce.soap.partner.PartnerConnection;
 import com.sforce.soap.partner.SaveResult;
@@ -26,6 +27,7 @@ import com.sforce.soap.partner.UndeleteResult;
 import com.sforce.soap.partner.UpsertResult;
 import com.sforce.soap.partner.sobject.SObject;
 import com.sforce.ws.ConnectionException;
+import com.streamsets.pipeline.api.Field;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.base.OnRecordErrorException;
@@ -38,7 +40,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -46,16 +50,47 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 
+import static com.streamsets.pipeline.api.Field.Type.DATETIME;
+import static com.streamsets.pipeline.api.Field.Type.TIME;
+
 public class ForceSoapWriter extends ForceWriter {
   // Max number of records allowed in a create() call
   // See https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_create.htm
   private static final int MAX_RECORDS_CREATE = 200;
   private static final Logger LOG = LoggerFactory.getLogger(ForceSoapWriter.class);
-  private final PartnerConnection partnerConnection;
 
-  public ForceSoapWriter(Map<String, String> fieldMappings, PartnerConnection partnerConnection) {
-    super(fieldMappings);
-    this.partnerConnection = partnerConnection;
+  private DescribeSObjectResult describeResult = null;
+  private Map<String, String> fieldTypeMap = new HashMap<>();
+
+  public ForceSoapWriter(
+      PartnerConnection partnerConnection, String sObject, Map<String, String> customMappings
+  ) throws ConnectionException {
+    super(partnerConnection, sObject, customMappings);
+  }
+
+  private String getTypeForRelationship(String fieldName) throws StageException {
+    String ret = fieldTypeMap.get(fieldName);
+    if (ret != null) {
+      return ret;
+    }
+
+    if (describeResult == null) {
+      try {
+        describeResult = partnerConnection.describeSObject(sObject);
+      } catch (ConnectionException e) {
+        throw new StageException(Errors.FORCE_08, e);
+      }
+    }
+
+    for (com.sforce.soap.partner.Field field : describeResult.getFields()) {
+      if (fieldName.equalsIgnoreCase(field.getRelationshipName())) {
+        String type = field.getReferenceTo()[0];
+        fieldTypeMap.put(fieldName, type);
+        return type;
+      }
+    }
+
+    throw new StageException(Errors.FORCE_43, fieldName);
   }
 
   private String[] sObjectsToIds(SObject[] sobjects) {
@@ -143,7 +178,7 @@ public class ForceSoapWriter extends ForceWriter {
         LOG.debug("Expression '{}' is evaluated to '{}' : ", target.conf.externalIdField, partitionName);
         partitions.put(partitionName, sobject);
       } catch (ELEvalException e) {
-        LOG.error("Failed to evaluate expression '{}' : ", target.conf.externalIdField, e.toString(), e);
+        LOG.error("Failed to evaluate expression '{}' : {}", target.conf.externalIdField, e.toString(), e);
         errorRecords.add(new OnRecordErrorException(record, e.getErrorCode(), e.getParams()));
       }
     }
@@ -245,13 +280,33 @@ public class ForceSoapWriter extends ForceWriter {
             continue;
           }
 
-          final Object value = record.get(fieldPath).getValue();
+          final Field field = record.get(fieldPath);
+          Object value = field.getValue();
 
           if (value == null &&
               (opCode == OperationType.UPDATE_CODE || opCode == OperationType.UPSERT_CODE)) {
             fieldsToNull.add(sFieldName);
           } else {
-            so.setField(sFieldName, value);
+            if (sFieldName.contains(".")) {
+              String[] parts = sFieldName.split("\\.");
+              if (parts.length > 2) {
+                throw new StageException(Errors.FORCE_42, sFieldName);
+              }
+              SObject parent = new SObject();
+              parent.setType(getTypeForRelationship(parts[0]));
+              parent.setField(parts[1], value);
+
+              so.setField(parts[0], parent);
+            } else {
+              Field.Type type = field.getType();
+              // Salesforce WSC does not work correctly with Date type for times or datetimes
+              if (type == TIME || type == DATETIME) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime((Date)value);
+                value = cal;
+              }
+              so.setField(sFieldName, value);
+            }
           }
         }
         if (fieldsToNull.size() > 0) {

@@ -288,7 +288,7 @@ public abstract class StageDefinitionExtractor {
           }
         } catch (Exception ex) {
           throw new IllegalArgumentException(Utils.format(
-              "Could not instantiate StageUpgrader for StageDefinition '{}': {}", name, ex.toString(), ex));
+              "Could not instantiate StageUpgrader for StageDefinition '{}': {}", name, ex.toString()), ex);
         }
 
         boolean resetOffset = sDef.resetOffset();
@@ -303,6 +303,8 @@ public abstract class StageDefinitionExtractor {
         List<Class> eventDefs = ImmutableList.copyOf(sDef.eventDefs());
 
         String yamlUpgrader = sDef.upgraderDef();
+
+        List<String> tags = ImmutableList.copyOf(sDef.tags());
 
         return new StageDefinition(
             sDef,
@@ -342,7 +344,8 @@ public abstract class StageDefinitionExtractor {
             inputStreamLabelProviderClass,
             bisectable,
             eventDefs,
-            yamlUpgrader
+            yamlUpgrader,
+            tags
         );
       } catch (Exception e) {
         throw new IllegalStateException("Exception while extracting stage definition for " + getStageName(klass), e);

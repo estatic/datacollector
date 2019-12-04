@@ -183,13 +183,13 @@
       <outputDirectory>/streamsets-libs/</outputDirectory>
     </fileSet>
 
-    <!-- DataFormants libs -->
+    <!-- Data Formats libs -->
     <fileSet>
       <directory>${basedir}/../dataformats-lib/target/streamsets-libs/</directory>
       <outputDirectory>/streamsets-libs/</outputDirectory>
     </fileSet>
 
-<!-- crypto-lib -->
+    <!-- crypto-lib -->
     <fileSet>
       <directory>${basedir}/../crypto-lib/target/streamsets-libs/</directory>
       <outputDirectory>/streamsets-libs/</outputDirectory>
@@ -231,6 +231,12 @@
       <outputDirectory>/streamsets-libs/</outputDirectory>
     </fileSet>
 
+    <!-- orchestrator-lib -->
+    <fileSet>
+      <directory>${basedir}/../orchestrator-lib/target/streamsets-libs/</directory>
+      <outputDirectory>/streamsets-libs/</outputDirectory>
+    </fileSet>
+
     <!-- rabbitmq-lib -->
     <fileSet>
       <directory>${basedir}/../rabbitmq-lib/target/streamsets-libs/</directory>
@@ -268,6 +274,10 @@
       <directory>${basedir}/../${cdh_6_2-lib}/target/streamsets-libs/</directory>
       <outputDirectory>/streamsets-libs/</outputDirectory>
     </fileSet>
+    <fileSet>
+      <directory>${basedir}/../${cdh_6_3-lib}/target/streamsets-libs/</directory>
+      <outputDirectory>/streamsets-libs/</outputDirectory>
+    </fileSet>
 
     <!-- CDH Spark Kafka lib -->
     <fileSet>
@@ -288,26 +298,6 @@
     </fileSet>
 
     <!-- HDP Libs -->
-    <fileSet>
-      <directory>${basedir}/../${hdp_2_6-lib}/target/streamsets-libs/</directory>
-      <outputDirectory>/streamsets-libs/</outputDirectory>
-    </fileSet>
-    <fileSet>
-      <directory>${basedir}/../${hdp_2_6_1-hive1-lib}/target/streamsets-libs/</directory>
-      <outputDirectory>/streamsets-libs/</outputDirectory>
-    </fileSet>
-    <fileSet>
-      <directory>${basedir}/../${hdp_2_6_2-hive1-lib}/target/streamsets-libs/</directory>
-      <outputDirectory>/streamsets-libs/</outputDirectory>
-    </fileSet>
-    <fileSet>
-      <directory>${basedir}/../${hdp_2_6-hive2-lib}/target/streamsets-libs/</directory>
-      <outputDirectory>/streamsets-libs/</outputDirectory>
-    </fileSet>
-    <fileSet>
-      <directory>${basedir}/../${hdp_2_6-flume-lib}/target/streamsets-libs/</directory>
-      <outputDirectory>/streamsets-libs/</outputDirectory>
-    </fileSet>
     <fileSet>
       <directory>${basedir}/../${hdp_3_1-lib}/target/streamsets-libs/</directory>
       <outputDirectory>/streamsets-libs/</outputDirectory>
@@ -426,6 +416,10 @@
 
 
     <!-- CDH5 Kafka libs -->
+    <fileSet>
+      <directory>${basedir}/../${cdh_kafka_4_1-lib}/target/streamsets-libs/</directory>
+      <outputDirectory>/streamsets-libs/</outputDirectory>
+    </fileSet>
     <fileSet>
       <directory>${basedir}/../${cdh_kafka_3_1-lib}/target/streamsets-libs/</directory>
       <outputDirectory>/streamsets-libs/</outputDirectory>

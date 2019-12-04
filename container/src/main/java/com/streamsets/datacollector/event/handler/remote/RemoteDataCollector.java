@@ -23,6 +23,8 @@ import com.streamsets.datacollector.callback.CallbackObjectType;
 import com.streamsets.datacollector.config.PipelineConfiguration;
 import com.streamsets.datacollector.config.RuleDefinitions;
 import com.streamsets.datacollector.config.dto.ValidationStatus;
+import com.streamsets.datacollector.event.client.api.EventClient;
+import com.streamsets.datacollector.event.client.impl.EventClientImpl;
 import com.streamsets.datacollector.event.dto.AckEvent;
 import com.streamsets.datacollector.event.dto.AckEventStatus;
 import com.streamsets.datacollector.event.dto.EventType;
@@ -56,6 +58,8 @@ import com.streamsets.datacollector.util.PipelineException;
 import com.streamsets.datacollector.validation.Issues;
 import com.streamsets.datacollector.validation.PipelineConfigurationValidator;
 import com.streamsets.lib.security.acl.dto.Acl;
+import com.streamsets.lib.security.http.RemoteSSOService;
+import com.streamsets.lib.security.http.SSOConstants;
 import com.streamsets.pipeline.api.ExecutionMode;
 import com.streamsets.pipeline.api.StageException;
 import com.streamsets.pipeline.api.impl.Utils;
@@ -83,12 +87,16 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 
+import static com.streamsets.datacollector.event.handler.remote.RemoteEventHandlerTask.sendPipelineMetrics;
+
 public class RemoteDataCollector implements DataCollector {
 
   public static final String IS_REMOTE_PIPELINE = "IS_REMOTE_PIPELINE";
   public static final String SCH_GENERATED_PIPELINE_NAME = "SCH_GENERATED_PIPELINE_NAME";
   private static final String NAME_AND_REV_SEPARATOR = "::";
   private static final Logger LOG = LoggerFactory.getLogger(RemoteDataCollector.class);
+  public static final String JOB_METRICS_URL = "jobrunner/rest/v1/jobs/metrics";
+  public static final String MESSAGING_EVENTS_URL = "messaging/rest/v1/events";
   private final Configuration configuration;
   private final Manager manager;
   private final PipelineStoreTask pipelineStore;
@@ -101,6 +109,12 @@ public class RemoteDataCollector implements DataCollector {
   private final StageLibraryTask stageLibrary;
   private final BlobStoreTask blobStoreTask;
   private final SafeScheduledExecutorService eventHandlerExecutor;
+  private final EventClient eventClient;
+  private String jobRunnerUrl;
+  private final Map<String, String> requestHeader;
+  protected static final String SEND_METRIC_ATTEMPTS =  "pipeline.metrics.attempts";
+  protected static final int DEFAULT_SEND_METRIC_ATTEMPTS = 0;
+
 
   @Inject
   public RemoteDataCollector(
@@ -128,6 +142,16 @@ public class RemoteDataCollector implements DataCollector {
     this.stageLibrary = stageLibrary;
     this.blobStoreTask = blobStoreTask;
     this.eventHandlerExecutor = eventHandlerExecutor;
+    String remoteBaseURL = RemoteSSOService.getValidURL(configuration.get(RemoteSSOService.DPM_BASE_URL_CONFIG,
+        RemoteSSOService.DPM_BASE_URL_DEFAULT
+    ));
+    requestHeader = new HashMap<>();
+    requestHeader.put(SSOConstants.X_REST_CALL, SSOConstants.SDC_COMPONENT_NAME);
+    requestHeader.put(SSOConstants.X_APP_AUTH_TOKEN, runtimeInfo.getAppAuthToken());
+    requestHeader.put(SSOConstants.X_APP_COMPONENT_ID, runtimeInfo.getId());
+    jobRunnerUrl = remoteBaseURL + JOB_METRICS_URL;
+    String defaultUrl = remoteBaseURL + MESSAGING_EVENTS_URL;
+    eventClient = new EventClientImpl(defaultUrl, configuration);
   }
 
   PipelineStoreTask getPipelineStoreTask() {
@@ -276,7 +300,7 @@ public class RemoteDataCollector implements DataCollector {
       String rev,
       List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs
   ) throws PipelineException {
-    Previewer previewer = manager.createPreviewer(user, name, rev, interceptorConfs, p -> null);
+    Previewer previewer = manager.createPreviewer(user, name, rev, interceptorConfs, p -> null, false);
     previewer.validateConfigs(1000L);
     validatorIdList.add(previewer.getId());
   }
@@ -297,7 +321,7 @@ public class RemoteDataCollector implements DataCollector {
       List<PipelineStartEvent.InterceptorConfiguration> interceptorConfs,
       Function<Object, Void> afterActionsFunction
   ) throws PipelineException {
-    final Previewer previewer = manager.createPreviewer(user, name, rev, interceptorConfs, afterActionsFunction);
+    final Previewer previewer = manager.createPreviewer(user, name, rev, interceptorConfs, afterActionsFunction, false);
     previewer.validateConfigs(10000l);
 
     if (!EnumSet.of(PreviewStatus.VALIDATION_ERROR,  PreviewStatus.INVALID).contains(previewer.getStatus())) {
@@ -321,15 +345,24 @@ public class RemoteDataCollector implements DataCollector {
     private final String rev;
     private final String user;
     private final long forceStopMillis;
+    private final int attempts;
+    private final EventClient eventClient;
+    private String jobRunnerUrl;
+    private final Map<String, String> requestHeader;
 
     public StopAndDeleteCallable(
-        RemoteDataCollector remoteDataCollector, String user, String pipelineName, String rev, long forceStopMillis
+        RemoteDataCollector remoteDataCollector, String user, String pipelineName, String rev, long forceStopMillis,
+        EventClient eventClient, String jobRunnerUrl, Map<String, String> requestHeader, Configuration configuration
     ) {
       this.remoteDataCollector = remoteDataCollector;
       this.pipelineName = pipelineName;
       this.rev = rev;
       this.user = user;
       this.forceStopMillis = forceStopMillis;
+      this.requestHeader = requestHeader;
+      this.jobRunnerUrl = jobRunnerUrl;
+      this.eventClient = eventClient;
+      this.attempts = configuration.get(SEND_METRIC_ATTEMPTS, DEFAULT_SEND_METRIC_ATTEMPTS);
     }
 
     private boolean waitForInactiveState(
@@ -402,11 +435,14 @@ public class RemoteDataCollector implements DataCollector {
               pipelineState.getNextRetryTimeStamp()
           );
         }
+        // We're currently sending with attempts set to 0 because we are disabling this function by default
+        sendPipelineMetrics(remoteDataCollector, eventClient, jobRunnerUrl, requestHeader, attempts);
         remoteDataCollector.delete(pipelineName, rev);
       } catch (Exception ex) {
         ackStatus = AckEventStatus.ERROR;
         ackEventMessage = Utils.format("Remote event type {} encountered error {}", EventType.STOP_DELETE_PIPELINE,
             ex);
+        LOG.error(ex.getMessage(), ex);
       }
       long endTime = System.currentTimeMillis();
       LOG.info("Time in secs to stop and delete pipeline {} is {}", pipelineName, (endTime - startTime)/1000);
@@ -418,13 +454,17 @@ public class RemoteDataCollector implements DataCollector {
   @Override
   public Future<AckEvent> stopAndDelete(
       String user, String name, String rev, long forceTimeoutMillis
-  ) throws PipelineException, StageException {
+  ) {
     LOG.info("Pipeline will be stopped and deleted, force timeout is {}", forceTimeoutMillis);
     Future<AckEvent> ackEventFuture = eventHandlerExecutor.submit(new StopAndDeleteCallable(this,
         user,
         name,
         rev,
-        forceTimeoutMillis
+        forceTimeoutMillis,
+        eventClient,
+        jobRunnerUrl,
+        requestHeader,
+        configuration
     ));
     return ackEventFuture;
   }
@@ -586,6 +626,17 @@ public class RemoteDataCollector implements DataCollector {
     return pipelineStatusMap.values();
   }
 
+  public List<PipelineState> getRemotePipelines() throws PipelineException {
+    List<PipelineState> pipelineStates = manager.getPipelines();
+    List<PipelineState> remoteStates = new ArrayList<>();
+    for (PipelineState pipelineState: pipelineStates) {
+      if (manager.isRemotePipeline(pipelineState.getPipelineId(), pipelineState.getRev())) {
+        remoteStates.add(pipelineState);
+      }
+    }
+    return remoteStates;
+  }
+
   private void setValidationStatus(Map<String, PipelineAndValidationStatus> pipelineStatusMap) {
     List<String> idsToRemove = new ArrayList<>();
     for (String previewerId : validatorIdList) {
@@ -663,5 +714,8 @@ public class RemoteDataCollector implements DataCollector {
     }
   }
 
+  public Runner getRunner(String name, String rev) throws PipelineException  {
+    return manager.getRunner(name, rev);
+  }
 }
 

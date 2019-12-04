@@ -201,4 +201,34 @@ public class TestPipelineConfigUpgrader {
     Assert.assertEquals("databricksConfig.terminateCluster", upgrade.get(2).getName());
     Assert.assertEquals(upgrade.get(2).getValue(), false);
   }
+
+
+  @Test
+  public void testPipelineConfigUpgradeV14ToV15() throws StageException {
+    PipelineConfigUpgrader pipelineConfigUpgrader = new PipelineConfigUpgrader();
+    TestUpgraderContext context = new TestUpgraderContext("x", "y", "z", 14, 15);
+
+    List<Config> upgrade = pipelineConfigUpgrader.upgrade(new ArrayList<>(), context);
+
+    Assert.assertEquals("ludicrousMode", upgrade.get(0).getName());
+    Assert.assertEquals(false, upgrade.get(0).getValue());
+    Assert.assertEquals("ludicrousModeInputCount", upgrade.get(1).getName());
+    Assert.assertEquals(false, upgrade.get(1).getValue());
+    Assert.assertEquals("advancedErrorHandling", upgrade.get(2).getName());
+    Assert.assertEquals(false, upgrade.get(2).getValue());
+    Assert.assertEquals("triggerInterval", upgrade.get(3).getName());
+    Assert.assertEquals(2000, upgrade.get(3).getValue());
+  }
+
+  @Test
+  public void testPipelineConfigUpgradeV15ToV16() throws StageException {
+    PipelineConfigUpgrader pipelineConfigUpgrader = new PipelineConfigUpgrader();
+    TestUpgraderContext context = new TestUpgraderContext("x", "y", "z", 15, 16);
+
+    List<Config> upgrade = pipelineConfigUpgrader.upgrade(new ArrayList<>(), context);
+
+    Assert.assertEquals("preprocessScript", upgrade.get(0).getName());
+    Assert.assertEquals("", upgrade.get(0).getValue());
+  }
+
 }

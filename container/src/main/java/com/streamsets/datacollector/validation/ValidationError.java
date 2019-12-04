@@ -101,9 +101,10 @@ public enum ValidationError implements ErrorCode {
             + " is active"),
   VALIDATION_0090("Encountered exception while validating configuration : {}"),
   VALIDATION_0091("Found more than one Target stage that triggers offset commit"),
-  VALIDATION_0092("Delivery Guarantee can only be {} if pipeline contains a Target that triggers offset commit"),
+  VALIDATION_0092("Delivery Guarantee can only be {} if pipeline contains a destination that triggers offset commit"),
   VALIDATION_0093("The pipeline title is empty"),
   VALIDATION_0094("Stage expects {} input lanes, but only {} given"),
+  VALIDATION_0095("Stage library {} is a legacy library and must be installed separately"),
 
   // Event related validations
   VALIDATION_0100("Invalid event stream name '{}'. Streams can include the following characters: '{}'"),
@@ -118,11 +119,17 @@ public enum ValidationError implements ErrorCode {
   VALIDATION_0200("Invalid services declaration, expected definition for '{}', but got '{}'"),
 
   // cluster config validations
+  VALIDATION_0300("Stage '{}' using the '{}' stage library cannot be used with the '{}' cluster manager type"),
   VALIDATION_0301("Cannot specify keytab if Kerberos is disabled via the {} configuration property"),
-  VALIDATION_0302("Keytab path must be absolute; specified path {} was relative{}"),
+  VALIDATION_0302("Specified path {} was relative{}. Keytab path must be absolute. "),
   VALIDATION_0303("No file was found at {}; please double check the keytab path{}"),
   VALIDATION_0304("{} was not a regular file; please double check the keytab path{}"),
   VALIDATION_0305("Impersonation is required by {} configuration property, so an explicit user may not be specified."),
+  VALIDATION_0306("Invalid URL for Standalone Spark Cluster Type, The Master URL must use the following format: 'spark://HOST:PORT'"),
+  VALIDATION_0401(
+      "The {} property was set to {}, therefore you are not allowed to specify a keytab. Please contact your system " +
+          "administrator with any questions."
+  ),
   ;
 
   private final String msg;

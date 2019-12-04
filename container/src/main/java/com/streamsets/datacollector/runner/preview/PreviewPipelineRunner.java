@@ -28,7 +28,7 @@ import com.streamsets.datacollector.el.JobEL;
 import com.streamsets.datacollector.el.PipelineEL;
 import com.streamsets.datacollector.main.RuntimeInfo;
 import com.streamsets.datacollector.metrics.MetricsConfigurator;
-import com.streamsets.datacollector.restapi.bean.MetricRegistryJson;
+import com.streamsets.datacollector.event.json.MetricRegistryJson;
 import com.streamsets.datacollector.runner.BatchContextImpl;
 import com.streamsets.datacollector.runner.BatchImpl;
 import com.streamsets.datacollector.runner.BatchListener;
@@ -44,11 +44,11 @@ import com.streamsets.datacollector.runner.PipelineRunner;
 import com.streamsets.datacollector.runner.PipelineRuntimeException;
 import com.streamsets.datacollector.runner.ProcessedSink;
 import com.streamsets.datacollector.runner.PushSourceContextDelegate;
-import com.streamsets.datacollector.runner.SourceResponseSink;
 import com.streamsets.datacollector.runner.RunnerPool;
 import com.streamsets.datacollector.runner.RuntimeStats;
 import com.streamsets.datacollector.runner.SourceOffsetTracker;
 import com.streamsets.datacollector.runner.SourcePipe;
+import com.streamsets.datacollector.runner.SourceResponseSinkImpl;
 import com.streamsets.datacollector.runner.StageContext;
 import com.streamsets.datacollector.runner.StageOutput;
 import com.streamsets.datacollector.runner.StagePipe;
@@ -180,7 +180,8 @@ public class PreviewPipelineRunner implements PipelineRunner, PushSourceContextD
       stageRuntime.getDefinition().getType().isOneOf(StageType.EXECUTOR, StageType.TARGET),
       "Invalid lifecycle event stage type: " + stageRuntime.getDefinition().getType()
     );
-    stageRuntime.execute(null, 1000, batch, null, new ErrorSink(), new EventSink(), new ProcessedSink(), new SourceResponseSink());
+    stageRuntime.execute(null, 1000, batch, null, new ErrorSink(), new EventSink(),
+        new ProcessedSink(), new SourceResponseSinkImpl());
   }
 
   @Override
@@ -263,8 +264,9 @@ public class PreviewPipelineRunner implements PipelineRunner, PushSourceContextD
 
   @Override
   public boolean processBatch(BatchContext batchCtx, String entityName, String entityOffset) {
+    BatchContextImpl batchContext = (BatchContextImpl) batchCtx;
     try {
-      BatchContextImpl batchContext = (BatchContextImpl) batchCtx;
+      batchContext.ensureState();
 
       // Finish origin processing
       originPipe.finishBatchContext(batchContext);
@@ -298,6 +300,7 @@ public class PreviewPipelineRunner implements PipelineRunner, PushSourceContextD
 
       return  false;
     } finally {
+      batchContext.setProcessed(true);
       PipelineEL.unsetConstantsInContext();
       JobEL.unsetConstantsInContext();
     }

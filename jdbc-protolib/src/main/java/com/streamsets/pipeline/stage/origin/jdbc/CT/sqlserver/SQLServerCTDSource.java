@@ -35,6 +35,7 @@ import com.streamsets.pipeline.stage.origin.jdbc.table.TableJdbcConfigBean;
     resetOffset = true,
     producesEvents = true,
     upgrader = SQLServerCTSourceUpgrader.class,
+    upgraderDef = "upgrader/SQLServerCTDSource.yaml",
     onlineHelpRefUrl ="index.html?contextID=task_vsh_22s_r1b"
 )
 @GenerateResourceBundle
@@ -65,6 +66,7 @@ public class SQLServerCTDSource extends DPushSource {
     tableJdbcConfigBean.batchTableStrategy = ctTableJdbcConfigBean.batchTableStrategy;
     tableJdbcConfigBean.timeZoneID = ctTableJdbcConfigBean.timeZoneID;
     tableJdbcConfigBean.quoteChar = QuoteChar.NONE;
+    tableJdbcConfigBean.unknownTypeAction = ctTableJdbcConfigBean.unknownTypeAction;
     tableJdbcConfigBean.numberOfThreads = ctTableJdbcConfigBean.numberOfThreads;
     tableJdbcConfigBean.tableOrderStrategy = ctTableJdbcConfigBean.tableOrderStrategy;
 
